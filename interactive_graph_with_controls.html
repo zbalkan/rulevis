@@ -1,0 +1,1399 @@
+<html>
+    <head>
+        <meta charset="utf-8">
+        
+            <script src="lib/bindings/utils.js"></script>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css" integrity="sha512-WgxfT5LWjfszlPHXRmBWHkV2eceiWTOBvrKCNbdgDYTHrT2AeLCGbF4sZlZw3UMN3WtL0tGUoIAKsu8mllg/XA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js" integrity="sha512-LnvoEWDFrqGHlHmDD2101OrLcbsfkrzoSpvtSQtxK3RMnRV0eOkhhBN2dXHKRrUU8p2DGRTk35n4O8nWSVe1mQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+            
+                <link href="lib/tom-select/tom-select.css" rel="stylesheet">
+                <script src="lib/tom-select/tom-select.complete.min.js"></script>
+            
+        
+<center>
+<h1>Wazuh Ruleset Graph</h1>
+</center>
+
+<!-- <link rel="stylesheet" href="../node_modules/vis/dist/vis.min.css" type="text/css" />
+<script type="text/javascript" src="../node_modules/vis/dist/vis.js"> </script>-->
+        <link
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/css/bootstrap.min.css"
+          rel="stylesheet"
+          integrity="sha384-eOJMYsd53ii+scO/bJGFsiCZc+5NDVN2yr8+0RDqr0Ql0h+rP48ckxlpbzKgwra6"
+          crossorigin="anonymous"
+        />
+        <script
+          src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-JEW9xMcG8R+pH31jmWH6WWP0WintQrMb4s7ZOdauHnUtxwoG2vI5DkLtS3qm9Ekf"
+          crossorigin="anonymous"
+        ></script>
+
+
+        <center>
+          <h1>Wazuh Ruleset Graph</h1>
+        </center>
+        <style type="text/css">
+
+             #mynetwork {
+                 width: 100%;
+                 height: 800px;
+                 background-color: #ffffff;
+                 border: 1px solid lightgray;
+                 position: relative;
+                 float: left;
+             }
+
+             
+             #loadingBar {
+                 position:absolute;
+                 top:0px;
+                 left:0px;
+                 width: 100%;
+                 height: 800px;
+                 background-color:rgba(200,200,200,0.8);
+                 -webkit-transition: all 0.5s ease;
+                 -moz-transition: all 0.5s ease;
+                 -ms-transition: all 0.5s ease;
+                 -o-transition: all 0.5s ease;
+                 transition: all 0.5s ease;
+                 opacity:1;
+             }
+
+             #bar {
+                 position:absolute;
+                 top:0px;
+                 left:0px;
+                 width:20px;
+                 height:20px;
+                 margin:auto auto auto auto;
+                 border-radius:11px;
+                 border:2px solid rgba(30,30,30,0.05);
+                 background: rgb(0, 173, 246); /* Old browsers */
+                 box-shadow: 2px 0px 4px rgba(0,0,0,0.4);
+             }
+
+             #border {
+                 position:absolute;
+                 top:10px;
+                 left:10px;
+                 width:500px;
+                 height:23px;
+                 margin:auto auto auto auto;
+                 box-shadow: 0px 0px 4px rgba(0,0,0,0.2);
+                 border-radius:10px;
+             }
+
+             #text {
+                 position:absolute;
+                 top:8px;
+                 left:530px;
+                 width:30px;
+                 height:50px;
+                 margin:auto auto auto auto;
+                 font-size:22px;
+                 color: #000000;
+             }
+
+             div.outerBorder {
+                 position:relative;
+                 top:400px;
+                 width:600px;
+                 height:44px;
+                 margin:auto auto auto auto;
+                 border:8px solid rgba(0,0,0,0.1);
+                 background: rgb(252,252,252); /* Old browsers */
+                 background: -moz-linear-gradient(top,  rgba(252,252,252,1) 0%, rgba(237,237,237,1) 100%); /* FF3.6+ */
+                 background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,rgba(252,252,252,1)), color-stop(100%,rgba(237,237,237,1))); /* Chrome,Safari4+ */
+                 background: -webkit-linear-gradient(top,  rgba(252,252,252,1) 0%,rgba(237,237,237,1) 100%); /* Chrome10+,Safari5.1+ */
+                 background: -o-linear-gradient(top,  rgba(252,252,252,1) 0%,rgba(237,237,237,1) 100%); /* Opera 11.10+ */
+                 background: -ms-linear-gradient(top,  rgba(252,252,252,1) 0%,rgba(237,237,237,1) 100%); /* IE10+ */
+                 background: linear-gradient(to bottom,  rgba(252,252,252,1) 0%,rgba(237,237,237,1) 100%); /* W3C */
+                 filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#fcfcfc', endColorstr='#ededed',GradientType=0 ); /* IE6-9 */
+                 border-radius:72px;
+                 box-shadow: 0px 0px 10px rgba(0,0,0,0.2);
+             }
+             
+
+             
+
+             
+        </style>
+    </head>
+
+
+    <body>
+        <div class="card" style="width: 100%">
+            
+                <div id="select-menu" class="card-header">
+                    <div class="row no-gutters">
+                        <div class="col-10 pb-2">
+                            <select
+                            class="form-select"
+                            aria-label="Default select example"
+                            onchange="selectNode([value]);"
+                            id="select-node"
+                            placeholder="Select node..."
+                            >
+                                <option selected>Select a Node by ID</option>
+                                
+                                    <option value="1">1</option>
+                                
+                                    <option value="2">2</option>
+                                
+                                    <option value="3">3</option>
+                                
+                                    <option value="4">4</option>
+                                
+                                    <option value="5">5</option>
+                                
+                                    <option value="6">6</option>
+                                
+                                    <option value="7">7</option>
+                                
+                                    <option value="500">500</option>
+                                
+                                    <option value="501">501</option>
+                                
+                                    <option value="502">502</option>
+                                
+                                    <option value="503">503</option>
+                                
+                                    <option value="504">504</option>
+                                
+                                    <option value="505">505</option>
+                                
+                                    <option value="506">506</option>
+                                
+                                    <option value="509">509</option>
+                                
+                                    <option value="510">510</option>
+                                
+                                    <option value="511">511</option>
+                                
+                                    <option value="512">512</option>
+                                
+                                    <option value="513">513</option>
+                                
+                                    <option value="514">514</option>
+                                
+                                    <option value="515">515</option>
+                                
+                                    <option value="516">516</option>
+                                
+                                    <option value="517">517</option>
+                                
+                                    <option value="518">518</option>
+                                
+                                    <option value="519">519</option>
+                                
+                                    <option value="520">520</option>
+                                
+                                    <option value="521">521</option>
+                                
+                                    <option value="530">530</option>
+                                
+                                    <option value="531">531</option>
+                                
+                                    <option value="532">532</option>
+                                
+                                    <option value="533">533</option>
+                                
+                                    <option value="534">534</option>
+                                
+                                    <option value="535">535</option>
+                                
+                                    <option value="536">536</option>
+                                
+                                    <option value="550">550</option>
+                                
+                                    <option value="553">553</option>
+                                
+                                    <option value="554">554</option>
+                                
+                                    <option value="555">555</option>
+                                
+                                    <option value="560">560</option>
+                                
+                                    <option value="580">580</option>
+                                
+                                    <option value="581">581</option>
+                                
+                                    <option value="591">591</option>
+                                
+                                    <option value="592">592</option>
+                                
+                                    <option value="593">593</option>
+                                
+                                    <option value="594">594</option>
+                                
+                                    <option value="597">597</option>
+                                
+                                    <option value="598">598</option>
+                                
+                                    <option value="600">600</option>
+                                
+                                    <option value="601">601</option>
+                                
+                                    <option value="602">602</option>
+                                
+                                    <option value="603">603</option>
+                                
+                                    <option value="604">604</option>
+                                
+                                    <option value="605">605</option>
+                                
+                                    <option value="606">606</option>
+                                
+                                    <option value="607">607</option>
+                                
+                                    <option value="650">650</option>
+                                
+                                    <option value="651">651</option>
+                                
+                                    <option value="652">652</option>
+                                
+                                    <option value="653">653</option>
+                                
+                                    <option value="654">654</option>
+                                
+                                    <option value="655">655</option>
+                                
+                                    <option value="656">656</option>
+                                
+                                    <option value="657">657</option>
+                                
+                                    <option value="658">658</option>
+                                
+                                    <option value="700">700</option>
+                                
+                                    <option value="701">701</option>
+                                
+                                    <option value="750">750</option>
+                                
+                                    <option value="751">751</option>
+                                
+                                    <option value="752">752</option>
+                                
+                                    <option value="200">200</option>
+                                
+                                    <option value="201">201</option>
+                                
+                                    <option value="202">202</option>
+                                
+                                    <option value="203">203</option>
+                                
+                                    <option value="204">204</option>
+                                
+                                    <option value="205">205</option>
+                                
+                                    <option value="210">210</option>
+                                
+                                    <option value="211">211</option>
+                                
+                                    <option value="212">212</option>
+                                
+                                    <option value="213">213</option>
+                                
+                                    <option value="214">214</option>
+                                
+                                    <option value="215">215</option>
+                                
+                                    <option value="216">216</option>
+                                
+                                    <option value="217">217</option>
+                                
+                                    <option value="218">218</option>
+                                
+                                    <option value="220">220</option>
+                                
+                                    <option value="221">221</option>
+                                
+                                    <option value="222">222</option>
+                                
+                                    <option value="230">230</option>
+                                
+                                    <option value="231">231</option>
+                                
+                                    <option value="232">232</option>
+                                
+                                    <option value="233">233</option>
+                                
+                                    <option value="234">234</option>
+                                
+                                    <option value="235">235</option>
+                                
+                                    <option value="236">236</option>
+                                
+                                    <option value="237">237</option>
+                                
+                                    <option value="238">238</option>
+                                
+                                    <option value="239">239</option>
+                                
+                                    <option value="240">240</option>
+                                
+                                    <option value="241">241</option>
+                                
+                                    <option value="242">242</option>
+                                
+                                    <option value="400">400</option>
+                                
+                                    <option value="401">401</option>
+                                
+                                    <option value="402">402</option>
+                                
+                                    <option value="403">403</option>
+                                
+                                    <option value="404">404</option>
+                                
+                                    <option value="405">405</option>
+                                
+                                    <option value="406">406</option>
+                                
+                                    <option value="407">407</option>
+                                
+                                    <option value="408">408</option>
+                                
+                                    <option value="409">409</option>
+                                
+                                    <option value="410">410</option>
+                                
+                                    <option value="411">411</option>
+                                
+                                    <option value="412">412</option>
+                                
+                                    <option value="413">413</option>
+                                
+                                    <option value="414">414</option>
+                                
+                                    <option value="415">415</option>
+                                
+                                    <option value="416">416</option>
+                                
+                                    <option value="417">417</option>
+                                
+                                    <option value="418">418</option>
+                                
+                                    <option value="420">420</option>
+                                
+                                    <option value="421">421</option>
+                                
+                                    <option value="422">422</option>
+                                
+                                    <option value="423">423</option>
+                                
+                                    <option value="424">424</option>
+                                
+                                    <option value="425">425</option>
+                                
+                                    <option value="400,410">400,410</option>
+                                
+                                    <option value="426">426</option>
+                                
+                                    <option value="427">427</option>
+                                
+                                    <option value="428">428</option>
+                                
+                                    <option value="1001">1001</option>
+                                
+                                    <option value="1002">1002</option>
+                                
+                                    <option value="1003">1003</option>
+                                
+                                    <option value="1004">1004</option>
+                                
+                                    <option value="1005">1005</option>
+                                
+                                    <option value="1006">1006</option>
+                                
+                                    <option value="1007">1007</option>
+                                
+                                    <option value="1008">1008</option>
+                                
+                                    <option value="1009">1009</option>
+                                
+                                    <option value="1010">1010</option>
+                                
+                                    <option value="2100">2100</option>
+                                
+                                    <option value="2101">2101</option>
+                                
+                                    <option value="2102">2102</option>
+                                
+                                    <option value="2103">2103</option>
+                                
+                                    <option value="2104">2104</option>
+                                
+                                    <option value="2301">2301</option>
+                                
+                                    <option value="2501">2501</option>
+                                
+                                    <option value="2502">2502</option>
+                                
+                                    <option value="2503">2503</option>
+                                
+                                    <option value="2504">2504</option>
+                                
+                                    <option value="2505">2505</option>
+                                
+                                    <option value="2506">2506</option>
+                                
+                                    <option value="2507">2507</option>
+                                
+                                    <option value="2508">2508</option>
+                                
+                                    <option value="2509">2509</option>
+                                
+                                    <option value="2550">2550</option>
+                                
+                                    <option value="2551">2551</option>
+                                
+                                    <option value="2701">2701</option>
+                                
+                                    <option value="2800">2800</option>
+                                
+                                    <option value="2801">2801</option>
+                                
+                                    <option value="2802">2802</option>
+                                
+                                    <option value="2803">2803</option>
+                                
+                                    <option value="5100">5100</option>
+                                
+                                    <option value="5101">5101</option>
+                                
+                                    <option value="5102">5102</option>
+                                
+                                    <option value="5103">5103</option>
+                                
+                                    <option value="5104">5104</option>
+                                
+                                    <option value="5105">5105</option>
+                                
+                                    <option value="5106">5106</option>
+                                
+                                    <option value="5107">5107</option>
+                                
+                                    <option value="5108">5108</option>
+                                
+                                    <option value="5109">5109</option>
+                                
+                                    <option value="5110">5110</option>
+                                
+                                    <option value="5111">5111</option>
+                                
+                                    <option value="5112">5112</option>
+                                
+                                    <option value="5113">5113</option>
+                                
+                                    <option value="5130">5130</option>
+                                
+                                    <option value="5131">5131</option>
+                                
+                                    <option value="5132">5132</option>
+                                
+                                    <option value="5133">5133</option>
+                                
+                                    <option value="5134">5134</option>
+                                
+                                    <option value="5135">5135</option>
+                                
+                                    <option value="5136">5136</option>
+                                
+                                    <option value="5137">5137</option>
+                                
+                                    <option value="5138">5138</option>
+                                
+                                    <option value="5139">5139</option>
+                                
+                                    <option value="5140">5140</option>
+                                
+                                    <option value="5141">5141</option>
+                                
+                                    <option value="5200">5200</option>
+                                
+                                    <option value="2830">2830</option>
+                                
+                                    <option value="2831">2831</option>
+                                
+                                    <option value="2834">2834</option>
+                                
+                                    <option value="2832">2832</option>
+                                
+                                    <option value="2833">2833</option>
+                                
+                                    <option value="5300">5300</option>
+                                
+                                    <option value="5301">5301</option>
+                                
+                                    <option value="5302">5302</option>
+                                
+                                    <option value="5303">5303</option>
+                                
+                                    <option value="5304">5304</option>
+                                
+                                    <option value="5305">5305</option>
+                                
+                                    <option value="5303, 5304">5303, 5304</option>
+                                
+                                    <option value="5306">5306</option>
+                                
+                                    <option value="7101">7101</option>
+                                
+                                    <option value="5901">5901</option>
+                                
+                                    <option value="5902">5902</option>
+                                
+                                    <option value="5903">5903</option>
+                                
+                                    <option value="5904">5904</option>
+                                
+                                    <option value="5905">5905</option>
+                                
+                                    <option value="5400">5400</option>
+                                
+                                    <option value="5401">5401</option>
+                                
+                                    <option value="5402">5402</option>
+                                
+                                    <option value="5407">5407</option>
+                                
+                                    <option value="5403">5403</option>
+                                
+                                    <option value="5404">5404</option>
+                                
+                                    <option value="5405">5405</option>
+                                
+                                    <option value="5406">5406</option>
+                                
+                                    <option value="9100">9100</option>
+                                
+                                    <option value="9101">9101</option>
+                                
+                                    <option value="9102">9102</option>
+                                
+                                    <option value="10100">10100</option>
+                                
+                                    <option value="9200">9200</option>
+                                
+                                    <option value="9201">9201</option>
+                                
+                                    <option value="2900">2900</option>
+                                
+                                    <option value="2901">2901</option>
+                                
+                                    <option value="2902">2902</option>
+                                
+                                    <option value="2903">2903</option>
+                                
+                                    <option value="2904">2904</option>
+                                
+                                    <option value="2930">2930</option>
+                                
+                                    <option value="2931">2931</option>
+                                
+                                    <option value="2932">2932</option>
+                                
+                                    <option value="2930,2931">2930,2931</option>
+                                
+                                    <option value="2933">2933</option>
+                                
+                                    <option value="2934">2934</option>
+                                
+                                    <option value="2935">2935</option>
+                                
+                                    <option value="2936">2936</option>
+                                
+                                    <option value="2937">2937</option>
+                                
+                                    <option value="2938">2938</option>
+                                
+                                    <option value="2939">2939</option>
+                                
+                                    <option value="2940">2940</option>
+                                
+                                    <option value="2941">2941</option>
+                                
+                                    <option value="2942">2942</option>
+                                
+                                    <option value="2943">2943</option>
+                                
+                                    <option value="2944">2944</option>
+                                
+                                    <option value="2945">2945</option>
+                                
+                                    <option value="2960">2960</option>
+                                
+                                    <option value="2961">2961</option>
+                                
+                                    <option value="2962">2962</option>
+                                
+                                    <option value="2963">2963</option>
+                                
+                                    <option value="2964">2964</option>
+                                
+                                    <option value="3100">3100</option>
+                                
+                                    <option value="3101">3101</option>
+                                
+                                    <option value="3102">3102</option>
+                                
+                                    <option value="3103">3103</option>
+                                
+                                    <option value="3104">3104</option>
+                                
+                                    <option value="3105">3105</option>
+                                
+                                    <option value="3106">3106</option>
+                                
+                                    <option value="3107">3107</option>
+                                
+                                    <option value="3108">3108</option>
+                                
+                                    <option value="3109">3109</option>
+                                
+                                    <option value="3151">3151</option>
+                                
+                                    <option value="3152">3152</option>
+                                
+                                    <option value="3153">3153</option>
+                                
+                                    <option value="3154">3154</option>
+                                
+                                    <option value="3155">3155</option>
+                                
+                                    <option value="3156">3156</option>
+                                
+                                    <option value="3158">3158</option>
+                                
+                                    <option value="3190">3190</option>
+                                
+                                    <option value="3191">3191</option>
+                                
+                                    <option value="3300">3300</option>
+                                
+                                    <option value="3301">3301</option>
+                                
+                                    <option value="3302">3302</option>
+                                
+                                    <option value="3303">3303</option>
+                                
+                                    <option value="3304">3304</option>
+                                
+                                    <option value="3305">3305</option>
+                                
+                                    <option value="3306">3306</option>
+                                
+                                    <option value="3301, 3302">3301, 3302</option>
+                                
+                                    <option value="3320">3320</option>
+                                
+                                    <option value="3330">3330</option>
+                                
+                                    <option value="3332">3332</option>
+                                
+                                    <option value="3331">3331</option>
+                                
+                                    <option value="3334">3334</option>
+                                
+                                    <option value="3335">3335</option>
+                                
+                                    <option value="3333">3333</option>
+                                
+                                    <option value="3351">3351</option>
+                                
+                                    <option value="3352">3352</option>
+                                
+                                    <option value="3353">3353</option>
+                                
+                                    <option value="3354">3354</option>
+                                
+                                    <option value="3355">3355</option>
+                                
+                                    <option value="3356">3356</option>
+                                
+                                    <option value="3357">3357</option>
+                                
+                                    <option value="3390">3390</option>
+                                
+                                    <option value="3395">3395</option>
+                                
+                                    <option value="3396">3396</option>
+                                
+                                    <option value="3397">3397</option>
+                                
+                                    <option value="3398">3398</option>
+                                
+                                    <option value="3399">3399</option>
+                                
+                                    <option value="3500">3500</option>
+                                
+                                    <option value="3501">3501</option>
+                                
+                                    <option value="3502">3502</option>
+                                
+                                    <option value="3600">3600</option>
+                                
+                                    <option value="3601">3601</option>
+                                
+                                    <option value="3602">3602</option>
+                                
+                                    <option value="3603">3603</option>
+                                
+                                    <option value="3651">3651</option>
+                                
+                                    <option value="3700">3700</option>
+                                
+                                    <option value="3701">3701</option>
+                                
+                                    <option value="3702">3702</option>
+                                
+                                    <option value="3751">3751</option>
+                                
+                                    <option value="3752">3752</option>
+                                
+                                    <option value="3800">3800</option>
+                                
+                                    <option value="3801">3801</option>
+                                
+                                    <option value="3802">3802</option>
+                                
+                                    <option value="3851">3851</option>
+                                
+                                    <option value="3852">3852</option>
+                                
+                                    <option value="3900">3900</option>
+                                
+                                    <option value="3901">3901</option>
+                                
+                                    <option value="3902">3902</option>
+                                
+                                    <option value="3903">3903</option>
+                                
+                                    <option value="3904">3904</option>
+                                
+                                    <option value="3910">3910</option>
+                                
+                                    <option value="3911">3911</option>
+                                
+                                    <option value="4300">4300</option>
+                                
+                                    <option value="4310">4310</option>
+                                
+                                    <option value="4311">4311</option>
+                                
+                                    <option value="4312">4312</option>
+                                
+                                    <option value="4313">4313</option>
+                                
+                                    <option value="4314">4314</option>
+                                
+                                    <option value="4315">4315</option>
+                                
+                                    <option value="4321">4321</option>
+                                
+                                    <option value="4322">4322</option>
+                                
+                                    <option value="4323">4323</option>
+                                
+                                    <option value="4324">4324</option>
+                                
+                                    <option value="4325">4325</option>
+                                
+                                    <option value="4326">4326</option>
+                                
+                                    <option value="4327">4327</option>
+                                
+                                    <option value="4330">4330</option>
+                                
+                                    <option value="4331">4331</option>
+                                
+                                    <option value="4332">4332</option>
+                                
+                                    <option value="4333">4333</option>
+                                
+                                    <option value="4330, 4331, 4332">4330, 4331, 4332</option>
+                                
+                                    <option value="4334">4334</option>
+                                
+                                    <option value="4335">4335</option>
+                                
+                                    <option value="4336">4336</option>
+                                
+                                    <option value="4337">4337</option>
+                                
+                                    <option value="4338">4338</option>
+                                
+                                    <option value="4339">4339</option>
+                                
+                                    <option value="4340">4340</option>
+                                
+                                    <option value="4341">4341</option>
+                                
+                                    <option value="4342">4342</option>
+                                
+                                    <option value="4380">4380</option>
+                                
+                                    <option value="4381">4381</option>
+                                
+                                    <option value="4382">4382</option>
+                                
+                                    <option value="4383">4383</option>
+                                
+                                    <option value="4385">4385</option>
+                                
+                                    <option value="4386">4386</option>
+                                
+                                    <option value="4500">4500</option>
+                                
+                                    <option value="4501">4501</option>
+                                
+                                    <option value="4502">4502</option>
+                                
+                                    <option value="4503">4503</option>
+                                
+                                    <option value="4513">4513</option>
+                                
+                                    <option value="4504">4504</option>
+                                
+                                    <option value="4505">4505</option>
+                                
+                                    <option value="4506">4506</option>
+                                
+                                    <option value="4507">4507</option>
+                                
+                                    <option value="4508">4508</option>
+                                
+                                    <option value="4509">4509</option>
+                                
+                                    <option value="4550">4550</option>
+                                
+                                    <option value="4551">4551</option>
+                                
+                                    <option value="4552">4552</option>
+                                
+                                    <option value="4553">4553</option>
+                                
+                                    <option value="4560">4560</option>
+                                
+                                    <option value="4700">4700</option>
+                                
+                                    <option value="4710">4710</option>
+                                
+                                    <option value="4711">4711</option>
+                                
+                                    <option value="4712">4712</option>
+                                
+                                    <option value="4713">4713</option>
+                                
+                                    <option value="4714">4714</option>
+                                
+                                    <option value="4715">4715</option>
+                                
+                                    <option value="4716">4716</option>
+                                
+                                    <option value="4717">4717</option>
+                                
+                                    <option value="4721">4721</option>
+                                
+                                    <option value="4722">4722</option>
+                                
+                                    <option value="4724">4724</option>
+                                
+                                    <option value="4800">4800</option>
+                                
+                                    <option value="4801">4801</option>
+                                
+                                    <option value="4802">4802</option>
+                                
+                                    <option value="4803">4803</option>
+                                
+                                    <option value="4804">4804</option>
+                                
+                                    <option value="4805">4805</option>
+                                
+                                    <option value="4806">4806</option>
+                                
+                                    <option value="4807">4807</option>
+                                
+                                    <option value="4810">4810</option>
+                                
+                                    <option value="4811">4811</option>
+                                
+                                    <option value="4850">4850</option>
+                                
+                                    <option value="4851">4851</option>
+                                
+                                    <option value="5500">5500</option>
+                                
+                                    <option value="5501">5501</option>
+                                
+                                    <option value="5502">5502</option>
+                                
+                                    <option value="5503">5503</option>
+                                
+                                    <option value="5504">5504</option>
+                                
+                                    <option value="5521">5521</option>
+                                
+                                    <option value="5522">5522</option>
+                                
+                                    <option value="5523">5523</option>
+                                
+                                    <option value="5551">5551</option>
+                                
+                                    <option value="5552">5552</option>
+                                
+                                    <option value="5553">5553</option>
+                                
+                                    <option value="5554">5554</option>
+                                
+                                    <option value="5555">5555</option>
+                                
+                                    <option value="5556">5556</option>
+                                
+                                    <option value="5557">5557</option>
+                                
+                                    <option value="5600">5600</option>
+                                
+                                    <option value="5601">5601</option>
+                                
+                                    <option value="5602">5602</option>
+                                
+                                    <option value="5603">5603</option>
+                                
+                                    <option value="5604">5604</option>
+                                
+                                    <option value="5631">5631</option>
+                                
+                                    <option value="5700">5700</option>
+                                
+                                    <option value="5701">5701</option>
+                                
+                                    <option value="5702">5702</option>
+                                
+                                    <option value="5703">5703</option>
+                                
+                                    <option value="5704">5704</option>
+                                
+                                    <option value="5705">5705</option>
+                                
+                                    <option value="5706">5706</option>
+                                
+                                    <option value="5707">5707</option>
+                                
+                                    <option value="5709">5709</option>
+                                
+                                    <option value="5710">5710</option>
+                                
+                                    <option value="5711">5711</option>
+                                
+                                    <option value="5712">5712</option>
+                                
+                                    <option value="5713">5713</option>
+                                
+                                    <option value="5714">5714</option>
+                                
+                                    <option value="5715">5715</option>
+                                
+                                    <option value="5716">5716</option>
+                                
+                                    <option value="5717">5717</option>
+                                
+                                    <option value="5718">5718</option>
+                                
+                                    <option value="5719">5719</option>
+                                
+                                    <option value="5720">5720</option>
+                                
+                                    <option value="5721">5721</option>
+                                
+                                    <option value="5722">5722</option>
+                                
+                                    <option value="5723">5723</option>
+                                
+                                    <option value="5724">5724</option>
+                                
+                                    <option value="5725">5725</option>
+                                
+                                    <option value="5726">5726</option>
+                                
+                                    <option value="5727">5727</option>
+                                
+                                    <option value="5728">5728</option>
+                                
+                                    <option value="5729">5729</option>
+                                
+                                    <option value="5730">5730</option>
+                                
+                                    <option value="5731">5731</option>
+                                
+                                    <option value="5732">5732</option>
+                                
+                                    <option value="5733">5733</option>
+                                
+                                    <option value="5734">5734</option>
+                                
+                                    <option value="5735">5735</option>
+                                
+                                    <option value="5736">5736</option>
+                                
+                                    <option value="5737">5737</option>
+                                
+                                    <option value="5738">5738</option>
+                                
+                                    <option value="5739">5739</option>
+                                
+                                    <option value="5740">5740</option>
+                                
+                                    <option value="5741">5741</option>
+                                
+                                    <option value="5742">5742</option>
+                                
+                                    <option value="5743">5743</option>
+                                
+                                    <option value="5744">5744</option>
+                                
+                                    <option value="5745">5745</option>
+                                
+                                    <option value="5746">5746</option>
+                                
+                                    <option value="5747">5747</option>
+                                
+                                    <option value="5748">5748</option>
+                                
+                                    <option value="5749">5749</option>
+                                
+                                    <option value="5750">5750</option>
+                                
+                                    <option value="5751">5751</option>
+                                
+                                    <option value="5752">5752</option>
+                                
+                                    <option value="5753">5753</option>
+                                
+                                    <option value="5754">5754</option>
+                                
+                                    <option value="5755">5755</option>
+                                
+                                    <option value="5756">5756</option>
+                                
+                                    <option value="5757">5757</option>
+                                
+                                    <option value="5758">5758</option>
+                                
+                                    <option value="5700,5710">5700,5710</option>
+                                
+                                    <option value="5759">5759</option>
+                                
+                                    <option value="5760">5760</option>
+                                
+                                    <option value="5700,5716">5700,5716</option>
+                                
+                                    <option value="5761">5761</option>
+                                
+                                    <option value="5762">5762</option>
+                                
+                                    <option value="5763">5763</option>
+                                
+                                    <option value="6100">6100</option>
+                                
+                                    <option value="6101">6101</option>
+                                
+                                    <option value="6102">6102</option>
+                                
+                                    <option value="6103">6103</option>
+                                
+                                    <option value="6104">6104</option>
+                                
+                                    <option value="6105">6105</option>
+                                
+                                    <option value="6106">6106</option>
+                                
+                            </select>
+                        </div>
+                        <div class="col-2 pb-2">
+                            <button type="button" class="btn btn-primary btn-block" onclick="neighbourhoodHighlight({nodes: []});">Reset Selection</button>
+                        </div>
+                    </div>
+                </div>
+            
+            
+              <div id="filter-menu" class="card-header">
+                <div class="row no-gutters">
+                  <div class="col-3 pb-2">
+                    <select
+                            class="form-select"
+                            aria-label="Default select example"
+                            onchange="updateFilter(value, 'item')"
+                            id="select-item"
+                        >
+                        <option value="">Select a network item</option>
+                        <option value="edge">edge</option>
+                        <option value="node">node</option>
+                    </select>
+                  </div>
+                  <div class="col-3 pb-2">
+                    <select
+                            class="form-select"
+                            aria-label="Default select example"
+                            onchange="updateFilter(value, 'property')"
+                            id="select-property"
+                        >
+                        <option value="">Select a property...</option>
+                    </select>
+                  </div>
+                  <div class="col-3 pb-2">
+                    <select
+                            class="form-select"
+                            aria-label="Default select example"
+                            id="select-value"
+                        >
+                        <option value="">Select value(s)...</option>
+                    </select>
+                  </div>
+                  <div class="col-1 pb-2">
+                    <button type="button" class="btn btn-primary btn-block" onclick="highlightFilter(filter);">Filter</button>
+                  </div>
+                  <div class="col-2 pb-2">
+                    <button type="button" class="btn btn-primary btn-block" onclick="clearFilter(true)">Reset Selection</button>
+                  </div>
+                </div>
+              </div>
+            
+            <div id="mynetwork" class="card-body"></div>
+        </div>
+
+        
+            <div id="loadingBar">
+              <div class="outerBorder">
+                <div id="text">0%</div>
+                <div id="border">
+                  <div id="bar"></div>
+                </div>
+              </div>
+            </div>
+        
+        
+
+        <script type="text/javascript">
+
+              // initialize global variables.
+              var edges;
+              var nodes;
+              var allNodes;
+              var allEdges;
+              var nodeColors;
+              var originalNodes;
+              var network;
+              var container;
+              var options, data;
+              var filter = {
+                  item : '',
+                  property : '',
+                  value : []
+              };
+
+              
+                  new TomSelect("#select-node",{
+                      create: false,
+                      sortField: {
+                          field: "text",
+                          direction: "asc"
+                      }
+                  });
+              
+
+              
+                  // explicitly using onItemAdd and this function as we need to save multiple values
+                  let updateValueFilter = function() {
+                      return function () {
+                      filter['value'].push(arguments[0])
+                      }
+                  }
+
+                  let valueControl = new TomSelect("#select-value",{
+                      maxItems: null,
+                      valueField: 'id',
+                      labelField: 'title',
+                      searchField: 'title',
+                      create: false,
+                      sortField: {
+                          field: "text",
+                          direction: "asc"
+                      },
+                      onItemAdd: updateValueFilter()
+                  });
+
+                  let addValues = function() {
+                      return function () {
+                          // clear the current value options and add the selected attribute values
+                          // tom-select handles duplicates
+                          let selectedProperty = arguments[0];
+                          valueControl.clear();
+                          valueControl.clearOptions();
+                          filter['value'] = []
+                          if (filter['item'] === 'node') {
+                              for (let each in allNodes) {
+                                  valueControl.addOption({
+                                      id:allNodes[each][selectedProperty],
+                                      title:allNodes[each][selectedProperty]
+                                  })
+                              }
+                          }
+                          else if (filter['item'] === 'edge') {
+                              for (let each in allEdges) {
+                                  valueControl.addOption({
+                                      id:allEdges[each][selectedProperty],
+                                      title:allEdges[each][selectedProperty]
+                                  })
+                              }
+                          }
+                      }
+                  };
+
+                  let propControl = new TomSelect("#select-property",{
+                      valueField: 'id',
+                      labelField: 'title',
+                      searchField: 'title',
+                      create: false,
+                      sortField: {
+                          field: "text",
+                          direction: "asc"
+                      },
+                      onItemAdd: addValues()
+                  });
+
+                  let addProperties = function() {
+                      return function () {
+                          // loops through the selected network item and adds the attributes to dropdown
+                          // tom-select handles duplicates
+                          clearFilter(false)
+                          if (arguments[0] === 'edge') {
+                              for (let each in allEdges) {
+                                  if (allEdges.hasOwnProperty(each)) {
+                                      for (let eachProp in allEdges[each]) {
+                                          if (allEdges[each].hasOwnProperty(eachProp)) {
+                                              propControl.addOption({id: eachProp, title: eachProp})
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                          else if (arguments[0] === 'node') {
+                              for (let each in allNodes) {
+                                  if (allNodes.hasOwnProperty(each)) {
+                                      for (let eachProp in allNodes[each]) {
+                                          if (allNodes[each].hasOwnProperty(eachProp)
+                                              && (eachProp !== 'hidden' && eachProp !== 'savedLabel'
+                                                  && eachProp !== 'hiddenLabel')) {
+                                              propControl.addOption({id: eachProp, title: eachProp})
+
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  };
+
+                  let itemControl = new TomSelect("#select-item",{
+                      create: false,
+                      sortField:{
+                          field: "text",
+                          direction: "asc"
+                      },
+                      onItemAdd: addProperties()
+                  });
+
+                  function clearFilter(reset) {
+                      // utility function to clear all the selected filter options
+                      // if reset is set to true, the existing filter will be removed
+                      // else, only the dropdown options are cleared
+                      propControl.clear();
+                      propControl.clearOptions();
+                      valueControl.clear();
+                      valueControl.clearOptions();
+                      filter = {
+                          item : '',
+                          property : '',
+                          value : []
+                      }
+                      if (reset) {
+                          itemControl.clear();
+                          filterHighlight({nodes: []})
+                      }
+                  }
+
+                  function updateFilter(value, key) {
+                      // key could be 'item' or 'property' and value is as selected in dropdown
+                      filter[key] = value
+                  }
+
+              
+
+              // This method is responsible for drawing the graph, returns the drawn network
+              function drawGraph() {
+                  var container = document.getElementById('mynetwork');
+
+                  
+
+                  // parsing and collecting nodes and edges from the python
+                  nodes = new vis.DataSet([{"color": "#97c2fc", "id": "1", "label": "1\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2", "label": "2\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3", "label": "3\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4", "label": "4\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5", "label": "5\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "6", "label": "6\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "7", "label": "7\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "500", "label": "500\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "501", "label": "501\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "502", "label": "502\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "503", "label": "503\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "504", "label": "504\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "505", "label": "505\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "506", "label": "506\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "509", "label": "509\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "510", "label": "510\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "511", "label": "511\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "512", "label": "512\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "513", "label": "513\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "514", "label": "514\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "515", "label": "515\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "516", "label": "516\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "517", "label": "517\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "518", "label": "518\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "519", "label": "519\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "520", "label": "520\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "521", "label": "521\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "530", "label": "530\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "531", "label": "531\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "532", "label": "532\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "533", "label": "533\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "534", "label": "534\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "535", "label": "535\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "536", "label": "536\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "550", "label": "550\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "553", "label": "553\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "554", "label": "554\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "555", "label": "555\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "560", "label": "560\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "580", "label": "580\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "581", "label": "581\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "591", "label": "591\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "592", "label": "592\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "593", "label": "593\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "594", "label": "594\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "597", "label": "597\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "598", "label": "598\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "600", "label": "600\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "601", "label": "601\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "602", "label": "602\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "603", "label": "603\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "604", "label": "604\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "605", "label": "605\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "606", "label": "606\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "607", "label": "607\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "650", "label": "650\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "651", "label": "651\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "652", "label": "652\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "653", "label": "653\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "654", "label": "654\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "655", "label": "655\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "656", "label": "656\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "657", "label": "657\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "658", "label": "658\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "700", "label": "700\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "701", "label": "701\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "750", "label": "750\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "751", "label": "751\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "752", "label": "752\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "200", "label": "200\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "201", "label": "201\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "202", "label": "202\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "203", "label": "203\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "204", "label": "204\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "205", "label": "205\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "210", "label": "210\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "211", "label": "211\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "212", "label": "212\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "213", "label": "213\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "214", "label": "214\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "215", "label": "215\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "216", "label": "216\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "217", "label": "217\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "218", "label": "218\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "220", "label": "220\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "221", "label": "221\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "222", "label": "222\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "230", "label": "230\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "231", "label": "231\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "232", "label": "232\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "233", "label": "233\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "234", "label": "234\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "235", "label": "235\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "236", "label": "236\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "237", "label": "237\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "238", "label": "238\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "239", "label": "239\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "240", "label": "240\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "241", "label": "241\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "242", "label": "242\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "400", "label": "400\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "401", "label": "401\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "402", "label": "402\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "403", "label": "403\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "404", "label": "404\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "405", "label": "405\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "406", "label": "406\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "407", "label": "407\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "408", "label": "408\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "409", "label": "409\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "410", "label": "410\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "411", "label": "411\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "412", "label": "412\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "413", "label": "413\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "414", "label": "414\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "415", "label": "415\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "416", "label": "416\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "417", "label": "417\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "418", "label": "418\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "420", "label": "420\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "421", "label": "421\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "422", "label": "422\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "423", "label": "423\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "424", "label": "424\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "425", "label": "425\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "400,410", "label": "400,410\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "426", "label": "426\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "427", "label": "427\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "428", "label": "428\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "1001", "label": "1001\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "1002", "label": "1002\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "1003", "label": "1003\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "1004", "label": "1004\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "1005", "label": "1005\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "1006", "label": "1006\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "1007", "label": "1007\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "1008", "label": "1008\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "1009", "label": "1009\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "1010", "label": "1010\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2100", "label": "2100\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2101", "label": "2101\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2102", "label": "2102\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2103", "label": "2103\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2104", "label": "2104\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2301", "label": "2301\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2501", "label": "2501\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2502", "label": "2502\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2503", "label": "2503\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2504", "label": "2504\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2505", "label": "2505\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2506", "label": "2506\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2507", "label": "2507\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2508", "label": "2508\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2509", "label": "2509\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2550", "label": "2550\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2551", "label": "2551\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2701", "label": "2701\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2800", "label": "2800\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2801", "label": "2801\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2802", "label": "2802\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2803", "label": "2803\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5100", "label": "5100\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5101", "label": "5101\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5102", "label": "5102\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5103", "label": "5103\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5104", "label": "5104\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5105", "label": "5105\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5106", "label": "5106\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5107", "label": "5107\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5108", "label": "5108\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5109", "label": "5109\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5110", "label": "5110\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5111", "label": "5111\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5112", "label": "5112\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5113", "label": "5113\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5130", "label": "5130\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5131", "label": "5131\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5132", "label": "5132\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5133", "label": "5133\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5134", "label": "5134\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5135", "label": "5135\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5136", "label": "5136\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5137", "label": "5137\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5138", "label": "5138\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5139", "label": "5139\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5140", "label": "5140\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5141", "label": "5141\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5200", "label": "5200\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2830", "label": "2830\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2831", "label": "2831\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2834", "label": "2834\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2832", "label": "2832\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2833", "label": "2833\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5300", "label": "5300\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5301", "label": "5301\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5302", "label": "5302\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5303", "label": "5303\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5304", "label": "5304\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5305", "label": "5305\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5303, 5304", "label": "5303, 5304\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5306", "label": "5306\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "7101", "label": "7101\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5901", "label": "5901\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5902", "label": "5902\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5903", "label": "5903\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5904", "label": "5904\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5905", "label": "5905\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5400", "label": "5400\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5401", "label": "5401\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5402", "label": "5402\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5407", "label": "5407\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5403", "label": "5403\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5404", "label": "5404\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5405", "label": "5405\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5406", "label": "5406\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "9100", "label": "9100\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "9101", "label": "9101\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "9102", "label": "9102\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "10100", "label": "10100\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "9200", "label": "9200\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "9201", "label": "9201\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2900", "label": "2900\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2901", "label": "2901\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2902", "label": "2902\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2903", "label": "2903\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2904", "label": "2904\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2930", "label": "2930\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2931", "label": "2931\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2932", "label": "2932\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2930,2931", "label": "2930,2931\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2933", "label": "2933\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2934", "label": "2934\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2935", "label": "2935\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2936", "label": "2936\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2937", "label": "2937\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2938", "label": "2938\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2939", "label": "2939\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2940", "label": "2940\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2941", "label": "2941\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2942", "label": "2942\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2943", "label": "2943\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2944", "label": "2944\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2945", "label": "2945\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2960", "label": "2960\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2961", "label": "2961\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2962", "label": "2962\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2963", "label": "2963\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "2964", "label": "2964\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3100", "label": "3100\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3101", "label": "3101\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3102", "label": "3102\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3103", "label": "3103\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3104", "label": "3104\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3105", "label": "3105\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3106", "label": "3106\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3107", "label": "3107\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3108", "label": "3108\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3109", "label": "3109\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3151", "label": "3151\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3152", "label": "3152\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3153", "label": "3153\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3154", "label": "3154\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3155", "label": "3155\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3156", "label": "3156\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3158", "label": "3158\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3190", "label": "3190\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3191", "label": "3191\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3300", "label": "3300\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3301", "label": "3301\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3302", "label": "3302\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3303", "label": "3303\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3304", "label": "3304\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3305", "label": "3305\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3306", "label": "3306\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3301, 3302", "label": "3301, 3302\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3320", "label": "3320\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3330", "label": "3330\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3332", "label": "3332\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3331", "label": "3331\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3334", "label": "3334\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3335", "label": "3335\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3333", "label": "3333\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3351", "label": "3351\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3352", "label": "3352\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3353", "label": "3353\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3354", "label": "3354\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3355", "label": "3355\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3356", "label": "3356\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3357", "label": "3357\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3390", "label": "3390\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3395", "label": "3395\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3396", "label": "3396\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3397", "label": "3397\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3398", "label": "3398\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3399", "label": "3399\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3500", "label": "3500\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3501", "label": "3501\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3502", "label": "3502\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3600", "label": "3600\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3601", "label": "3601\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3602", "label": "3602\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3603", "label": "3603\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3651", "label": "3651\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3700", "label": "3700\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3701", "label": "3701\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3702", "label": "3702\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3751", "label": "3751\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3752", "label": "3752\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3800", "label": "3800\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3801", "label": "3801\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3802", "label": "3802\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3851", "label": "3851\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3852", "label": "3852\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3900", "label": "3900\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3901", "label": "3901\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3902", "label": "3902\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3903", "label": "3903\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3904", "label": "3904\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3910", "label": "3910\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "3911", "label": "3911\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4300", "label": "4300\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4310", "label": "4310\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4311", "label": "4311\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4312", "label": "4312\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4313", "label": "4313\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4314", "label": "4314\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4315", "label": "4315\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4321", "label": "4321\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4322", "label": "4322\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4323", "label": "4323\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4324", "label": "4324\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4325", "label": "4325\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4326", "label": "4326\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4327", "label": "4327\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4330", "label": "4330\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4331", "label": "4331\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4332", "label": "4332\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4333", "label": "4333\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4330, 4331, 4332", "label": "4330, 4331, 4332\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4334", "label": "4334\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4335", "label": "4335\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4336", "label": "4336\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4337", "label": "4337\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4338", "label": "4338\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4339", "label": "4339\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4340", "label": "4340\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4341", "label": "4341\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4342", "label": "4342\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4380", "label": "4380\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4381", "label": "4381\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4382", "label": "4382\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4383", "label": "4383\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4385", "label": "4385\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4386", "label": "4386\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4500", "label": "4500\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4501", "label": "4501\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4502", "label": "4502\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4503", "label": "4503\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4513", "label": "4513\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4504", "label": "4504\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4505", "label": "4505\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4506", "label": "4506\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4507", "label": "4507\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4508", "label": "4508\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4509", "label": "4509\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4550", "label": "4550\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4551", "label": "4551\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4552", "label": "4552\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4553", "label": "4553\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4560", "label": "4560\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4700", "label": "4700\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4710", "label": "4710\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4711", "label": "4711\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4712", "label": "4712\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4713", "label": "4713\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4714", "label": "4714\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4715", "label": "4715\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4716", "label": "4716\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4717", "label": "4717\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4721", "label": "4721\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4722", "label": "4722\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4724", "label": "4724\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4800", "label": "4800\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4801", "label": "4801\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4802", "label": "4802\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4803", "label": "4803\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4804", "label": "4804\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4805", "label": "4805\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4806", "label": "4806\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4807", "label": "4807\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4810", "label": "4810\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4811", "label": "4811\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4850", "label": "4850\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "4851", "label": "4851\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5500", "label": "5500\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5501", "label": "5501\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5502", "label": "5502\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5503", "label": "5503\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5504", "label": "5504\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5521", "label": "5521\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5522", "label": "5522\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5523", "label": "5523\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5551", "label": "5551\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5552", "label": "5552\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5553", "label": "5553\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5554", "label": "5554\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5555", "label": "5555\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5556", "label": "5556\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5557", "label": "5557\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5600", "label": "5600\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5601", "label": "5601\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5602", "label": "5602\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5603", "label": "5603\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5604", "label": "5604\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5631", "label": "5631\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5700", "label": "5700\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5701", "label": "5701\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5702", "label": "5702\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5703", "label": "5703\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5704", "label": "5704\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5705", "label": "5705\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5706", "label": "5706\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5707", "label": "5707\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5709", "label": "5709\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5710", "label": "5710\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5711", "label": "5711\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5712", "label": "5712\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5713", "label": "5713\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5714", "label": "5714\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5715", "label": "5715\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5716", "label": "5716\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5717", "label": "5717\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5718", "label": "5718\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5719", "label": "5719\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5720", "label": "5720\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5721", "label": "5721\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5722", "label": "5722\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5723", "label": "5723\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5724", "label": "5724\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5725", "label": "5725\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5726", "label": "5726\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5727", "label": "5727\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5728", "label": "5728\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5729", "label": "5729\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5730", "label": "5730\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5731", "label": "5731\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5732", "label": "5732\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5733", "label": "5733\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5734", "label": "5734\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5735", "label": "5735\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5736", "label": "5736\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5737", "label": "5737\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5738", "label": "5738\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5739", "label": "5739\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5740", "label": "5740\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5741", "label": "5741\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5742", "label": "5742\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5743", "label": "5743\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5744", "label": "5744\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5745", "label": "5745\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5746", "label": "5746\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5747", "label": "5747\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5748", "label": "5748\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5749", "label": "5749\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5750", "label": "5750\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5751", "label": "5751\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5752", "label": "5752\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5753", "label": "5753\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5754", "label": "5754\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5755", "label": "5755\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5756", "label": "5756\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5757", "label": "5757\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5758", "label": "5758\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5700,5710", "label": "5700,5710\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5759", "label": "5759\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5760", "label": "5760\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5700,5716", "label": "5700,5716\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5761", "label": "5761\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5762", "label": "5762\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "5763", "label": "5763\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "6100", "label": "6100\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "6101", "label": "6101\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "6102", "label": "6102\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "6103", "label": "6103\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "6104", "label": "6104\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "6105", "label": "6105\nGroups: ", "shape": "dot"}, {"color": "#97c2fc", "id": "6106", "label": "6106\nGroups: ", "shape": "dot"}]);
+                  edges = new vis.DataSet([{"arrows": "to", "from": "500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "501"}, {"arrows": "to", "from": "500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "502"}, {"arrows": "to", "from": "500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "503"}, {"arrows": "to", "from": "500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "504"}, {"arrows": "to", "from": "500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "505"}, {"arrows": "to", "from": "500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "506"}, {"arrows": "to", "from": "500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "517"}, {"arrows": "to", "from": "500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "520"}, {"arrows": "to", "from": "500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "530"}, {"arrows": "to", "from": "500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "555"}, {"arrows": "to", "from": "500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "560"}, {"arrows": "to", "from": "500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "591"}, {"arrows": "to", "from": "500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "592"}, {"arrows": "to", "from": "500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "593"}, {"arrows": "to", "from": "509", "relation_type": "if_sid", "title": "Type: if_sid", "to": "510"}, {"arrows": "to", "from": "510", "relation_type": "if_sid", "title": "Type: if_sid", "to": "511"}, {"arrows": "to", "from": "510", "relation_type": "if_sid", "title": "Type: if_sid", "to": "512"}, {"arrows": "to", "from": "510", "relation_type": "if_sid", "title": "Type: if_sid", "to": "513"}, {"arrows": "to", "from": "510", "relation_type": "if_sid", "title": "Type: if_sid", "to": "514"}, {"arrows": "to", "from": "510", "relation_type": "if_sid", "title": "Type: if_sid", "to": "515"}, {"arrows": "to", "from": "510", "relation_type": "if_sid", "title": "Type: if_sid", "to": "516"}, {"arrows": "to", "from": "510", "relation_type": "if_sid", "title": "Type: if_sid", "to": "521"}, {"arrows": "to", "from": "514", "relation_type": "if_sid", "title": "Type: if_sid", "to": "518"}, {"arrows": "to", "from": "516", "relation_type": "if_sid", "title": "Type: if_sid", "to": "519"}, {"arrows": "to", "from": "530", "relation_type": "if_sid", "title": "Type: if_sid", "to": "531"}, {"arrows": "to", "from": "530", "relation_type": "if_sid", "title": "Type: if_sid", "to": "533"}, {"arrows": "to", "from": "530", "relation_type": "if_sid", "title": "Type: if_sid", "to": "534"}, {"arrows": "to", "from": "530", "relation_type": "if_sid", "title": "Type: if_sid", "to": "535"}, {"arrows": "to", "from": "531", "relation_type": "if_sid", "title": "Type: if_sid", "to": "532"}, {"arrows": "to", "from": "531", "relation_type": "if_sid", "title": "Type: if_sid", "to": "536"}, {"arrows": "to", "from": "600", "relation_type": "if_sid", "title": "Type: if_sid", "to": "601"}, {"arrows": "to", "from": "600", "relation_type": "if_sid", "title": "Type: if_sid", "to": "602"}, {"arrows": "to", "from": "600", "relation_type": "if_sid", "title": "Type: if_sid", "to": "603"}, {"arrows": "to", "from": "600", "relation_type": "if_sid", "title": "Type: if_sid", "to": "604"}, {"arrows": "to", "from": "600", "relation_type": "if_sid", "title": "Type: if_sid", "to": "605"}, {"arrows": "to", "from": "600", "relation_type": "if_sid", "title": "Type: if_sid", "to": "606"}, {"arrows": "to", "from": "600", "relation_type": "if_sid", "title": "Type: if_sid", "to": "607"}, {"arrows": "to", "from": "650", "relation_type": "if_sid", "title": "Type: if_sid", "to": "651"}, {"arrows": "to", "from": "650", "relation_type": "if_sid", "title": "Type: if_sid", "to": "652"}, {"arrows": "to", "from": "650", "relation_type": "if_sid", "title": "Type: if_sid", "to": "653"}, {"arrows": "to", "from": "650", "relation_type": "if_sid", "title": "Type: if_sid", "to": "654"}, {"arrows": "to", "from": "650", "relation_type": "if_sid", "title": "Type: if_sid", "to": "655"}, {"arrows": "to", "from": "650", "relation_type": "if_sid", "title": "Type: if_sid", "to": "656"}, {"arrows": "to", "from": "650", "relation_type": "if_sid", "title": "Type: if_sid", "to": "657"}, {"arrows": "to", "from": "650", "relation_type": "if_sid", "title": "Type: if_sid", "to": "658"}, {"arrows": "to", "from": "700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "701"}, {"arrows": "to", "from": "200", "relation_type": "if_sid", "title": "Type: if_sid", "to": "201"}, {"arrows": "to", "from": "200", "relation_type": "if_sid", "title": "Type: if_sid", "to": "210"}, {"arrows": "to", "from": "200", "relation_type": "if_sid", "title": "Type: if_sid", "to": "211"}, {"arrows": "to", "from": "200", "relation_type": "if_sid", "title": "Type: if_sid", "to": "220"}, {"arrows": "to", "from": "200", "relation_type": "if_sid", "title": "Type: if_sid", "to": "222"}, {"arrows": "to", "from": "200", "relation_type": "if_sid", "title": "Type: if_sid", "to": "230"}, {"arrows": "to", "from": "201", "relation_type": "if_sid", "title": "Type: if_sid", "to": "202"}, {"arrows": "to", "from": "201", "relation_type": "if_sid", "title": "Type: if_sid", "to": "203"}, {"arrows": "to", "from": "201", "relation_type": "if_sid", "title": "Type: if_sid", "to": "204"}, {"arrows": "to", "from": "201", "relation_type": "if_sid", "title": "Type: if_sid", "to": "205"}, {"arrows": "to", "from": "210", "relation_type": "if_sid", "title": "Type: if_sid", "to": "212"}, {"arrows": "to", "from": "210", "relation_type": "if_sid", "title": "Type: if_sid", "to": "213"}, {"arrows": "to", "from": "210", "relation_type": "if_sid", "title": "Type: if_sid", "to": "214"}, {"arrows": "to", "from": "210", "relation_type": "if_sid", "title": "Type: if_sid", "to": "215"}, {"arrows": "to", "from": "210", "relation_type": "if_sid", "title": "Type: if_sid", "to": "216"}, {"arrows": "to", "from": "211", "relation_type": "if_sid", "title": "Type: if_sid", "to": "217"}, {"arrows": "to", "from": "211", "relation_type": "if_sid", "title": "Type: if_sid", "to": "218"}, {"arrows": "to", "from": "230", "relation_type": "if_sid", "title": "Type: if_sid", "to": "231"}, {"arrows": "to", "from": "230", "relation_type": "if_sid", "title": "Type: if_sid", "to": "232"}, {"arrows": "to", "from": "230", "relation_type": "if_sid", "title": "Type: if_sid", "to": "233"}, {"arrows": "to", "from": "230", "relation_type": "if_sid", "title": "Type: if_sid", "to": "234"}, {"arrows": "to", "from": "230", "relation_type": "if_sid", "title": "Type: if_sid", "to": "235"}, {"arrows": "to", "from": "230", "relation_type": "if_sid", "title": "Type: if_sid", "to": "236"}, {"arrows": "to", "from": "230", "relation_type": "if_sid", "title": "Type: if_sid", "to": "237"}, {"arrows": "to", "from": "230", "relation_type": "if_sid", "title": "Type: if_sid", "to": "238"}, {"arrows": "to", "from": "230", "relation_type": "if_sid", "title": "Type: if_sid", "to": "239"}, {"arrows": "to", "from": "230", "relation_type": "if_sid", "title": "Type: if_sid", "to": "240"}, {"arrows": "to", "from": "230", "relation_type": "if_sid", "title": "Type: if_sid", "to": "241"}, {"arrows": "to", "from": "230", "relation_type": "if_sid", "title": "Type: if_sid", "to": "242"}, {"arrows": "to", "from": "400", "relation_type": "if_sid", "title": "Type: if_sid", "to": "401"}, {"arrows": "to", "from": "400", "relation_type": "if_sid", "title": "Type: if_sid", "to": "402"}, {"arrows": "to", "from": "400", "relation_type": "if_sid", "title": "Type: if_sid", "to": "403"}, {"arrows": "to", "from": "400", "relation_type": "if_sid", "title": "Type: if_sid", "to": "404"}, {"arrows": "to", "from": "400", "relation_type": "if_sid", "title": "Type: if_sid", "to": "405"}, {"arrows": "to", "from": "400", "relation_type": "if_sid", "title": "Type: if_sid", "to": "406"}, {"arrows": "to", "from": "400", "relation_type": "if_sid", "title": "Type: if_sid", "to": "407"}, {"arrows": "to", "from": "400", "relation_type": "if_sid", "title": "Type: if_sid", "to": "408"}, {"arrows": "to", "from": "400", "relation_type": "if_sid", "title": "Type: if_sid", "to": "409"}, {"arrows": "to", "from": "405", "relation_type": "if_sid", "title": "Type: if_sid", "to": "410"}, {"arrows": "to", "from": "405", "relation_type": "if_sid", "title": "Type: if_sid", "to": "411"}, {"arrows": "to", "from": "405", "relation_type": "if_sid", "title": "Type: if_sid", "to": "412"}, {"arrows": "to", "from": "405", "relation_type": "if_sid", "title": "Type: if_sid", "to": "413"}, {"arrows": "to", "from": "405", "relation_type": "if_sid", "title": "Type: if_sid", "to": "414"}, {"arrows": "to", "from": "405", "relation_type": "if_sid", "title": "Type: if_sid", "to": "415"}, {"arrows": "to", "from": "405", "relation_type": "if_sid", "title": "Type: if_sid", "to": "416"}, {"arrows": "to", "from": "405", "relation_type": "if_sid", "title": "Type: if_sid", "to": "417"}, {"arrows": "to", "from": "405", "relation_type": "if_sid", "title": "Type: if_sid", "to": "418"}, {"arrows": "to", "from": "420", "relation_type": "if_sid", "title": "Type: if_sid", "to": "421"}, {"arrows": "to", "from": "420", "relation_type": "if_sid", "title": "Type: if_sid", "to": "422"}, {"arrows": "to", "from": "420", "relation_type": "if_sid", "title": "Type: if_sid", "to": "423"}, {"arrows": "to", "from": "420", "relation_type": "if_sid", "title": "Type: if_sid", "to": "424"}, {"arrows": "to", "from": "420", "relation_type": "if_sid", "title": "Type: if_sid", "to": "428"}, {"arrows": "to", "from": "425", "relation_type": "if_sid", "title": "Type: if_sid", "to": "426"}, {"arrows": "to", "from": "425", "relation_type": "if_sid", "title": "Type: if_sid", "to": "427"}, {"arrows": "to", "from": "400,410", "relation_type": "if_sid", "title": "Type: if_sid", "to": "425"}, {"arrows": "to", "from": "1002", "relation_type": "if_sid", "title": "Type: if_sid", "to": "1009"}, {"arrows": "to", "from": "1002", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2942"}, {"arrows": "to", "from": "1002", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3752"}, {"arrows": "to", "from": "2100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2101"}, {"arrows": "to", "from": "2100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2102"}, {"arrows": "to", "from": "2100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2104"}, {"arrows": "to", "from": "2507", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2508"}, {"arrows": "to", "from": "2507", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2509"}, {"arrows": "to", "from": "2508", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "2509"}, {"arrows": "to", "from": "2550", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2551"}, {"arrows": "to", "from": "2800", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2801"}, {"arrows": "to", "from": "2800", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2802"}, {"arrows": "to", "from": "2800", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2803"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5101"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5102"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5103"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5104"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5105"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5106"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5107"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5108"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5109"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5110"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5111"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5112"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5113"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5130"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5131"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5132"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5133"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5135"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5138"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5139"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2935"}, {"arrows": "to", "from": "5100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2936"}, {"arrows": "to", "from": "5136", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5137"}, {"arrows": "to", "from": "5140", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5141"}, {"arrows": "to", "from": "2830", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2831"}, {"arrows": "to", "from": "2830", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2834"}, {"arrows": "to", "from": "2830", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2832"}, {"arrows": "to", "from": "2832", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2833"}, {"arrows": "to", "from": "5300", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5301"}, {"arrows": "to", "from": "5300", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5303"}, {"arrows": "to", "from": "5300", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5304"}, {"arrows": "to", "from": "5300", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5306"}, {"arrows": "to", "from": "5301", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5302"}, {"arrows": "to", "from": "5303, 5304", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5305"}, {"arrows": "to", "from": "5400", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5401"}, {"arrows": "to", "from": "5400", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5402"}, {"arrows": "to", "from": "5400", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5407"}, {"arrows": "to", "from": "5400", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5403"}, {"arrows": "to", "from": "5400", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5405"}, {"arrows": "to", "from": "5400", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5406"}, {"arrows": "to", "from": "5401", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5404"}, {"arrows": "to", "from": "9100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "9101"}, {"arrows": "to", "from": "9100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "9102"}, {"arrows": "to", "from": "9200", "relation_type": "if_sid", "title": "Type: if_sid", "to": "9201"}, {"arrows": "to", "from": "2900", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2901"}, {"arrows": "to", "from": "2900", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2902"}, {"arrows": "to", "from": "2900", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2903"}, {"arrows": "to", "from": "2900", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2904"}, {"arrows": "to", "from": "2930,2931", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2932"}, {"arrows": "to", "from": "2930,2931", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2933"}, {"arrows": "to", "from": "2930,2931", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2934"}, {"arrows": "to", "from": "2935", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2937"}, {"arrows": "to", "from": "2936", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2938"}, {"arrows": "to", "from": "2936", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2939"}, {"arrows": "to", "from": "2940", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2941"}, {"arrows": "to", "from": "2943", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2944"}, {"arrows": "to", "from": "2960", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2961"}, {"arrows": "to", "from": "2962", "relation_type": "if_sid", "title": "Type: if_sid", "to": "2963"}, {"arrows": "to", "from": "2963", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "2964"}, {"arrows": "to", "from": "3100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3101"}, {"arrows": "to", "from": "3100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3108"}, {"arrows": "to", "from": "3100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3109"}, {"arrows": "to", "from": "3101", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3102"}, {"arrows": "to", "from": "3101", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3103"}, {"arrows": "to", "from": "3101", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3104"}, {"arrows": "to", "from": "3101", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3105"}, {"arrows": "to", "from": "3101", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3106"}, {"arrows": "to", "from": "3101", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3107"}, {"arrows": "to", "from": "3102", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "3151"}, {"arrows": "to", "from": "3103", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "3152"}, {"arrows": "to", "from": "3104", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "3153"}, {"arrows": "to", "from": "3105", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "3154"}, {"arrows": "to", "from": "3106", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "3155"}, {"arrows": "to", "from": "3107", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "3156"}, {"arrows": "to", "from": "3108", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "3158"}, {"arrows": "to", "from": "3190", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3191"}, {"arrows": "to", "from": "3300", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3301"}, {"arrows": "to", "from": "3300", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3302"}, {"arrows": "to", "from": "3300", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3303"}, {"arrows": "to", "from": "3300", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3304"}, {"arrows": "to", "from": "3300", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3305"}, {"arrows": "to", "from": "3300", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3331"}, {"arrows": "to", "from": "3301", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "3351"}, {"arrows": "to", "from": "3302", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "3352"}, {"arrows": "to", "from": "3303", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "3353"}, {"arrows": "to", "from": "3304", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "3354"}, {"arrows": "to", "from": "3305", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "3355"}, {"arrows": "to", "from": "3306", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "3356"}, {"arrows": "to", "from": "3301, 3302", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3306"}, {"arrows": "to", "from": "3320", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3330"}, {"arrows": "to", "from": "3320", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3332"}, {"arrows": "to", "from": "3320", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3334"}, {"arrows": "to", "from": "3320", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3335"}, {"arrows": "to", "from": "3320", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3333"}, {"arrows": "to", "from": "3332", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "3357"}, {"arrows": "to", "from": "3395", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3396"}, {"arrows": "to", "from": "3395", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3397"}, {"arrows": "to", "from": "3395", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3398"}, {"arrows": "to", "from": "3398", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3399"}, {"arrows": "to", "from": "3500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3501"}, {"arrows": "to", "from": "3500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3502"}, {"arrows": "to", "from": "3600", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3601"}, {"arrows": "to", "from": "3600", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3602"}, {"arrows": "to", "from": "3600", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3603"}, {"arrows": "to", "from": "3601", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "3651"}, {"arrows": "to", "from": "3700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3701"}, {"arrows": "to", "from": "3700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3702"}, {"arrows": "to", "from": "3702", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "3751"}, {"arrows": "to", "from": "3800", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3801"}, {"arrows": "to", "from": "3800", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3802"}, {"arrows": "to", "from": "3801", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "3851"}, {"arrows": "to", "from": "3802", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "3852"}, {"arrows": "to", "from": "3900", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3901"}, {"arrows": "to", "from": "3900", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3902"}, {"arrows": "to", "from": "3900", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3903"}, {"arrows": "to", "from": "3900", "relation_type": "if_sid", "title": "Type: if_sid", "to": "3904"}, {"arrows": "to", "from": "3901", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "3911"}, {"arrows": "to", "from": "3902", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "3910"}, {"arrows": "to", "from": "4300", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4310"}, {"arrows": "to", "from": "4300", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4311"}, {"arrows": "to", "from": "4300", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4312"}, {"arrows": "to", "from": "4300", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4313"}, {"arrows": "to", "from": "4300", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4314"}, {"arrows": "to", "from": "4300", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4315"}, {"arrows": "to", "from": "4310", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4330"}, {"arrows": "to", "from": "4310", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4338"}, {"arrows": "to", "from": "4310", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "4380"}, {"arrows": "to", "from": "4311", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4331"}, {"arrows": "to", "from": "4311", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "4381"}, {"arrows": "to", "from": "4312", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4337"}, {"arrows": "to", "from": "4312", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "4382"}, {"arrows": "to", "from": "4313", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4325"}, {"arrows": "to", "from": "4313", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4326"}, {"arrows": "to", "from": "4313", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4327"}, {"arrows": "to", "from": "4313", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4332"}, {"arrows": "to", "from": "4313", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "4383"}, {"arrows": "to", "from": "4314", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4321"}, {"arrows": "to", "from": "4314", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4322"}, {"arrows": "to", "from": "4314", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4323"}, {"arrows": "to", "from": "4314", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4324"}, {"arrows": "to", "from": "4314", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4334"}, {"arrows": "to", "from": "4314", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4335"}, {"arrows": "to", "from": "4314", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4336"}, {"arrows": "to", "from": "4314", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4339"}, {"arrows": "to", "from": "4314", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4340"}, {"arrows": "to", "from": "4314", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4341"}, {"arrows": "to", "from": "4314", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4342"}, {"arrows": "to", "from": "4333", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "4385"}, {"arrows": "to", "from": "4330, 4331, 4332", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4333"}, {"arrows": "to", "from": "4334", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "4386"}, {"arrows": "to", "from": "4500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4501"}, {"arrows": "to", "from": "4500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4502"}, {"arrows": "to", "from": "4500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4503"}, {"arrows": "to", "from": "4500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4513"}, {"arrows": "to", "from": "4500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4504"}, {"arrows": "to", "from": "4500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4560"}, {"arrows": "to", "from": "4501", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4506"}, {"arrows": "to", "from": "4501", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4508"}, {"arrows": "to", "from": "4502", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4507"}, {"arrows": "to", "from": "4503", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4505"}, {"arrows": "to", "from": "4503", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "4550"}, {"arrows": "to", "from": "4503", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "4551"}, {"arrows": "to", "from": "4513", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "4552"}, {"arrows": "to", "from": "4513", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "4553"}, {"arrows": "to", "from": "4504", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4509"}, {"arrows": "to", "from": "4700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4710"}, {"arrows": "to", "from": "4700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4711"}, {"arrows": "to", "from": "4700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4712"}, {"arrows": "to", "from": "4700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4713"}, {"arrows": "to", "from": "4700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4714"}, {"arrows": "to", "from": "4700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4715"}, {"arrows": "to", "from": "4700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4716"}, {"arrows": "to", "from": "4700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4717"}, {"arrows": "to", "from": "4714", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4724"}, {"arrows": "to", "from": "4715", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4721"}, {"arrows": "to", "from": "4715", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4722"}, {"arrows": "to", "from": "4800", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4801"}, {"arrows": "to", "from": "4800", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4802"}, {"arrows": "to", "from": "4800", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4803"}, {"arrows": "to", "from": "4800", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4804"}, {"arrows": "to", "from": "4800", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4805"}, {"arrows": "to", "from": "4800", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4806"}, {"arrows": "to", "from": "4800", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4807"}, {"arrows": "to", "from": "4801", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4811"}, {"arrows": "to", "from": "4803", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "4851"}, {"arrows": "to", "from": "4804", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "4850"}, {"arrows": "to", "from": "4806", "relation_type": "if_sid", "title": "Type: if_sid", "to": "4810"}, {"arrows": "to", "from": "5500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5501"}, {"arrows": "to", "from": "5500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5502"}, {"arrows": "to", "from": "5500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5503"}, {"arrows": "to", "from": "5500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5504"}, {"arrows": "to", "from": "5500", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5552"}, {"arrows": "to", "from": "5501", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5521"}, {"arrows": "to", "from": "5502", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5522"}, {"arrows": "to", "from": "5503", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "5551"}, {"arrows": "to", "from": "5504", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5523"}, {"arrows": "to", "from": "5556", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5557"}, {"arrows": "to", "from": "5600", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5601"}, {"arrows": "to", "from": "5600", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5602"}, {"arrows": "to", "from": "5600", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5603"}, {"arrows": "to", "from": "5602", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "5603"}, {"arrows": "to", "from": "5602", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "5631"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5701"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5702"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5704"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5706"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5707"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5709"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5710"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5711"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5713"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5715"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5716"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5717"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5718"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5721"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5722"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5723"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5724"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5725"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5726"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5727"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5728"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5729"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5730"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5731"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5732"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5733"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5734"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5735"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5736"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5737"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5738"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5739"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5740"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5741"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5742"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5743"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5744"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5745"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5746"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5747"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5748"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5749"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5750"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5751"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5754"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5755"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5756"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5757"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5761"}, {"arrows": "to", "from": "5700", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5762"}, {"arrows": "to", "from": "5702", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "5703"}, {"arrows": "to", "from": "5704", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "5705"}, {"arrows": "to", "from": "5710", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "5712"}, {"arrows": "to", "from": "5713", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "5714"}, {"arrows": "to", "from": "5716", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "5720"}, {"arrows": "to", "from": "5718", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "5719"}, {"arrows": "to", "from": "5750", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5752"}, {"arrows": "to", "from": "5750", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5753"}, {"arrows": "to", "from": "5750", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5759"}, {"arrows": "to", "from": "5700,5710", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5758"}, {"arrows": "to", "from": "5760", "relation_type": "if_matched_sid", "title": "Type: if_matched_sid", "to": "5763"}, {"arrows": "to", "from": "5700,5716", "relation_type": "if_sid", "title": "Type: if_sid", "to": "5760"}, {"arrows": "to", "from": "6100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "6101"}, {"arrows": "to", "from": "6100", "relation_type": "if_sid", "title": "Type: if_sid", "to": "6102"}, {"arrows": "to", "from": "6101", "relation_type": "if_sid", "title": "Type: if_sid", "to": "6104"}, {"arrows": "to", "from": "6102", "relation_type": "if_sid", "title": "Type: if_sid", "to": "6103"}, {"arrows": "to", "from": "6102", "relation_type": "if_sid", "title": "Type: if_sid", "to": "6105"}, {"arrows": "to", "from": "6103", "relation_type": "if_sid", "title": "Type: if_sid", "to": "6106"}]);
+
+                  nodeColors = {};
+                  allNodes = nodes.get({ returnType: "Object" });
+                  for (nodeId in allNodes) {
+                    nodeColors[nodeId] = allNodes[nodeId].color;
+                  }
+                  allEdges = edges.get({ returnType: "Object" });
+                  // adding nodes and edges to the graph
+                  data = {nodes: nodes, edges: edges};
+
+                  var options = {"nodes": {"shape": "dot", "size": 10, "font": {"size": 14}}, "edges": {"arrows": {"to": {"enabled": true}}}, "physics": {"forceAtlas2Based": {"gravitationalConstant": -50, "centralGravity": 0.01, "springLength": 100}, "minVelocity": 0.75}, "layout": {"randomSeed": 191006, "improvedLayout": false}};
+
+                  
+
+
+                  
+
+                  network = new vis.Network(container, data, options);
+
+                  
+                    network.on("click", neighbourhoodHighlight);
+                  
+
+                  
+                    network.on("selectNode", neighbourhoodHighlight);
+                  
+
+                  
+
+
+                  
+                      network.on("stabilizationProgress", function(params) {
+                          document.getElementById('loadingBar').removeAttribute("style");
+                          var maxWidth = 496;
+                          var minWidth = 20;
+                          var widthFactor = params.iterations/params.total;
+                          var width = Math.max(minWidth,maxWidth * widthFactor);
+                          document.getElementById('bar').style.width = width + 'px';
+                          document.getElementById('text').innerHTML = Math.round(widthFactor*100) + '%';
+                      });
+                      network.once("stabilizationIterationsDone", function() {
+                          document.getElementById('text').innerHTML = '100%';
+                          document.getElementById('bar').style.width = '496px';
+                          document.getElementById('loadingBar').style.opacity = 0;
+                          // really clean the dom element
+                          setTimeout(function () {document.getElementById('loadingBar').style.display = 'none';}, 500);
+                      });
+                  
+
+                  return network;
+
+              }
+              drawGraph();
+        </script>
+    </body>
+</html>
