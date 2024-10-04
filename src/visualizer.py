@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 import time
 import xml.etree.ElementTree as ET
 from collections import defaultdict
@@ -195,10 +196,24 @@ class RuleVisualizer:
         }
         """)
 
-        net.set_template_dir(template_directory=os.path.abspath('./'),
+        # Template file should be in the same directory as the script
+        if not os.path.exists(os.path.join(get_root_dir(), 'template.html')):
+            raise FileNotFoundError(
+                'Template file not found. Please make sure the template.html file is in the same directory as the script.')
+
+        net.set_template_dir(template_directory=os.path.abspath(get_root_dir()),
                              template_file='template.html')
 
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         out_file = os.path.join(os.path.abspath(
             './'), f'{timestamp}_interactive_graph.html')
         net.show(out_file, local=True, notebook=False)
+
+
+def get_root_dir() -> str:
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    elif __file__:
+        return os.path.dirname(__file__)
+    else:
+        return './'
