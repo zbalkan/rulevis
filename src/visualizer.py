@@ -100,9 +100,14 @@ class RuleVisualizer:
         return all_groups
 
     def extract_rule_description(self, children: list[tuple[str, Optional[str]]]) -> Optional[str]:
+        description: list[str] = []
         for child in children:
             if child[0] == 'description':
-                return str(child[1])
+                d = child[1]
+                if d:
+                    description.append(d)
+        if len(description) > 0:
+            return ' '.join(description)
         return None
 
     def wrap_with_root(self, xml_content: str) -> str:
