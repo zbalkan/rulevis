@@ -2,7 +2,10 @@
 
 A simple tool to visualize the Wazuh ruleset for analysis of connections. It may help finding loops, duplicates, and redundant rules.
 
-![A screenshot from default ruleset](/assets/screenshot.png)
+![A screenshot of the whole default ruleset](/assets/full.png)
+
+![A screenshot of a single rule cluster](/assets/single.png)
+
 
 ## Requirements
 
