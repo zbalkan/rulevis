@@ -2,6 +2,9 @@
 
 A simple tool to visualize the Wazuh ruleset for analysis of connections. It may help finding loops, duplicates, and redundant rules.
 
+![A screenshot from default ruleset](/assets/screenshot.png)
+
+
 ## Requirements
 
 - Python 3.9+
