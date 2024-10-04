@@ -4,7 +4,6 @@ A simple tool to visualize the Wazuh ruleset for analysis of connections. It may
 
 ![A screenshot from default ruleset](/assets/screenshot.png)
 
-
 ## Requirements
 
 - Python 3.9+
@@ -12,6 +11,7 @@ A simple tool to visualize the Wazuh ruleset for analysis of connections. It may
 
 ## Installation
 
+- Clone this repository
 - Use your preferred virtual environment module for Python and activate
 - use `pip install -r ./requirements.txt` to install dependencies
 - Start using the script
@@ -31,4 +31,4 @@ options:
 
 ## Note
 
-Beware the higher the number of the nodes, the higher the CPU and memory usage, the longer drawing time. Start by using `-t` and increase incremetally to ensure it works.
+Beware the higher the number of the nodes, the higher the CPU and memory usage, the longer drawing time. Start by using `-t` and increase incrementally to ensure it works.
