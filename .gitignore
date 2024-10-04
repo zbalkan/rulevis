@@ -136,8 +136,6 @@ dmypy.json
 .vscode/
 
 # Project specific excludes
-pyvenv.cfg
-/Scripts
 /out
-launch.json
 *.db
+*graph.html
