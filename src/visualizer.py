@@ -141,69 +141,118 @@ class RuleVisualizer:
 
     def visualize_graph_interactive_with_controls(self) -> None:
         net = Network(height="800px", width="100%", directed=True, neighborhood_highlight=True,
-                      select_menu=False, filter_menu=True, heading='Wazuh Ruleset Graph')
+                    select_menu=False, filter_menu=True, heading='Wazuh Ruleset Graph')
 
+        # Define colors for each connection type
+        connection_colors = {
+            "if_group": "green",
+            "if_sid": "blue",
+            "if_matched_sid": "purple",
+            "if_matched_group": "yellow"
+        }
+
+        # Define cycle color overlay
+        cycle_color = "red"  # Red for cycle highlighting
+
+        # Detect cycles using networkx
+        cycles = list(nx.simple_cycles(self.G))
+
+        # Check if there are any cycles
+        if cycles:
+            # Track nodes and edges involved in cycles
+            cycle_nodes = set()
+            cycle_edges = set()
+
+            # Collect nodes and edges in cycles
+            for cycle in cycles:
+                cycle_nodes.update(cycle)  # Add all nodes in this cycle
+                for i in range(len(cycle)):
+                    source = cycle[i]
+                    target = cycle[(i + 1) % len(cycle)]
+                    cycle_edges.add((source, target))  # Add edges in the cycle
+        else:
+            logging.info("No cycles detected in the graph.")
+
+        # Add nodes to pyvis network, applying cycle color as overlay if in cycle
         for node, data in self.G.nodes(data=True):
             group_list = ','.join(data.get('groups', []))
             desc = data.get('description', 'No description')
             tooltip = f"Groups: {group_list}"
-            net.add_node(node, label=f"{node}: {desc}",
-                         title=tooltip, group=group_list)
 
+            # Base color for node (use cycle color if in a cycle)
+            if cycles and node in cycle_nodes:
+                node_color = cycle_color
+            else:
+                node_color = "lightblue"  # Default color if not part of a cycle
+            net.add_node(node, label=f"{node}: {desc}",
+                        title=tooltip, group=group_list, color=node_color)
+
+        # Add edges to pyvis network with type-specific colors and cycle overlay if applicable
         for source, target, edge_data in self.G.edges(data=True):
             relation_type = edge_data.get('relation_type')
-            color = edge_data.get('color', 'black')
-            net.add_edge(
-                source, target, title=f"Type: {relation_type}", relation_type=relation_type, color=color)
 
+            # Use type-specific color; if in cycle, apply cycle color as an overlay
+            primary_color = connection_colors.get(
+                relation_type, "black")  # Default to black if type unknown
+            if cycles and (source, target) in cycle_edges:
+                edge_color = cycle_color
+            else:
+                edge_color = primary_color
+
+            net.add_edge(
+                source, target, title=f"Type: {relation_type}", relation_type=relation_type, color=edge_color)
+
+        # Set custom options for interactive visualization
         net.set_options("""
         var options = {
-          "nodes": {
+        "nodes": {
             "shape": "dot",
             "size": 10,
             "font": {
-              "size": 14
+            "size": 14
             }
-          },
-          "edges": {
+        },
+        "edges": {
             "arrows": {
-              "to": {
+            "to": {
                 "enabled": true
-              }
+            }
             },
             "smooth": {
-              "type": "continuous"
+            "type": "continuous"
             }
-          },
-          "physics": {
+        },
+        "physics": {
             "barnesHut": {
-              "gravitationalConstant": -2000,
-              "centralGravity": 0.3,
-              "springLength": 100,
-              "springConstant": 0.05,
-              "avoidOverlap": 0.1
+            "gravitationalConstant": -2000,
+            "centralGravity": 0.3,
+            "springLength": 100,
+            "springConstant": 0.05,
+            "avoidOverlap": 0.1
             },
             "minVelocity": 0.75,
             "maxVelocity": 50,
             "solver": "barnesHut",
             "timestep": 0.5,
             "adaptiveTimestep": true
-          },
-          "layout": {
+        },
+        "layout": {
             "randomSeed": 191006,
             "improvedLayout": false
-          }
+        }
         }
         """)
 
-        # Template file should be in the same directory as the script
+        # Ensure template file exists
         if not os.path.exists(os.path.join(get_root_dir(), 'template.html')):
             raise FileNotFoundError(
                 'Template file not found. Please make sure the template.html file is in the same directory as the script.')
 
+        # Use custom template for visualization
         net.set_template_dir(template_directory=os.path.abspath(get_root_dir()),
-                             template_file='template.html')
+                            template_file='template.html')
 
+        # Save and show the interactive graph
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         out_file = os.path.join(os.path.abspath(
             './'), f'{timestamp}_interactive_graph.html')
