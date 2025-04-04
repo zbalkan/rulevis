@@ -8,12 +8,27 @@ import os
 import sys
 from typing import Final
 
-from visualizer import RuleVisualizer
+from generator import GraphGenerator
 
 APP_NAME: Final[str] = 'rulevis'
 APP_VERSION: Final[str] = '0.1'
 DESCRIPTION: Final[str] = f"{APP_NAME} ({APP_VERSION}) is a Wazuh rule visualization tool."
 ENCODING: Final[str] = "utf-8"
+
+
+def generate_graph(paths: list[str], top: int, output: str) -> None:
+    logging.info("Generating rule graph...")
+    generator = GraphGenerator(paths=paths, top=top)
+    generator.build_graph_from_xml()
+    generator.save_graph('./graph.pickle')
+    logging.info(f"Graph saved to {output}")
+
+
+def run_flask_app(graph_path: str) -> None:
+    from flask_app import create_app
+    app = create_app(graph_path)  # Load the graph once at startup
+    logging.info("Starting Flask app...")
+    app.run(debug=True, use_reloader=False)
 
 
 def validate_paths(paths: list[str]) -> None:
@@ -34,16 +49,34 @@ def main() -> None:
                         help="Path to the Wazuh rule directories. Comma-separated multiple paths are accepted.")
     parser.add_argument("--top", "-t", dest="top", required=False, default=0, type=int,
                         help="Top N XML files to process, especially for testing purposes")
+    parser.add_argument("--generate", "-g", action="store_true",
+                        help="Only generate graph.pickle and exit")
+    parser.add_argument("--webpage", "-w", action="store_true",
+                        help="Only start the Flask web app")
+    parser.add_argument("--output", "-o", default="graph.pickle",
+                        help="Path to output gpickle file")
 
     args: argparse.Namespace = parser.parse_args()
     paths: list[str] = [p for p in str(args.path).split(',') if p != '']
     top = int(args.top)
+    output: str = str(args.output)
 
     validate_paths(paths)
 
-    visualizer = RuleVisualizer(paths=paths, top=top)
-    visualizer.build_graph_from_xml()
-    visualizer.visualize_graph_interactive_with_controls()
+    if not args.generate and not args.webpage:
+        # Run both steps in order
+        generate_graph(paths, top, output)
+        run_flask_app(output)
+
+    elif args.generate:
+        generate_graph(paths, top, output)
+
+    elif args.webpage:
+        if not os.path.exists(output):
+            print(
+                f"Error: {output} does not exist. Generate the graph first with -g.")
+            sys.exit(1)
+        run_flask_app(output)
 
 
 if __name__ == "__main__":

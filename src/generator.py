@@ -1,19 +1,17 @@
 import logging
 import os
 import sys
-import time
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from typing import Final, Optional
 
+import pickle
 import networkx as nx
-from networkx import MultiDiGraph
-from pyvis.network import Network
 
 ENCODING: Final[str] = "utf-8"
 
 
-class RuleVisualizer:
+class GraphGenerator:
     def __init__(self, paths: list[str], top: int = 0) -> None:
         self.paths = paths
         self.top = top
@@ -114,7 +112,7 @@ class RuleVisualizer:
     def wrap_with_root(self, xml_content: str) -> str:
         return f"<root>{xml_content}</root>"
 
-    def build_graph_from_xml(self) -> MultiDiGraph:
+    def build_graph_from_xml(self) -> None:
         xml_files = self.get_all_xml_files()
 
         for xml_file in xml_files:
@@ -127,7 +125,7 @@ class RuleVisualizer:
                     f"Error reading file {xml_file}: {e}", exc_info=True)
                 continue
 
-            wrapped_content = self.wrap_with_root(xml_content)
+            wrapped_content: str = self.wrap_with_root(xml_content)
 
             try:
                 parsed_xml = ET.fromstring(wrapped_content)
@@ -137,126 +135,24 @@ class RuleVisualizer:
             except Exception as e:
                 logging.error(f"Error parsing {xml_file}: {e}", exc_info=True)
 
-        return self.G
+        first_level_rules = [node for node in self.G.nodes if self.G.in_degree(
+            node) == 0]
 
-    def visualize_graph_interactive_with_controls(self) -> None:
-        net = Network(height="800px", width="100%", directed=True, neighborhood_highlight=True,
-                    select_menu=False, filter_menu=True, heading='Wazuh Ruleset Graph')
+        # Add synthetic root and connect to top-level rules
+        synthetic_root = '0'  # Root has ID of 0
+        self.G.add_node(
+            synthetic_root, description="Synthetic root node", groups=["__meta__"])
 
-        # Define colors for each connection type
-        connection_colors = {
-            "if_group": "green",
-            "if_sid": "blue",
-            "if_matched_sid": "purple",
-            "if_matched_group": "yellow"
-        }
+        for node in first_level_rules:
+            self.add_edge_with_type(synthetic_root, node, "root", "black")
 
-        # Define cycle color overlay
-        cycle_color = "red"  # Red for cycle highlighting
-
-        # Detect cycles using networkx
-        cycles = list(nx.simple_cycles(self.G))
-
-        # Check if there are any cycles
-        if cycles:
-            # Track nodes and edges involved in cycles
-            cycle_nodes = set()
-            cycle_edges = set()
-
-            # Collect nodes and edges in cycles
-            for cycle in cycles:
-                cycle_nodes.update(cycle)  # Add all nodes in this cycle
-                for i in range(len(cycle)):
-                    source = cycle[i]
-                    target = cycle[(i + 1) % len(cycle)]
-                    cycle_edges.add((source, target))  # Add edges in the cycle
-        else:
-            logging.info("No cycles detected in the graph.")
-
-        # Add nodes to pyvis network, applying cycle color as overlay if in cycle
-        for node, data in self.G.nodes(data=True):
-            group_list = ','.join(data.get('groups', []))
-            desc = data.get('description', 'No description')
-            tooltip = f"Groups: {group_list}"
-
-            # Base color for node (use cycle color if in a cycle)
-            if cycles and node in cycle_nodes:
-                node_color = cycle_color
-            else:
-                node_color = "lightblue"  # Default color if not part of a cycle
-            net.add_node(node, label=f"{node}: {desc}",
-                        title=tooltip, group=group_list, color=node_color)
-
-        # Add edges to pyvis network with type-specific colors and cycle overlay if applicable
-        for source, target, edge_data in self.G.edges(data=True):
-            relation_type = edge_data.get('relation_type')
-
-            # Use type-specific color; if in cycle, apply cycle color as an overlay
-            primary_color = connection_colors.get(
-                relation_type, "black")  # Default to black if type unknown
-            if cycles and (source, target) in cycle_edges:
-                edge_color = cycle_color
-            else:
-                edge_color = primary_color
-
-            net.add_edge(
-                source, target, title=f"Type: {relation_type}", relation_type=relation_type, color=edge_color)
-
-        # Set custom options for interactive visualization
-        net.set_options("""
-        var options = {
-        "nodes": {
-            "shape": "dot",
-            "size": 10,
-            "font": {
-            "size": 14
-            }
-        },
-        "edges": {
-            "arrows": {
-            "to": {
-                "enabled": true
-            }
-            },
-            "smooth": {
-            "type": "continuous"
-            }
-        },
-        "physics": {
-            "barnesHut": {
-            "gravitationalConstant": -2000,
-            "centralGravity": 0.3,
-            "springLength": 100,
-            "springConstant": 0.05,
-            "avoidOverlap": 0.1
-            },
-            "minVelocity": 0.75,
-            "maxVelocity": 50,
-            "solver": "barnesHut",
-            "timestep": 0.5,
-            "adaptiveTimestep": true
-        },
-        "layout": {
-            "randomSeed": 191006,
-            "improvedLayout": false
-        }
-        }
-        """)
-
-        # Ensure template file exists
-        if not os.path.exists(os.path.join(get_root_dir(), 'template.html')):
-            raise FileNotFoundError(
-                'Template file not found. Please make sure the template.html file is in the same directory as the script.')
-
-        # Use custom template for visualization
-        net.set_template_dir(template_directory=os.path.abspath(get_root_dir()),
-                            template_file='template.html')
-
-        # Save and show the interactive graph
-        timestamp = time.strftime("%Y%m%d-%H%M%S")
-        out_file = os.path.join(os.path.abspath(
-            './'), f'{timestamp}_interactive_graph.html')
-        net.show(out_file, local=True, notebook=False)
+    def save_graph(self, output_path: str) -> None:
+        try:
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            pickle.dump(self.G, open(output_path, 'wb'))
+            logging.info(f"Graph saved to {output_path}")
+        except Exception as e:
+            logging.error(f"Error saving graph: {e}", exc_info=True)
 
 
 def get_root_dir() -> str:
