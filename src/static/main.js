@@ -110,16 +110,18 @@ function updateGraph(newNodes, newLinks) {
 
     const nodeEnter = node.enter().append("g")
         .attr("class", "node")
-        .call(d3.drag()
-            .on("start", dragstarted)
-            .on("drag", dragged)
-            .on("end", dragended))
+        // Double-click: clear highlight and expand node if applicable
         .on("dblclick", (event, d) => {
             event.stopPropagation();
+            clearHighlight();
             if (d.has_children) {
                 expandNode(d.id);
             }
         })
+        .call(d3.drag()
+            .on("start", dragstarted)
+            .on("drag", dragged)
+            .on("end", dragended))
         .on("mouseover", (event, d) => {
             tooltipTimeout = setTimeout(() => {
                 tooltip.transition().duration(TOOLTIP_SHOW_DURATION).style("opacity", 0.9);
@@ -183,7 +185,6 @@ function expandNode(nodeId) {
                 nodeToUpdate.node_type = "default";
                 nodeToUpdate.has_children = false;
             }
-
             updateGraph(data.nodes, data.edges);
         });
 }
@@ -211,14 +212,17 @@ function handleSearch() {
     if (!searchInput) return;
 
     const foundNode = nodes.find(n => n.id === searchInput);
-    // Clear any existing highlights
-    container.selectAll("g.node").classed("highlight", false);
+    // Clear any existing highlights and resume simulation in case it was paused
+    clearHighlight();
 
     if (foundNode) {
         // Add a highlight class to the found node
         container.selectAll("g.node")
             .filter(d => d.id === foundNode.id)
             .classed("highlight", true);
+
+        // Pause simulation during highlighting
+        simulation.stop();
 
         // Pan to center the found node if its coordinates are available
         if (foundNode.x != null && foundNode.y != null) {
@@ -230,10 +234,33 @@ function handleSearch() {
     }
 }
 
-document.getElementById("searchBtn").addEventListener("click", handleSearch);
+document.getElementById("searchBtn").addEventListener("click", function (event) {
+    event.stopPropagation();
+    handleSearch();
+});
 document.getElementById("searchBox").addEventListener("keyup", (event) => {
     if (event.key === "Enter") {
+        event.stopPropagation();
         handleSearch();
+    }
+});
+
+// ----- Highlight Reset Logic -----
+function clearHighlight() {
+    container.selectAll("g.node").classed("highlight", false);
+    // Resume simulation when highlight is cleared
+    simulation.restart();
+}
+
+// Global click handler: if user clicks anywhere that is not a search element or a highlighted node, clear the highlight.
+document.addEventListener("click", function (event) {
+    const target = event.target;
+    // Do not clear if click is on the search box or button
+    if (target.id === "searchBtn" || target.id === "searchBox") return;
+    // Check if the click target is inside a node element with the "highlight" class.
+    const highlightedNode = target.closest("g.node.highlight");
+    if (!highlightedNode) {
+        clearHighlight();
     }
 });
 
