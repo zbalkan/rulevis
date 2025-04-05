@@ -14,6 +14,11 @@ document.getElementById("resetZoom").addEventListener("click", () => {
 });
 
 const tooltip = d3.select("#tooltip");
+let tooltipTimeout;
+const TOOLTIP_SHOW_DELAY = 500;      // ms delay before showing tooltip
+const TOOLTIP_HIDE_DURATION = 300;   // ms to fade out tooltip
+const TOOLTIP_SHOW_DURATION = 200;   // ms to fade in tooltip
+
 const width = window.innerWidth;
 const height = window.innerHeight * 0.9;
 
@@ -63,13 +68,20 @@ function updateGraph(newNodes, newLinks) {
         .insert("line", ":first-child")
         .attr("stroke", d => d.color || "#999")
         .on("mouseover", (event, d) => {
-            tooltip.transition().duration(200).style("opacity", 0.9);
-            tooltip.html(`Relation: ${d.relation_type || 'unknown'}`)
-                .style("left", (event.pageX + 5) + "px")
-                .style("top", (event.pageY - 28) + "px");
+            tooltipTimeout = setTimeout(() => {
+                tooltip.transition().duration(TOOLTIP_SHOW_DURATION).style("opacity", 0.9);
+                tooltip.html(
+                    `ID: ${d.id}<br>` +
+                    `Description: ${d.description || 'N/A'}<br>` +
+                    `Groups: ${(d.groups || []).join(', ')}`
+                )
+                    .style("left", (event.pageX + 5) + "px")
+                    .style("top", (event.pageY - 28) + "px");
+            }, TOOLTIP_SHOW_DELAY);
         })
         .on("mouseout", () => {
-            tooltip.transition().duration(500).style("opacity", 0);
+            clearTimeout(tooltipTimeout);
+            tooltip.transition().duration(TOOLTIP_HIDE_DURATION).style("opacity", 0);
         });
 
     const node = container.selectAll("g.node")
@@ -88,17 +100,20 @@ function updateGraph(newNodes, newLinks) {
             }
         })
         .on("mouseover", (event, d) => {
-            tooltip.transition().duration(200).style("opacity", .9);
-            tooltip.html(
-                `ID: ${d.id}<br>` +
-                `Description: ${d.description || 'N/A'}<br>` +
-                `Groups: ${(d.groups || []).join(', ')}`
-            )
-                .style("left", (event.pageX + 5) + "px")
-                .style("top", (event.pageY - 28) + "px");
+            tooltipTimeout = setTimeout(() => {
+                tooltip.transition().duration(TOOLTIP_SHOW_DURATION).style("opacity", 0.9);
+                tooltip.html(
+                    `ID: ${d.id}<br>` +
+                    `Description: ${d.description || 'N/A'}<br>` +
+                    `Groups: ${(d.groups || []).join(', ')}`
+                )
+                    .style("left", (event.pageX + 5) + "px")
+                    .style("top", (event.pageY - 28) + "px");
+            }, TOOLTIP_SHOW_DELAY);
         })
         .on("mouseout", () => {
-            tooltip.transition().duration(500).style("opacity", 0);
+            clearTimeout(tooltipTimeout);
+            tooltip.transition().duration(TOOLTIP_HIDE_DURATION).style("opacity", 0);
         });
 
     nodeEnter.append("circle")
