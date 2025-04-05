@@ -44,21 +44,23 @@ class GraphGenerator:
 
     def add_relationship_edges(self, rule_id: str, if_sid: Optional[str], if_matched_sid: Optional[str], if_group: Optional[str], if_matched_group: Optional[str]) -> None:
         if if_sid:
-            self.add_edge_with_type(if_sid, rule_id, 'if_sid', 'blue')
-        if if_matched_sid:
-            self.add_edge_with_type(
-                if_matched_sid, rule_id, 'if_matched_sid', 'green')
+            for sid in if_sid.split(','):
+                self.add_edge_with_type(sid.strip(), rule_id, 'if_sid', 'blue')
 
-        # Add relationships based on if_group and if_matched_group
+        if if_matched_sid:
+            for sid in if_matched_sid.split(','):
+                self.add_edge_with_type(
+                    sid.strip(), rule_id, 'if_matched_sid', 'green')
+
         if if_group:
             for group in if_group.split(','):
-                for parent_rule in self.group_membership.get(group, []):
+                for parent_rule in self.group_membership.get(group.strip(), []):
                     self.add_edge_with_type(
                         parent_rule, rule_id, 'if_group', 'red')
 
         if if_matched_group:
             for group in if_matched_group.split(','):
-                for parent_rule in self.group_membership.get(group, []):
+                for parent_rule in self.group_membership.get(group.strip(), []):
                     self.add_edge_with_type(
                         parent_rule, rule_id, 'if_matched_group', 'purple')
 
@@ -145,6 +147,10 @@ class GraphGenerator:
 
         for node in first_level_rules:
             self.add_edge_with_type(synthetic_root, node, "root", "black")
+
+        print("Total nodes:", self.G.number_of_nodes())
+        print("First-level children (connected to root):", len(list(self.G.successors("0"))))
+
 
     def save_graph(self, output_path: str) -> None:
         try:
