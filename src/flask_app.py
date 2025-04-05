@@ -62,6 +62,9 @@ def create_app(graph_path: str) -> Flask:
                 button:hover {
                     background: #444;
                 }
+                text {
+                    user-select: none;
+                }
             </style>
 
         </head>
