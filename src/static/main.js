@@ -82,6 +82,7 @@ function updateGraph(newNodes, newLinks) {
             .on("drag", dragged)
             .on("end", dragended))
         .on("dblclick", (event, d) => {
+            event.stopPropagation();  // 👈 Prevent zoom handler from triggering
             if (d.has_children) {
                 expandNode(d.id);
             }
