@@ -70,11 +70,7 @@ function updateGraph(newNodes, newLinks) {
         .on("mouseover", (event, d) => {
             tooltipTimeout = setTimeout(() => {
                 tooltip.transition().duration(TOOLTIP_SHOW_DURATION).style("opacity", 0.9);
-                tooltip.html(
-                    `ID: ${d.id}<br>` +
-                    `Description: ${d.description || 'N/A'}<br>` +
-                    `Groups: ${(d.groups || []).join(', ')}`
-                )
+                tooltip.html(`Relation: ${d.relation_type || 'unknown'}`)
                     .style("left", (event.pageX + 5) + "px")
                     .style("top", (event.pageY - 28) + "px");
             }, TOOLTIP_SHOW_DELAY);
