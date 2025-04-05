@@ -18,11 +18,11 @@ def create_app(graph_path: str) -> Flask:
     def index():
         return render_template_string("""
         <!DOCTYPE html>
-        <html lang=\"en\">
+        <html lang="en">
         <head>
-            <meta charset=\"UTF-8\">
+            <meta charset="UTF-8">
             <title>Rule Graph Explorer</title>
-            <script src=\"https://d3js.org/d3.v7.min.js\"></script>
+            <script src="https://d3js.org/d3.v7.min.js"></script>
             <link rel="stylesheet" href="static/styles.css">
         </head>
         <body>
@@ -63,8 +63,9 @@ def create_app(graph_path: str) -> Flask:
                 "id": nid,
                 **G.nodes[nid],
                 "has_children": G.out_degree(nid) > 0,
-                "is_expanded": nid == root,  # root starts expanded
-                "color": "steelblue" if G.out_degree(nid) > 0 else "grey"
+                "is_expanded": nid == root,
+                # Root node is always 'default' (grey) even if it has children
+                "node_type": "default" if nid == root else ("expandable" if G.out_degree(nid) > 0 else "default")
             }
             for nid in [root] + children
         ]
@@ -73,8 +74,7 @@ def create_app(graph_path: str) -> Flask:
             {
                 "source": root,
                 "target": child,
-                "color": "#171717",  # very light gray for visual de-emphasis
-                "relation_type": "No parent object"
+                "relation_type": "no_parent"
             }
             for child in children
         ]
@@ -91,16 +91,21 @@ def create_app(graph_path: str) -> Flask:
 
         children = list(G.successors(node_id))
         nodes = [
-            {"id": nid, **G.nodes[nid], "has_children": G.out_degree(nid) > 0,
-             "color": "steelblue" if G.out_degree(nid) > 0 else "grey"} for nid in [node_id] + children
+            {
+                "id": nid,
+                **G.nodes[nid],
+                "has_children": G.out_degree(nid) > 0,
+                "node_type": "expandable" if G.out_degree(nid) > 0 else "default"
+            }
+            for nid in [node_id] + children
         ]
         edges = [
             {
                 "source": node_id,
                 "target": child,
-                "color": G.get_edge_data(node_id, child)[0].get("color", "black"),
                 "relation_type": G.get_edge_data(node_id, child)[0].get("relation_type", "unknown")
-            } for child in children
+            }
+            for child in children
         ]
 
         return jsonify({

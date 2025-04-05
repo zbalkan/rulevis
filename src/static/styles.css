@@ -96,3 +96,42 @@ text {
     font-size: 10px;
     border-top: 1px solid #444;
 }
+
+/* Semantic Edge Styles */
+.edge-if_sid {
+    stroke: blue;
+}
+
+.edge-if_matched_sid {
+    stroke: green;
+}
+
+.edge-if_group {
+    stroke: red;
+}
+
+.edge-if_matched_group {
+    stroke: purple;
+}
+
+.edge-no_parent {
+    stroke: #171717;
+}
+
+.edge-unknown {
+    stroke: #999;
+}
+
+/* Semantic Node Styles */
+.node-expandable {
+    fill: steelblue;
+}
+
+.node-default {
+    fill: grey;
+}
+
+/* Transition for smooth state changes */
+.circle {
+    transition: fill 0.3s ease;
+}

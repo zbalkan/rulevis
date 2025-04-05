@@ -1,11 +1,11 @@
 import logging
 import os
+import pickle
 import sys
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from typing import Final, Optional
 
-import pickle
 import networkx as nx
 
 ENCODING: Final[str] = "utf-8"
@@ -35,34 +35,31 @@ class GraphGenerator:
             logging.info('Processing all files...')
             return xml_files
 
-    def add_edge_with_type(self, source: str, target: str, relation_type: str, color: str) -> None:
+    def add_edge_with_type(self, source: str, target: str, relation_type: str) -> None:
         if logging.getLogger().getEffectiveLevel() <= logging.DEBUG:
             logging.debug(
                 f"Adding edge from {source} to {target} with type {relation_type}")
-        self.G.add_edge(
-            source, target, relation_type=relation_type, color=color)
+        self.G.add_edge(source, target, relation_type=relation_type)
 
     def add_relationship_edges(self, rule_id: str, if_sid: Optional[str], if_matched_sid: Optional[str], if_group: Optional[str], if_matched_group: Optional[str]) -> None:
         if if_sid:
             for sid in if_sid.split(','):
-                self.add_edge_with_type(sid.strip(), rule_id, 'if_sid', 'blue')
+                self.add_edge_with_type(sid.strip(), rule_id, 'if_sid')
 
         if if_matched_sid:
             for sid in if_matched_sid.split(','):
-                self.add_edge_with_type(
-                    sid.strip(), rule_id, 'if_matched_sid', 'green')
+                self.add_edge_with_type(sid.strip(), rule_id, 'if_matched_sid')
 
         if if_group:
             for group in if_group.split(','):
                 for parent_rule in self.group_membership.get(group.strip(), []):
-                    self.add_edge_with_type(
-                        parent_rule, rule_id, 'if_group', 'red')
+                    self.add_edge_with_type(parent_rule, rule_id, 'if_group')
 
         if if_matched_group:
             for group in if_matched_group.split(','):
                 for parent_rule in self.group_membership.get(group.strip(), []):
                     self.add_edge_with_type(
-                        parent_rule, rule_id, 'if_matched_group', 'purple')
+                        parent_rule, rule_id, 'if_matched_group')
 
     def parse_groups_and_rules(self, element: ET.Element, inherited_groups: list[str]) -> None:
         if element.tag == 'rule':
@@ -137,8 +134,8 @@ class GraphGenerator:
             except Exception as e:
                 logging.error(f"Error parsing {xml_file}: {e}", exc_info=True)
 
-        first_level_rules = [node for node in self.G.nodes if self.G.in_degree(
-            node) == 0]
+        first_level_rules = [
+            node for node in self.G.nodes if self.G.in_degree(node) == 0]
 
         # Add synthetic root and connect to top-level rules
         synthetic_root = '0'  # Root has ID of 0
@@ -146,11 +143,11 @@ class GraphGenerator:
             synthetic_root, description="Synthetic root node", groups=["__meta__"])
 
         for node in first_level_rules:
-            self.add_edge_with_type(synthetic_root, node, "root", "black")
+            self.add_edge_with_type(synthetic_root, node, "root")
 
         print("Total nodes:", self.G.number_of_nodes())
-        print("First-level children (connected to root):", len(list(self.G.successors("0"))))
-
+        print("First-level children (connected to root):",
+              len(list(self.G.successors("0"))))
 
     def save_graph(self, output_path: str) -> None:
         try:

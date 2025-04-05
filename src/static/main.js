@@ -68,7 +68,6 @@ function updateGraph(newNodes, newLinks) {
                 }
             }
             n.is_expanded = n.is_expanded || false;
-            n.color = (n.has_children && !n.is_expanded) ? "steelblue" : "grey";
             nodes.push(n);
         }
     });
@@ -85,12 +84,13 @@ function updateGraph(newNodes, newLinks) {
         target: nodes.find(n => n.id === l.target)
     }));
 
+    // Update edges: assign semantic classes based on relation_type
     const link = container.selectAll("line")
         .data(fullLinks, d => d.source.id + '-' + d.target.id);
 
     link.enter()
         .insert("line", ":first-child")
-        .attr("stroke", d => d.color || "#999")
+        .attr("class", d => `edge edge-${d.relation_type || 'unknown'}`)
         .on("mouseover", (event, d) => {
             tooltipTimeout = setTimeout(() => {
                 tooltip.transition().duration(TOOLTIP_SHOW_DURATION).style("opacity", 0.9);
@@ -104,6 +104,7 @@ function updateGraph(newNodes, newLinks) {
             tooltip.transition().duration(TOOLTIP_HIDE_DURATION).style("opacity", 0);
         });
 
+    // Update nodes: assign semantic classes based on node_type
     const node = container.selectAll("g.node")
         .data(nodes, d => d.id);
 
@@ -114,7 +115,7 @@ function updateGraph(newNodes, newLinks) {
             .on("drag", dragged)
             .on("end", dragended))
         .on("dblclick", (event, d) => {
-            event.stopPropagation();  // 👈 Prevent zoom handler from triggering
+            event.stopPropagation();
             if (d.has_children) {
                 expandNode(d.id);
             }
@@ -137,17 +138,17 @@ function updateGraph(newNodes, newLinks) {
         });
 
     nodeEnter.append("circle")
-        .attr("r", 10)
-        .attr("fill", d => d.color || "steelblue");
+        .attr("class", d => `circle ${d.node_type ? 'node-' + d.node_type : 'node-default'}`)
+        .attr("r", 10);
 
     nodeEnter.append("text")
         .attr("x", 12)
         .attr("dy", ".35em")
         .text(d => `${d.id}`);
 
-    // UPDATE existing node colors if needed
+    // Update existing node classes if needed
     container.selectAll("g.node").select("circle")
-        .attr("fill", d => d.color || "steelblue");
+        .attr("class", d => `circle ${d.node_type ? 'node-' + d.node_type : 'node-default'}`);
 
     simulation.nodes(nodes).on("tick", () => {
         container.selectAll("line")
@@ -179,7 +180,7 @@ function expandNode(nodeId) {
             const nodeToUpdate = nodes.find(n => n.id === nodeId);
             if (nodeToUpdate) {
                 nodeToUpdate.is_expanded = true;
-                nodeToUpdate.color = "grey";
+                nodeToUpdate.node_type = "default";
                 nodeToUpdate.has_children = false;
             }
 
