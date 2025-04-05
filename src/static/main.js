@@ -11,7 +11,6 @@ const zoom = d3.zoom()
     .on("zoom", (event) => {
         container.attr("transform", event.transform);
     });
-
 svg.call(zoom);
 
 // Block right-click context menu on SVG canvas if not clicking on a node.
@@ -32,19 +31,11 @@ document.getElementById("resetGraph").addEventListener("click", () => {
     simulation.nodes([]);
     simulation.force("link").links([]);
     simulation.on("tick", null);
-
     nodes.length = 0;
     links.length = 0;
     container.selectAll("*").remove();
-
-    // Clear the displayed rule IDs set
     displayedRuleIDs.clear();
-
-    svg.transition().duration(500).call(
-        zoom.transform,
-        d3.zoomIdentity
-    );
-
+    svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
     loadInitialGraph();
 });
 
@@ -72,8 +63,7 @@ function hideTooltip() {
     tooltip.transition().duration(TOOLTIP_HIDE_DURATION).style("opacity", 0);
 }
 
-// Helper: Check if all parents of a node are already displayed.
-// If node.parent_ids is not provided, assume the default parent is the root "0".
+// (Helper areParentsDisplayed remains available if needed.)
 function areParentsDisplayed(node) {
     if (node.parent_ids && node.parent_ids.length > 0) {
         return node.parent_ids.every(pid => displayedRuleIDs.has(pid));
@@ -108,7 +98,6 @@ function updateGraph(newNodes, newLinks) {
             n.is_expanded = n.is_expanded || false;
             n.parents_expanded = n.parents_expanded || false;
             nodes.push(n);
-            // Add new node ID to the global set
             displayedRuleIDs.add(n.id);
         }
     });
@@ -269,17 +258,13 @@ function dragended(event, d) {
 function handleSearch() {
     const searchInput = document.getElementById("searchBox").value.trim();
     if (!searchInput) return;
-
     const foundNode = nodes.find(n => n.id === searchInput);
     clearHighlight();
-
     if (foundNode) {
         container.selectAll("g.node")
             .filter(d => d.id === foundNode.id)
             .classed("highlight", true);
-
         simulation.stop();
-
         if (foundNode.x != null && foundNode.y != null) {
             svg.transition().duration(750)
                 .call(zoom.transform, d3.zoomIdentity.translate(width / 2 - foundNode.x, height / 2 - foundNode.y));
@@ -312,7 +297,6 @@ function showContextMenu(event, d) {
     simulation.stop();
     contextMenuOpen = true;
     hideTooltip();
-
     contextMenu.html("");
 
     // "Show children" menu item
@@ -320,15 +304,35 @@ function showContextMenu(event, d) {
         .text("Show children")
         .style("padding", "5px")
         .style("cursor", "pointer")
+        .style("opacity", 0.5)
+        .style("pointer-events", "none")
         .on("click", () => {
             hideContextMenu();
             if (d.has_children) {
                 expandNode(d.id);
             }
         });
-    if (!d.has_children) {
-        showChildrenItem.style("opacity", 0.5)
-            .style("pointer-events", "none");
+    if (d.has_children) {
+        // Check via API if there is at least one child not yet displayed.
+        fetch(`/api/node/${d.id}`)
+            .then(res => res.json())
+            .then(data => {
+                let childIDs = data.nodes.filter(n => n.id !== d.id).map(n => n.id);
+                const notDisplayed = childIDs.some(cid => !displayedRuleIDs.has(cid));
+                if (notDisplayed) {
+                    showChildrenItem.style("opacity", 1)
+                        .style("pointer-events", "auto");
+                } else {
+                    // All children are displayed; update state.
+                    d.has_children = false;
+                    d.node_type = "default";
+                    showChildrenItem.style("opacity", 0.5)
+                        .style("pointer-events", "none");
+                }
+            })
+            .catch(error => {
+                console.error("Error fetching children: ", error);
+            });
     }
 
     // "Show parents" menu item - created disabled initially
@@ -344,22 +348,16 @@ function showContextMenu(event, d) {
                 expandParents(d.id);
             }
         });
-    // Check parent's relationships via API only if not already expanded.
     if (!d.parents_expanded) {
         fetch(`/api/parents/${d.id}`)
             .then(res => res.json())
             .then(data => {
-                // Assume data.nodes contains parent's nodes (excluding d itself)
-                let parentIDs = data.nodes
-                    .filter(n => n.id !== d.id)
-                    .map(n => n.id);
-                // If there are actual parent IDs besides the root ("0"), remove "0" from the list.
+                let parentIDs = data.nodes.filter(n => n.id !== d.id).map(n => n.id);
                 if (parentIDs.length > 1) {
                     parentIDs = parentIDs.filter(pid => pid !== "0");
                 }
                 const allDisplayed = parentIDs.every(pid => displayedRuleIDs.has(pid));
                 if (!allDisplayed) {
-                    // Not all parents are displayed; enable the "Show parents" option
                     showParentsItem.style("opacity", 1)
                         .style("pointer-events", "auto");
                 }
@@ -376,7 +374,6 @@ function showContextMenu(event, d) {
 
 function hideContextMenu() {
     contextMenu.style("display", "none");
-    // Unfreeze: resume simulation and allow tooltips again
     if (contextMenuOpen) {
         simulation.restart();
         contextMenuOpen = false;

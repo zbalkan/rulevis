@@ -1,6 +1,5 @@
 import os
 import pickle
-
 from flask import Flask, jsonify, render_template_string
 from networkx import MultiDiGraph
 
@@ -63,10 +62,10 @@ def create_app(graph_path: str) -> Flask:
         nodes = [
             {
                 "id": nid,
-                **G.nodes[nid],
-                "has_children": G.out_degree(nid) > 0,
-                "is_expanded": nid == root,
-                "node_type": "default" if nid == root else ("expandable" if G.out_degree(nid) > 0 else "default")
+                **{k: v for k, v in G.nodes[nid].items() if k != "node_type"},
+                "has_children": (G.out_degree(nid) > 0),
+                "is_expanded": (nid == root),
+                "node_type": "default" if (nid == root or G.out_degree(nid) == 0) else "expandable"
             }
             for nid in [root] + children
         ]
@@ -80,10 +79,7 @@ def create_app(graph_path: str) -> Flask:
             for child in children
         ]
 
-        return jsonify({
-            "nodes": nodes,
-            "edges": edges
-        })
+        return jsonify({"nodes": nodes, "edges": edges})
 
     @app.route("/api/node/<node_id>", methods=["GET"])
     def get_node_children(node_id):
@@ -94,9 +90,9 @@ def create_app(graph_path: str) -> Flask:
         nodes = [
             {
                 "id": nid,
-                **G.nodes[nid],
-                "has_children": G.out_degree(nid) > 0,
-                "node_type": "expandable" if G.out_degree(nid) > 0 else "default"
+                **{k: v for k, v in G.nodes[nid].items() if k != "node_type"},
+                "has_children": (G.out_degree(nid) > 0),
+                "node_type": "default" if (nid == node_id or G.out_degree(nid) == 0) else "expandable"
             }
             for nid in [node_id] + children
         ]
@@ -109,31 +105,26 @@ def create_app(graph_path: str) -> Flask:
             for child in children
         ]
 
-        return jsonify({
-            "nodes": nodes,
-            "edges": edges
-        })
+        return jsonify({"nodes": nodes, "edges": edges})
 
     @app.route("/api/parents/<node_id>", methods=["GET"])
     def get_node_parents(node_id):
         if node_id not in G:
             return jsonify({"error": f"Node '{node_id}' not found"}), 404
 
-        # Get parent nodes of the given node
         parents = list(G.predecessors(node_id))
+        if not parents:
+            parents = ["0"]
 
-        # Include the original node as well (for context)
         nodes = [
             {
                 "id": nid,
-                **G.nodes[nid],
-                "has_children": G.out_degree(nid) > 0,
-                "node_type": "expandable" if G.out_degree(nid) > 0 else "default"
+                **{k: v for k, v in G.nodes[nid].items() if k != "node_type"},
+                "has_children": (G.out_degree(nid) > 0),
+                "node_type": "default" if (nid == "0" or G.out_degree(nid) == 0) else "expandable"
             }
             for nid in parents + [node_id]
         ]
-
-        # Build edges from each parent to the node
         edges = [
             {
                 "source": parent,
@@ -142,10 +133,11 @@ def create_app(graph_path: str) -> Flask:
             }
             for parent in parents
         ]
-
-        return jsonify({
-            "nodes": nodes,
-            "edges": edges
-        })
+        return jsonify({"nodes": nodes, "edges": edges})
 
     return app
+
+
+if __name__ == "__main__":
+    app = create_app("graph.pickle")
+    app.run(debug=True)
