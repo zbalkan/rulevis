@@ -1,5 +1,6 @@
 import os
 import pickle
+
 from flask import Flask, jsonify, render_template_string
 from networkx import MultiDiGraph
 
@@ -22,59 +23,29 @@ def create_app(graph_path: str) -> Flask:
             <meta charset=\"UTF-8\">
             <title>Rule Graph Explorer</title>
             <script src=\"https://d3js.org/d3.v7.min.js\"></script>
-            <style>
-                body {
-                    font-family: sans-serif;
-                    margin: 0;
-                    background-color: #121212;
-                    color: #eee;
-                }
-
-                svg {
-                    width: 100%;
-                    height: 90vh;
-                    background-color: #121212;
-                    border: 1px solid #444;
-                }
-
-                .tooltip {
-                    position: absolute;
-                    text-align: left;
-                    padding: 8px;
-                    font: 12px sans-serif;
-                    background: #333;
-                    color: #eee;
-                    border: 1px solid #888;
-                    border-radius: 4px;
-                    pointer-events: none;
-                    opacity: 0;
-                }
-
-                button {
-                    background: #333;
-                    color: #eee;
-                    border: 1px solid #888;
-                    padding: 6px 12px;
-                    border-radius: 4px;
-                    cursor: pointer;
-                }
-
-                button:hover {
-                    background: #444;
-                }
-                text {
-                    user-select: none;
-                    pointer-events: none;
-                }
-            </style>
-
+            <link rel="stylesheet" href="static/styles.css">
         </head>
         <body>
-        <h2>Interactive Rule Graph Explorer</h2>
-        <button id="resetZoom" style="margin: 10px;">Reset Zoom</button>
-        <svg></svg>
-        <div id=\"tooltip\" class=\"tooltip\"></div>
-        <script src=\"static/main.js\"></script>
+        <div class="navbar">
+            <div class="navbar-left">
+                <div class="navbar-title">Interactive Rule Graph Explorer</div>
+            </div>
+            <div class="navbar-links">
+                <button id="resetZoom">Reset Zoom</button>
+            </div>
+        </div>
+
+        <div class="content">
+            <svg></svg>
+            <div id="tooltip" class="tooltip"></div>
+            <script src="static/main.js"></script>
+        </div>
+
+        <div class="footer">
+            <p>Visit official Wazuh documentation for <a href="https://documentation.wazuh.com/current/user-manual/ruleset/ruleset-xml-syntax/rules.html" target="_blank">Wazuh Rule Syntax</a>.</p>
+            <p>&copy; 2025 <a href="https://zaferbalkan.com" target="_blank">Zafer Balkan</a></p>
+            <p>The brand <a href="https://wazuh.com/" target="_blank">Wazuh</a> and related marks, emblems and images are registered trademarks of their respective owners.</p>
+        </div>
         </body>
         </html>
         """)

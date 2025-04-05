@@ -119,7 +119,6 @@ function updateGraph(newNodes, newLinks) {
     nodeEnter.append("text")
         .attr("x", 12)
         .attr("dy", ".35em")
-        .attr("fill", "#ffffff")
         .text(d => `${d.id}`);
 
     // UPDATE existing node colors if needed
