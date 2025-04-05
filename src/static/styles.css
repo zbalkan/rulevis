@@ -135,3 +135,10 @@ text {
 .circle {
     transition: fill 0.3s ease;
 }
+
+/* Highlight style for searched nodes */
+.node.highlight circle {
+    stroke: yellow;
+    stroke-width: 3px;
+    transition: stroke 0.3s ease;
+}

@@ -205,4 +205,37 @@ function dragended(event, d) {
     d.fy = d.y;
 }
 
+// ----- Search Functionality -----
+function handleSearch() {
+    const searchInput = document.getElementById("searchBox").value.trim();
+    if (!searchInput) return;
+
+    const foundNode = nodes.find(n => n.id === searchInput);
+    // Clear any existing highlights
+    container.selectAll("g.node").classed("highlight", false);
+
+    if (foundNode) {
+        // Add a highlight class to the found node
+        container.selectAll("g.node")
+            .filter(d => d.id === foundNode.id)
+            .classed("highlight", true);
+
+        // Pan to center the found node if its coordinates are available
+        if (foundNode.x != null && foundNode.y != null) {
+            svg.transition().duration(750)
+                .call(zoom.transform, d3.zoomIdentity.translate(width / 2 - foundNode.x, height / 2 - foundNode.y));
+        }
+    } else {
+        alert("Node not found: " + searchInput);
+    }
+}
+
+document.getElementById("searchBtn").addEventListener("click", handleSearch);
+document.getElementById("searchBox").addEventListener("keyup", (event) => {
+    if (event.key === "Enter") {
+        handleSearch();
+    }
+});
+
+// Initial graph load
 loadInitialGraph();

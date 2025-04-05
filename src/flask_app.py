@@ -33,6 +33,8 @@ def create_app(graph_path: str) -> Flask:
             <div class="navbar-links">
                 <button id="resetZoom">Reset Zoom</button>
                 <button id="resetGraph">Reset Graph</button>
+                <input type="text" id="searchBox" placeholder="Search Rule ID">
+                <button id="searchBtn">Search</button>
             </div>
         </div>
 
@@ -64,7 +66,6 @@ def create_app(graph_path: str) -> Flask:
                 **G.nodes[nid],
                 "has_children": G.out_degree(nid) > 0,
                 "is_expanded": nid == root,
-                # Root node is always 'default' (grey) even if it has children
                 "node_type": "default" if nid == root else ("expandable" if G.out_degree(nid) > 0 else "default")
             }
             for nid in [root] + children
