@@ -9,8 +9,32 @@ const zoom = d3.zoom()
 
 svg.call(zoom);
 
+// Reset zoom button handler
 document.getElementById("resetZoom").addEventListener("click", () => {
     svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+});
+
+// Reset graph button handler
+document.getElementById("resetGraph").addEventListener("click", () => {
+    // Stop simulation and clear forces
+    simulation.stop();
+    simulation.nodes([]);
+    simulation.force("link").links([]);
+    simulation.on("tick", null);
+
+    // Clear graph data and SVG elements
+    nodes.length = 0;
+    links.length = 0;
+    container.selectAll("*").remove();
+
+    // Reset zoom to default view
+    svg.transition().duration(500).call(
+        zoom.transform,
+        d3.zoomIdentity
+    );
+
+    // Reload from root node
+    loadInitialGraph();
 });
 
 const tooltip = d3.select("#tooltip");

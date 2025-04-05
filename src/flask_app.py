@@ -32,6 +32,7 @@ def create_app(graph_path: str) -> Flask:
             </div>
             <div class="navbar-links">
                 <button id="resetZoom">Reset Zoom</button>
+                <button id="resetGraph">Reset Graph</button>
             </div>
         </div>
 
