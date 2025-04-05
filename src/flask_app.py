@@ -64,6 +64,7 @@ def create_app(graph_path: str) -> Flask:
                 }
                 text {
                     user-select: none;
+                    pointer-events: none;
                 }
             </style>
 
