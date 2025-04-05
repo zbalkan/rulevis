@@ -114,4 +114,38 @@ def create_app(graph_path: str) -> Flask:
             "edges": edges
         })
 
+    @app.route("/api/parents/<node_id>", methods=["GET"])
+    def get_node_parents(node_id):
+        if node_id not in G:
+            return jsonify({"error": f"Node '{node_id}' not found"}), 404
+
+        # Get parent nodes of the given node
+        parents = list(G.predecessors(node_id))
+
+        # Include the original node as well (for context)
+        nodes = [
+            {
+                "id": nid,
+                **G.nodes[nid],
+                "has_children": G.out_degree(nid) > 0,
+                "node_type": "expandable" if G.out_degree(nid) > 0 else "default"
+            }
+            for nid in parents + [node_id]
+        ]
+
+        # Build edges from each parent to the node
+        edges = [
+            {
+                "source": parent,
+                "target": node_id,
+                "relation_type": G.get_edge_data(parent, node_id)[0].get("relation_type", "unknown")
+            }
+            for parent in parents
+        ]
+
+        return jsonify({
+            "nodes": nodes,
+            "edges": edges
+        })
+
     return app

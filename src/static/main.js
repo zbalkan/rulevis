@@ -1,3 +1,8 @@
+// Global set to track displayed rule IDs
+let displayedRuleIDs = new Set();
+// Flag to indicate if the context menu is open (freeze state)
+let contextMenuOpen = false;
+
 const svg = d3.select("svg");
 const container = svg.append("g");
 
@@ -9,6 +14,13 @@ const zoom = d3.zoom()
 
 svg.call(zoom);
 
+// Block right-click context menu on SVG canvas if not clicking on a node.
+svg.on("contextmenu", function (event) {
+    if (!event.target.closest("g.node")) {
+        event.preventDefault();
+    }
+});
+
 // Reset zoom button handler
 document.getElementById("resetZoom").addEventListener("click", () => {
     svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
@@ -16,32 +28,31 @@ document.getElementById("resetZoom").addEventListener("click", () => {
 
 // Reset graph button handler
 document.getElementById("resetGraph").addEventListener("click", () => {
-    // Stop simulation and clear forces
     simulation.stop();
     simulation.nodes([]);
     simulation.force("link").links([]);
     simulation.on("tick", null);
 
-    // Clear graph data and SVG elements
     nodes.length = 0;
     links.length = 0;
     container.selectAll("*").remove();
 
-    // Reset zoom to default view
+    // Clear the displayed rule IDs set
+    displayedRuleIDs.clear();
+
     svg.transition().duration(500).call(
         zoom.transform,
         d3.zoomIdentity
     );
 
-    // Reload from root node
     loadInitialGraph();
 });
 
 const tooltip = d3.select("#tooltip");
 let tooltipTimeout;
-const TOOLTIP_SHOW_DELAY = 500;      // ms delay before showing tooltip
-const TOOLTIP_HIDE_DURATION = 300;   // ms to fade out tooltip
-const TOOLTIP_SHOW_DURATION = 200;   // ms to fade in tooltip
+const TOOLTIP_SHOW_DELAY = 500;
+const TOOLTIP_HIDE_DURATION = 300;
+const TOOLTIP_SHOW_DURATION = 200;
 
 const width = window.innerWidth;
 const height = window.innerHeight * 0.9;
@@ -55,10 +66,37 @@ const simulation = d3.forceSimulation()
 let nodes = [];
 let links = [];
 
+// Helper function to hide tooltip
+function hideTooltip() {
+    clearTimeout(tooltipTimeout);
+    tooltip.transition().duration(TOOLTIP_HIDE_DURATION).style("opacity", 0);
+}
+
+// Helper: Check if all parents of a node are already displayed.
+// If node.parent_ids is not provided, assume the default parent is the root "0".
+function areParentsDisplayed(node) {
+    if (node.parent_ids && node.parent_ids.length > 0) {
+        return node.parent_ids.every(pid => displayedRuleIDs.has(pid));
+    } else {
+        return displayedRuleIDs.has("0");
+    }
+}
+
+// Create custom context menu element (initially hidden)
+const contextMenu = d3.select("body").append("div")
+    .attr("id", "contextMenu")
+    .style("position", "absolute")
+    .style("display", "none")
+    .style("background-color", "#333")
+    .style("color", "#eee")
+    .style("padding", "5px")
+    .style("border", "1px solid #888")
+    .style("border-radius", "4px")
+    .style("z-index", 1000);
+
 function updateGraph(newNodes, newLinks) {
     newNodes.forEach(n => {
         if (!nodes.some(existing => existing.id === n.id)) {
-            // Try to anchor new node near its parent if possible
             const parent = links.find(l => l.target === n.id);
             if (parent) {
                 const parentNode = nodes.find(p => p.id === parent.source);
@@ -68,7 +106,10 @@ function updateGraph(newNodes, newLinks) {
                 }
             }
             n.is_expanded = n.is_expanded || false;
+            n.parents_expanded = n.parents_expanded || false;
             nodes.push(n);
+            // Add new node ID to the global set
+            displayedRuleIDs.add(n.id);
         }
     });
 
@@ -84,7 +125,6 @@ function updateGraph(newNodes, newLinks) {
         target: nodes.find(n => n.id === l.target)
     }));
 
-    // Update edges: assign semantic classes based on relation_type
     const link = container.selectAll("line")
         .data(fullLinks, d => d.source.id + '-' + d.target.id);
 
@@ -92,6 +132,7 @@ function updateGraph(newNodes, newLinks) {
         .insert("line", ":first-child")
         .attr("class", d => `edge edge-${d.relation_type || 'unknown'}`)
         .on("mouseover", (event, d) => {
+            if (contextMenuOpen) return;
             tooltipTimeout = setTimeout(() => {
                 tooltip.transition().duration(TOOLTIP_SHOW_DURATION).style("opacity", 0.9);
                 tooltip.html(`Relation: ${d.relation_type || 'unknown'}`)
@@ -104,25 +145,32 @@ function updateGraph(newNodes, newLinks) {
             tooltip.transition().duration(TOOLTIP_HIDE_DURATION).style("opacity", 0);
         });
 
-    // Update nodes: assign semantic classes based on node_type
     const node = container.selectAll("g.node")
         .data(nodes, d => d.id);
 
     const nodeEnter = node.enter().append("g")
         .attr("class", "node")
-        // Double-click: clear highlight and expand node if applicable
+        .on("contextmenu", (event, d) => {
+            event.preventDefault();
+            event.stopPropagation();
+            hideTooltip();
+            showContextMenu(event, d);
+        })
         .on("dblclick", (event, d) => {
             event.stopPropagation();
+            hideContextMenu();
             clearHighlight();
             if (d.has_children) {
                 expandNode(d.id);
             }
         })
         .call(d3.drag()
+            .filter(function (event) { return event.button === 0; })
             .on("start", dragstarted)
             .on("drag", dragged)
             .on("end", dragended))
         .on("mouseover", (event, d) => {
+            if (contextMenuOpen) return;
             tooltipTimeout = setTimeout(() => {
                 tooltip.transition().duration(TOOLTIP_SHOW_DURATION).style("opacity", 0.9);
                 tooltip.html(
@@ -148,7 +196,6 @@ function updateGraph(newNodes, newLinks) {
         .attr("dy", ".35em")
         .text(d => `${d.id}`);
 
-    // Update existing node classes if needed
     container.selectAll("g.node").select("circle")
         .attr("class", d => `circle ${d.node_type ? 'node-' + d.node_type : 'node-default'}`);
 
@@ -189,6 +236,18 @@ function expandNode(nodeId) {
         });
 }
 
+function expandParents(nodeId) {
+    fetch(`/api/parents/${nodeId}`)
+        .then(res => res.json())
+        .then(data => {
+            const targetNode = nodes.find(n => n.id === nodeId);
+            if (targetNode) {
+                targetNode.parents_expanded = true;
+            }
+            updateGraph(data.nodes, data.edges);
+        });
+}
+
 function dragstarted(event, d) {
     if (!event.active) simulation.alphaTarget(0.3).restart();
     d.fx = d.x;
@@ -212,19 +271,15 @@ function handleSearch() {
     if (!searchInput) return;
 
     const foundNode = nodes.find(n => n.id === searchInput);
-    // Clear any existing highlights and resume simulation in case it was paused
     clearHighlight();
 
     if (foundNode) {
-        // Add a highlight class to the found node
         container.selectAll("g.node")
             .filter(d => d.id === foundNode.id)
             .classed("highlight", true);
 
-        // Pause simulation during highlighting
         simulation.stop();
 
-        // Pan to center the found node if its coordinates are available
         if (foundNode.x != null && foundNode.y != null) {
             svg.transition().duration(750)
                 .call(zoom.transform, d3.zoomIdentity.translate(width / 2 - foundNode.x, height / 2 - foundNode.y));
@@ -248,16 +303,93 @@ document.getElementById("searchBox").addEventListener("keyup", (event) => {
 // ----- Highlight Reset Logic -----
 function clearHighlight() {
     container.selectAll("g.node").classed("highlight", false);
-    // Resume simulation when highlight is cleared
     simulation.restart();
 }
 
-// Global click handler: if user clicks anywhere that is not a search element or a highlighted node, clear the highlight.
+// ----- Custom Context Menu Logic -----
+function showContextMenu(event, d) {
+    // Freeze all: pause simulation and disable tooltip actions
+    simulation.stop();
+    contextMenuOpen = true;
+    hideTooltip();
+
+    contextMenu.html("");
+
+    // "Show children" menu item
+    const showChildrenItem = contextMenu.append("div")
+        .text("Show children")
+        .style("padding", "5px")
+        .style("cursor", "pointer")
+        .on("click", () => {
+            hideContextMenu();
+            if (d.has_children) {
+                expandNode(d.id);
+            }
+        });
+    if (!d.has_children) {
+        showChildrenItem.style("opacity", 0.5)
+            .style("pointer-events", "none");
+    }
+
+    // "Show parents" menu item - created disabled initially
+    const showParentsItem = contextMenu.append("div")
+        .text("Show parents")
+        .style("padding", "5px")
+        .style("cursor", "pointer")
+        .style("opacity", 0.5)
+        .style("pointer-events", "none")
+        .on("click", () => {
+            hideContextMenu();
+            if (d.id !== "0" && !d.parents_expanded) {
+                expandParents(d.id);
+            }
+        });
+    // Check parent's relationships via API only if not already expanded.
+    if (!d.parents_expanded) {
+        fetch(`/api/parents/${d.id}`)
+            .then(res => res.json())
+            .then(data => {
+                // Assume data.nodes contains parent's nodes (excluding d itself)
+                let parentIDs = data.nodes
+                    .filter(n => n.id !== d.id)
+                    .map(n => n.id);
+                // If there are actual parent IDs besides the root ("0"), remove "0" from the list.
+                if (parentIDs.length > 1) {
+                    parentIDs = parentIDs.filter(pid => pid !== "0");
+                }
+                const allDisplayed = parentIDs.every(pid => displayedRuleIDs.has(pid));
+                if (!allDisplayed) {
+                    // Not all parents are displayed; enable the "Show parents" option
+                    showParentsItem.style("opacity", 1)
+                        .style("pointer-events", "auto");
+                }
+            })
+            .catch(error => {
+                console.error("Error fetching parents: ", error);
+            });
+    }
+
+    contextMenu.style("left", event.pageX + "px")
+        .style("top", event.pageY + "px")
+        .style("display", "block");
+}
+
+function hideContextMenu() {
+    contextMenu.style("display", "none");
+    // Unfreeze: resume simulation and allow tooltips again
+    if (contextMenuOpen) {
+        simulation.restart();
+        contextMenuOpen = false;
+    }
+}
+
+// Global click handler to hide context menu and reset highlight if clicking outside
 document.addEventListener("click", function (event) {
     const target = event.target;
-    // Do not clear if click is on the search box or button
     if (target.id === "searchBtn" || target.id === "searchBox") return;
-    // Check if the click target is inside a node element with the "highlight" class.
+    if (!target.closest("#contextMenu")) {
+        hideContextMenu();
+    }
     const highlightedNode = target.closest("g.node.highlight");
     if (!highlightedNode) {
         clearHighlight();
