@@ -158,59 +158,60 @@ const contextMenu = d3.select("body").append("div")
     .style("z-index", 1000);
 
 function updateGraph(newNodes, newLinks) {
-    newNodes.forEach(n => {
-        if (!nodes.some(existing => existing.id === n.id)) {
-            const parent = links.find(l => l.target === n.id);
-            if (parent) {
-                const parentNode = nodes.find(p => p.id === parent.source);
+    // 1. Merge or add nodes
+    newNodes.forEach(newNode => {
+        const existingNode = nodes.find(node => node.id === newNode.id);
+        if (existingNode) {
+            // Update key properties so the node's color/state changes if needed
+            existingNode.has_children = newNode.has_children;
+            existingNode.node_type = newNode.node_type;
+            // Optionally merge other fields like description, groups, etc.
+            existingNode.description = newNode.description;
+            existingNode.groups = newNode.groups;
+        } else {
+            // If it's a brand-new node, try to place it near its parent if known
+            const parentLink = links.find(l => l.target === newNode.id);
+            if (parentLink) {
+                const parentNode = nodes.find(n => n.id === parentLink.source);
                 if (parentNode && parentNode.x != null && parentNode.y != null) {
-                    n.x = parentNode.x + Math.random() * 20 - 10;
-                    n.y = parentNode.y + Math.random() * 20 - 10;
+                    newNode.x = parentNode.x + Math.random() * 20 - 10;
+                    newNode.y = parentNode.y + Math.random() * 20 - 10;
                 }
             }
-            n.is_expanded = n.is_expanded || false;
-            n.parents_expanded = n.parents_expanded || false;
-            nodes.push(n);
-            displayedRuleIDs.add(n.id);
+            // Initialize additional state
+            newNode.is_expanded = newNode.is_expanded || false;
+            newNode.parents_expanded = newNode.parents_expanded || false;
+            nodes.push(newNode);
+            displayedRuleIDs.add(newNode.id);
         }
     });
 
+    // 2. Merge or add links
     newLinks.forEach(l => {
-        if (!links.some(existing => existing.source === l.source && existing.target === l.target)) {
+        const exists = links.some(
+            existing => existing.source === l.source && existing.target === l.target
+        );
+        if (!exists) {
             links.push(l);
         }
     });
 
+    // 3. Create a mapped version of links with node objects as source/target
     const fullLinks = links.map(l => ({
         ...l,
         source: nodes.find(n => n.id === l.source),
         target: nodes.find(n => n.id === l.target)
     }));
 
-    const link = container.selectAll("line")
-        .data(fullLinks, d => d.source.id + '-' + d.target.id);
-
-    link.enter()
-        .insert("line", ":first-child")
-        .attr("class", d => `edge edge-${d.relation_type || 'unknown'}`)
-        .on("mouseover", (event, d) => {
-            if (contextMenuOpen) return;
-            tooltipTimeout = setTimeout(() => {
-                tooltip.transition().duration(TOOLTIP_SHOW_DURATION).style("opacity", 0.9);
-                tooltip.html(`Relation: ${d.relation_type || 'unknown'}`)
-                    .style("left", (event.pageX + 5) + "px")
-                    .style("top", (event.pageY - 28) + "px");
-            }, TOOLTIP_SHOW_DELAY);
-        })
-        .on("mouseout", () => {
-            clearTimeout(tooltipTimeout);
-            tooltip.transition().duration(TOOLTIP_HIDE_DURATION).style("opacity", 0);
-        });
-
-    const node = container.selectAll("g.node")
+    // 4. Node selection/enter/exit
+    const nodeSelection = container.selectAll("g.node")
         .data(nodes, d => d.id);
 
-    const nodeEnter = node.enter().append("g")
+    // Remove old nodes that no longer exist in 'nodes'
+    nodeSelection.exit().remove();
+
+    // Enter selection for new nodes
+    const nodeEnter = nodeSelection.enter().append("g")
         .attr("class", "node")
         .on("contextmenu", (event, d) => {
             event.preventDefault();
@@ -250,23 +251,50 @@ function updateGraph(newNodes, newLinks) {
         });
 
     nodeEnter.append("circle")
-        .attr("class", d => `circle ${d.node_type ? 'node-' + d.node_type : 'node-default'}`)
-        .attr("r", 10);
+        .attr("r", 10)
+        .attr("class", d => `circle ${d.node_type ? 'node-' + d.node_type : 'node-default'}`);
 
     nodeEnter.append("text")
         .attr("x", 12)
         .attr("dy", ".35em")
-        .text(d => `${d.id}`);
+        .text(d => d.id);
 
-    container.selectAll("g.node").select("circle")
+    // Update existing + new nodes in the DOM (to refresh CSS classes, etc.)
+    const allNodes = nodeEnter.merge(nodeSelection);
+    allNodes.select("circle")
         .attr("class", d => `circle ${d.node_type ? 'node-' + d.node_type : 'node-default'}`);
 
+    // 5. Link selection/enter/exit
+    const linkSelection = container.selectAll("line")
+        .data(fullLinks, d => d.source.id + "-" + d.target.id);
+
+    linkSelection.exit().remove();
+
+    linkSelection.enter()
+        .insert("line", ":first-child")
+        .attr("class", d => `edge edge-${d.relation_type || 'unknown'}`)
+        .on("mouseover", (event, d) => {
+            if (contextMenuOpen) return;
+            tooltipTimeout = setTimeout(() => {
+                tooltip.transition().duration(TOOLTIP_SHOW_DURATION).style("opacity", 0.9);
+                tooltip.html(`Relation: ${d.relation_type || 'unknown'}`)
+                    .style("left", (event.pageX + 5) + "px")
+                    .style("top", (event.pageY - 28) + "px");
+            }, TOOLTIP_SHOW_DELAY);
+        })
+        .on("mouseout", () => {
+            clearTimeout(tooltipTimeout);
+            tooltip.transition().duration(TOOLTIP_HIDE_DURATION).style("opacity", 0);
+        });
+
+    // 6. Update the simulation with the new node/link arrays
     simulation.nodes(nodes).on("tick", () => {
         container.selectAll("line")
             .attr("x1", d => d.source.x)
             .attr("y1", d => d.source.y)
             .attr("x2", d => d.target.x)
             .attr("y2", d => d.target.y);
+
         container.selectAll("g.node")
             .attr("transform", d => `translate(${d.x},${d.y})`);
     });
@@ -284,16 +312,22 @@ function loadInitialGraph() {
 }
 
 function expandNode(nodeId) {
-    // Pass the current displayed IDs to the backend
+    // Call API with current displayed node IDs.
     fetch(`/api/node/${nodeId}?displayed=${getDisplayedIds()}`)
         .then(res => res.json())
         .then(data => {
-            const nodeToUpdate = nodes.find(n => n.id === nodeId);
-            if (nodeToUpdate) {
-                nodeToUpdate.is_expanded = true;
-                nodeToUpdate.node_type = "default";  // Force default when children are expanded
-                nodeToUpdate.has_children = data.nodes.find(n => n.id === nodeId).has_children;
+            // Immediately add all returned nodes to the displayed set.
+            data.nodes.forEach(n => displayedRuleIDs.add(n.id));
+
+            // Force the parent's state to default (grey) right away.
+            const parentFromResponse = data.nodes.find(n => n.id === nodeId);
+            if (parentFromResponse) {
+                parentFromResponse.is_expanded = true;
+                parentFromResponse.node_type = "default";  // Force to default
+                parentFromResponse.has_children = false;     // Assume all children are now displayed
             }
+
+            // Update the graph with the API response.
             updateGraph(data.nodes, data.edges);
         });
 }
