@@ -406,6 +406,27 @@ document.addEventListener("click", function (event) {
     }
 });
 
+// Flag to indicate if simulation is paused via keyboard
+let simulationPausedByKey = false;
+
+document.addEventListener("keydown", (event) => {
+    // Check for Space key (key code "Space") or CTRL key (event.ctrlKey)
+    if (event.code === "Space" || event.ctrlKey) {
+        if (!simulationPausedByKey) {
+            simulationPausedByKey = true;
+            simulation.stop();
+        }
+    }
+});
+
+document.addEventListener("keyup", (event) => {
+    // On keyup, if space or ctrl is released, resume simulation
+    if (simulationPausedByKey && (event.code === "Space" || !event.ctrlKey)) {
+        simulationPausedByKey = false;
+        simulation.alpha(1).restart();
+    }
+});
+
 // Initial graph load
 loadInitialGraph();
 
