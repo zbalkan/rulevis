@@ -332,9 +332,11 @@ function dragended(event, d) {
 function handleSearch() {
     const searchInput = document.getElementById("searchBox").value.trim();
     if (!searchInput) return;
-    const foundNode = nodes.find(n => n.id === searchInput);
-    clearHighlight();
+
+    // Try to find the node in the current graph.
+    let foundNode = nodes.find(n => n.id === searchInput);
     if (foundNode) {
+        // Node exists in the canvas. Highlight it.
         container.selectAll("g.node")
             .filter(d => d.id === foundNode.id)
             .classed("highlight", true);
@@ -344,7 +346,32 @@ function handleSearch() {
                 .call(zoom.transform, d3.zoomIdentity.translate(width / 2 - foundNode.x, height / 2 - foundNode.y));
         }
     } else {
-        alert("Node not found: " + searchInput);
+        // Node not in current graph. Query the backend.
+        fetch(`/api/node/${searchInput}?displayed=${getDisplayedIds()}`)
+            .then(res => res.json())
+            .then(data => {
+                // Check if the returned data contains the searched node.
+                foundNode = data.nodes.find(n => n.id === searchInput);
+                if (foundNode) {
+                    // Update the graph with the newly returned nodes and edges.
+                    updateGraph(data.nodes, data.edges);
+                    // Highlight the node once it's added.
+                    container.selectAll("g.node")
+                        .filter(d => d.id === searchInput)
+                        .classed("highlight", true);
+                    simulation.stop();
+                    if (foundNode.x != null && foundNode.y != null) {
+                        svg.transition().duration(750)
+                            .call(zoom.transform, d3.zoomIdentity.translate(width / 2 - foundNode.x, height / 2 - foundNode.y));
+                    }
+                } else {
+                    alert("Node not found: " + searchInput);
+                }
+            })
+            .catch(error => {
+                console.error("Error fetching node: ", error);
+                alert("Error fetching node: " + searchInput);
+            });
     }
 }
 
