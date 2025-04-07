@@ -39,6 +39,17 @@ document.getElementById("resetGraph").addEventListener("click", () => {
     loadInitialGraph();
 });
 
+// Rearrange Graph button handler
+document.getElementById("rearrangeGraph").addEventListener("click", () => {
+    // Release pinned positions for all nodes.
+    nodes.forEach(d => {
+        d.fx = null;
+        d.fy = null;
+    });
+    // Reheat the simulation so the layout recalculates.
+    simulation.alpha(1).restart();
+});
+
 const tooltip = d3.select("#tooltip");
 let tooltipTimeout;
 const TOOLTIP_SHOW_DELAY = 500;
@@ -63,9 +74,13 @@ function hideTooltip() {
     tooltip.transition().duration(TOOLTIP_HIDE_DURATION).style("opacity", 0);
 }
 
-// Helper: Return comma-separated list of displayed IDs.
-function getDisplayedIds() {
-    return Array.from(displayedRuleIDs).join(",");
+// (Helper areParentsDisplayed remains available if needed.)
+function areParentsDisplayed(node) {
+    if (node.parent_ids && node.parent_ids.length > 0) {
+        return node.parent_ids.every(pid => displayedRuleIDs.has(pid));
+    } else {
+        return displayedRuleIDs.has("0");
+    }
 }
 
 // Create custom context menu element (initially hidden)
@@ -83,7 +98,6 @@ const contextMenu = d3.select("body").append("div")
 function updateGraph(newNodes, newLinks) {
     newNodes.forEach(n => {
         if (!nodes.some(existing => existing.id === n.id)) {
-            // Position new node relative to its parent's position, if possible.
             const parent = links.find(l => l.target === n.id);
             if (parent) {
                 const parentNode = nodes.find(p => p.id === parent.source);
@@ -208,7 +222,7 @@ function loadInitialGraph() {
 }
 
 function expandNode(nodeId) {
-    // Include the displayed IDs so that the backend can update state accordingly.
+    // Pass the current displayed IDs to the backend
     fetch(`/api/node/${nodeId}?displayed=${getDisplayedIds()}`)
         .then(res => res.json())
         .then(data => {
@@ -223,7 +237,6 @@ function expandNode(nodeId) {
 }
 
 function expandParents(nodeId) {
-    // Similarly include the displayed IDs if desired.
     fetch(`/api/parents/${nodeId}?displayed=${getDisplayedIds()}`)
         .then(res => res.json())
         .then(data => {
@@ -237,6 +250,8 @@ function expandParents(nodeId) {
 
 function dragstarted(event, d) {
     if (!event.active) simulation.alphaTarget(0.3).restart();
+    // Optionally, don't pin the nodes permanently; let them float until rearranged.
+    // d.fx and d.fy are kept until rearrangement is triggered.
     d.fx = d.x;
     d.fy = d.y;
 }
@@ -248,11 +263,10 @@ function dragged(event, d) {
 
 function dragended(event, d) {
     if (!event.active) simulation.alphaTarget(0);
-    d.fx = d.x;
-    d.fy = d.y;
+    // Here we leave d.fx and d.fy as they are (pinned)
+    // so that nodes remain at the dragged position until "rearrange" is triggered.
 }
 
-// ----- Search Functionality -----
 function handleSearch() {
     const searchInput = document.getElementById("searchBox").value.trim();
     if (!searchInput) return;
@@ -289,9 +303,13 @@ function clearHighlight() {
     simulation.restart();
 }
 
+// Helper: Return comma-separated list of displayed node IDs.
+function getDisplayedIds() {
+    return Array.from(displayedRuleIDs).join(",");
+}
+
 // ----- Custom Context Menu Logic -----
 function showContextMenu(event, d) {
-    // Freeze all: pause simulation and disable tooltip actions
     simulation.stop();
     contextMenuOpen = true;
     hideTooltip();
@@ -311,12 +329,9 @@ function showContextMenu(event, d) {
             }
         });
     if (d.has_children) {
-        // Use backend-provided state by sending displayed IDs.
         fetch(`/api/node/${d.id}?displayed=${getDisplayedIds()}`)
             .then(res => res.json())
             .then(data => {
-                // data.nodes includes d and its children.
-                // The backend now calculates the state based on the displayed list.
                 let updatedState = data.nodes.find(n => n.id === d.id);
                 d.has_children = updatedState.has_children;
                 d.node_type = updatedState.node_type;

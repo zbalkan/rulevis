@@ -33,6 +33,7 @@ def create_app(graph_path: str) -> Flask:
             <div class="navbar-links">
                 <button id="resetZoom">Reset Zoom</button>
                 <button id="resetGraph">Reset Graph</button>
+                <button id="rearrangeGraph">Rearrange Graph</button>
                 <input type="text" id="searchBox" placeholder="Search Rule ID">
                 <button id="searchBtn">Search</button>
             </div>
