@@ -1,6 +1,7 @@
 import os
 import pickle
-from flask import Flask, jsonify, render_template_string
+
+from flask import Flask, jsonify, render_template_string, request
 from networkx import MultiDiGraph
 
 
@@ -44,9 +45,14 @@ def create_app(graph_path: str) -> Flask:
         </div>
 
         <div class="footer">
-            <p>Visit official Wazuh documentation for <a href="https://documentation.wazuh.com/current/user-manual/ruleset/ruleset-xml-syntax/rules.html" target="_blank">Wazuh Rule Syntax</a>.</p>
+            <p>Visit official Wazuh documentation for
+               <a href="https://documentation.wazuh.com/current/user-manual/ruleset/ruleset-xml-syntax/rules.html" target="_blank">
+               Wazuh Rule Syntax</a>.
+            </p>
             <p>&copy; 2025 <a href="https://zaferbalkan.com" target="_blank">Zafer Balkan</a></p>
-            <p>The brand <a href="https://wazuh.com/" target="_blank">Wazuh</a> and related marks, emblems and images are registered trademarks of their respective owners.</p>
+            <p>The brand <a href="https://wazuh.com/" target="_blank">Wazuh</a> and related marks,
+               emblems and images are registered trademarks of their respective owners.
+            </p>
         </div>
         </body>
         </html>
@@ -59,6 +65,7 @@ def create_app(graph_path: str) -> Flask:
             return jsonify({"error": "Root node not found"}), 404
 
         children = list(G.successors(root))
+        all_ids = [root] + children
         nodes = [
             {
                 "id": nid,
@@ -67,9 +74,8 @@ def create_app(graph_path: str) -> Flask:
                 "is_expanded": (nid == root),
                 "node_type": "default" if (nid == root or G.out_degree(nid) == 0) else "expandable"
             }
-            for nid in [root] + children
+            for nid in all_ids
         ]
-
         edges = [
             {
                 "source": root,
@@ -78,7 +84,6 @@ def create_app(graph_path: str) -> Flask:
             }
             for child in children
         ]
-
         return jsonify({"nodes": nodes, "edges": edges})
 
     @app.route("/api/node/<node_id>", methods=["GET"])
@@ -86,7 +91,15 @@ def create_app(graph_path: str) -> Flask:
         if node_id not in G:
             return jsonify({"error": f"Node '{node_id}' not found"}), 404
 
+        # Get the set of displayed IDs from the query string.
+        displayed = set(request.args.get("displayed", "").split(",")) - {""}
+
         children = list(G.successors(node_id))
+        # Determine if there are any children that are NOT already displayed.
+        undisplayed_children = [child for child in children if child not in displayed]
+        # The queried node should be expandable only if there is at least one undisplayed child.
+        has_expandable_children = len(undisplayed_children) > 0
+
         nodes = [
             {
                 "id": nid,
@@ -96,6 +109,12 @@ def create_app(graph_path: str) -> Flask:
             }
             for nid in [node_id] + children
         ]
+        # Override the queried node's state based on the displayed info.
+        for n in nodes:
+            if n["id"] == node_id:
+                n["has_children"] = has_expandable_children
+                n["node_type"] = "expandable" if has_expandable_children else "default"
+
         edges = [
             {
                 "source": node_id,
@@ -104,7 +123,6 @@ def create_app(graph_path: str) -> Flask:
             }
             for child in children
         ]
-
         return jsonify({"nodes": nodes, "edges": edges})
 
     @app.route("/api/parents/<node_id>", methods=["GET"])
@@ -136,8 +154,3 @@ def create_app(graph_path: str) -> Flask:
         return jsonify({"nodes": nodes, "edges": edges})
 
     return app
-
-
-if __name__ == "__main__":
-    app = create_app("graph.pickle")
-    app.run(debug=True)

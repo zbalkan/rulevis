@@ -63,13 +63,9 @@ function hideTooltip() {
     tooltip.transition().duration(TOOLTIP_HIDE_DURATION).style("opacity", 0);
 }
 
-// (Helper areParentsDisplayed remains available if needed.)
-function areParentsDisplayed(node) {
-    if (node.parent_ids && node.parent_ids.length > 0) {
-        return node.parent_ids.every(pid => displayedRuleIDs.has(pid));
-    } else {
-        return displayedRuleIDs.has("0");
-    }
+// Helper: Return comma-separated list of displayed IDs.
+function getDisplayedIds() {
+    return Array.from(displayedRuleIDs).join(",");
 }
 
 // Create custom context menu element (initially hidden)
@@ -87,6 +83,7 @@ const contextMenu = d3.select("body").append("div")
 function updateGraph(newNodes, newLinks) {
     newNodes.forEach(n => {
         if (!nodes.some(existing => existing.id === n.id)) {
+            // Position new node relative to its parent's position, if possible.
             const parent = links.find(l => l.target === n.id);
             if (parent) {
                 const parentNode = nodes.find(p => p.id === parent.source);
@@ -194,7 +191,6 @@ function updateGraph(newNodes, newLinks) {
             .attr("y1", d => d.source.y)
             .attr("x2", d => d.target.x)
             .attr("y2", d => d.target.y);
-
         container.selectAll("g.node")
             .attr("transform", d => `translate(${d.x},${d.y})`);
     });
@@ -212,21 +208,23 @@ function loadInitialGraph() {
 }
 
 function expandNode(nodeId) {
-    fetch(`/api/node/${nodeId}`)
+    // Include the displayed IDs so that the backend can update state accordingly.
+    fetch(`/api/node/${nodeId}?displayed=${getDisplayedIds()}`)
         .then(res => res.json())
         .then(data => {
             const nodeToUpdate = nodes.find(n => n.id === nodeId);
             if (nodeToUpdate) {
                 nodeToUpdate.is_expanded = true;
-                nodeToUpdate.node_type = "default";
-                nodeToUpdate.has_children = false;
+                nodeToUpdate.node_type = "default";  // Force default when children are expanded
+                nodeToUpdate.has_children = data.nodes.find(n => n.id === nodeId).has_children;
             }
             updateGraph(data.nodes, data.edges);
         });
 }
 
 function expandParents(nodeId) {
-    fetch(`/api/parents/${nodeId}`)
+    // Similarly include the displayed IDs if desired.
+    fetch(`/api/parents/${nodeId}?displayed=${getDisplayedIds()}`)
         .then(res => res.json())
         .then(data => {
             const targetNode = nodes.find(n => n.id === nodeId);
@@ -299,7 +297,7 @@ function showContextMenu(event, d) {
     hideTooltip();
     contextMenu.html("");
 
-    // "Show children" menu item
+    // "Show children" menu item - created disabled initially
     const showChildrenItem = contextMenu.append("div")
         .text("Show children")
         .style("padding", "5px")
@@ -313,19 +311,19 @@ function showContextMenu(event, d) {
             }
         });
     if (d.has_children) {
-        // Check via API if there is at least one child not yet displayed.
-        fetch(`/api/node/${d.id}`)
+        // Use backend-provided state by sending displayed IDs.
+        fetch(`/api/node/${d.id}?displayed=${getDisplayedIds()}`)
             .then(res => res.json())
             .then(data => {
-                let childIDs = data.nodes.filter(n => n.id !== d.id).map(n => n.id);
-                const notDisplayed = childIDs.some(cid => !displayedRuleIDs.has(cid));
-                if (notDisplayed) {
+                // data.nodes includes d and its children.
+                // The backend now calculates the state based on the displayed list.
+                let updatedState = data.nodes.find(n => n.id === d.id);
+                d.has_children = updatedState.has_children;
+                d.node_type = updatedState.node_type;
+                if (d.has_children) {
                     showChildrenItem.style("opacity", 1)
                         .style("pointer-events", "auto");
                 } else {
-                    // All children are displayed; update state.
-                    d.has_children = false;
-                    d.node_type = "default";
                     showChildrenItem.style("opacity", 0.5)
                         .style("pointer-events", "none");
                 }
@@ -349,7 +347,7 @@ function showContextMenu(event, d) {
             }
         });
     if (!d.parents_expanded) {
-        fetch(`/api/parents/${d.id}`)
+        fetch(`/api/parents/${d.id}?displayed=${getDisplayedIds()}`)
             .then(res => res.json())
             .then(data => {
                 let parentIDs = data.nodes.filter(n => n.id !== d.id).map(n => n.id);
