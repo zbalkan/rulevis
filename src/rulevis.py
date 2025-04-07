@@ -1,11 +1,12 @@
 #!/usr/bin/python3
-# -*- coding: utf-8 -*-
 # main.py
 
 import argparse
 import logging
 import os
 import sys
+import webbrowser
+from threading import Timer
 from typing import Final
 
 from generator import GraphGenerator
@@ -24,10 +25,15 @@ def generate_graph(paths: list[str], top: int, output: str) -> None:
     logging.info(f"Graph saved to {output}")
 
 
+def open_browser():
+    webbrowser.open_new('http://localhost:5000/')
+
+
 def run_flask_app(graph_path: str) -> None:
     from flask_app import create_app
     app = create_app(graph_path)  # Load the graph once at startup
     logging.info("Starting Flask app...")
+    Timer(1, open_browser).start()
     app.run(debug=True, use_reloader=False)
 
 
