@@ -406,26 +406,33 @@ document.addEventListener("click", function (event) {
     }
 });
 
+// Initial graph load
+loadInitialGraph();
+
+
+
+// ----- Legend Building Logic -----
+// Function to build the legend for nodes and edges
 function buildLegend() {
-    // Node Legend Data: Using our CSS classes for nodes.
+    // --- Node Legend ---
     const nodeLegendData = [
         { label: "Expandable Node", class: "node-expandable" },
         { label: "Default Node", class: "node-default" }
     ];
 
-    // Append a group for the node legend. Adjust position as needed.
+    // Append a group for the node legend at a fixed position.
     const nodeLegend = svg.append("g")
-        .attr("class", "node-legend")
+        .attr("class", "legend node-legend")
         .attr("transform", "translate(20,20)");
 
-    const nodeLegendItems = nodeLegend.selectAll(".node-legend-item")
+    const nodeLegendItems = nodeLegend.selectAll(".legend-item")
         .data(nodeLegendData)
         .enter()
         .append("g")
-        .attr("class", "node-legend-item")
+        .attr("class", "legend-item")
         .attr("transform", (d, i) => `translate(0, ${i * 25})`);
 
-    // Append a circle that takes its style from the CSS class.
+    // Append a circle for each node legend item. The circle gets its fill from your CSS.
     nodeLegendItems.append("circle")
         .attr("r", 8)
         .attr("class", d => d.class);
@@ -438,7 +445,7 @@ function buildLegend() {
         .attr("fill", "#eee")
         .attr("font-size", "14px");
 
-    // Edge Legend Data: Use CSS classes defined for edges.
+    // --- Edge Legend ---
     const edgeLegendData = [
         { label: "if_sid", class: "edge-if_sid" },
         { label: "if_matched_sid", class: "edge-if_matched_sid" },
@@ -448,19 +455,19 @@ function buildLegend() {
         { label: "Unknown", class: "edge-unknown" }
     ];
 
-    // Append a group for the edge legend. Adjust vertical position as needed.
+    // Append a group for the edge legend; position it below the node legend.
     const edgeLegend = svg.append("g")
-        .attr("class", "edge-legend")
+        .attr("class", "legend edge-legend")
         .attr("transform", "translate(20,100)");
 
-    const edgeLegendItems = edgeLegend.selectAll(".edge-legend-item")
+    const edgeLegendItems = edgeLegend.selectAll(".legend-item")
         .data(edgeLegendData)
         .enter()
         .append("g")
-        .attr("class", "edge-legend-item")
+        .attr("class", "legend-item")
         .attr("transform", (d, i) => `translate(0, ${i * 25})`);
 
-    // Append a line to represent the edge. The stroke is defined by the CSS class.
+    // Append a line for each edge legend item.
     edgeLegendItems.append("line")
         .attr("x1", 0)
         .attr("y1", 8)
@@ -480,6 +487,3 @@ function buildLegend() {
 
 // Call buildLegend() after the graph loads.
 buildLegend();
-
-// Initial graph load
-loadInitialGraph();
