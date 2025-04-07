@@ -88,33 +88,27 @@ def create_app(graph_path: str) -> Flask:
         return jsonify({"nodes": nodes, "edges": edges})
 
     @app.route("/api/node/<node_id>", methods=["GET"])
-    def get_node_children(node_id):
+    def get_node_children(node_id: str):
         if node_id not in G:
             return jsonify({"error": f"Node '{node_id}' not found"}), 404
 
         # Get the set of displayed IDs from the query string.
-        displayed = set(request.args.get("displayed", "").split(",")) - {""}
+        displayed: set[str] = set(request.args.get("displayed", "").split(",")) - {""}
 
         children = list(G.successors(node_id))
-        # Determine if there are any children that are NOT already displayed.
-        undisplayed_children = [child for child in children if child not in displayed]
-        # The queried node should be expandable only if there is at least one undisplayed child.
-        has_expandable_children = len(undisplayed_children) > 0
 
-        nodes = [
-            {
+        nodes: list[dict] = []
+        for nid in [node_id] + children:
+            # Determine undisplayed children for the node
+            expandable = is_expandable(displayed, nid)
+
+            node_data = {
                 "id": nid,
                 **{k: v for k, v in G.nodes[nid].items() if k != "node_type"},
-                "has_children": (G.out_degree(nid) > 0),
-                "node_type": "default" if (nid == node_id or G.out_degree(nid) == 0) else "expandable"
+                "has_children": expandable,
+                "node_type": "expandable" if expandable else "default"
             }
-            for nid in [node_id] + children
-        ]
-        # Override the queried node's state based on the displayed info.
-        for n in nodes:
-            if n["id"] == node_id:
-                n["has_children"] = has_expandable_children
-                n["node_type"] = "expandable" if has_expandable_children else "default"
+            nodes.append(node_data)
 
         edges = [
             {
@@ -127,23 +121,28 @@ def create_app(graph_path: str) -> Flask:
         return jsonify({"nodes": nodes, "edges": edges})
 
     @app.route("/api/parents/<node_id>", methods=["GET"])
-    def get_node_parents(node_id):
+    def get_node_parents(node_id: str):
         if node_id not in G:
             return jsonify({"error": f"Node '{node_id}' not found"}), 404
 
-        parents = list(G.predecessors(node_id))
-        if not parents:
-            parents = ["0"]
+        # Get the set of displayed IDs from the query string.
+        displayed: set[str] = set(request.args.get("displayed", "").split(",")) - {""}
 
-        nodes = [
-            {
+        parents = list(G.predecessors(node_id))
+
+        nodes: list[dict] = []
+        for nid in [node_id] + parents:
+            # Determine undisplayed children for the node
+            expandable = is_expandable(displayed, nid)
+
+            node_data = {
                 "id": nid,
                 **{k: v for k, v in G.nodes[nid].items() if k != "node_type"},
-                "has_children": (G.out_degree(nid) > 0),
-                "node_type": "default" if (nid == "0" or G.out_degree(nid) == 0) else "expandable"
+                "has_children": expandable,
+                "node_type": "expandable" if expandable else "default"
             }
-            for nid in parents + [node_id]
-        ]
+            nodes.append(node_data)
+
         edges = [
             {
                 "source": parent,
@@ -153,5 +152,11 @@ def create_app(graph_path: str) -> Flask:
             for parent in parents
         ]
         return jsonify({"nodes": nodes, "edges": edges})
+
+    def is_expandable(displayed: set[str], nid: str) -> bool:
+        undisplayed_children = [child for child in G.successors(
+            nid) if child not in displayed]
+
+        return len(undisplayed_children) > 0
 
     return app
