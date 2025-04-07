@@ -406,5 +406,80 @@ document.addEventListener("click", function (event) {
     }
 });
 
+function buildLegend() {
+    // Node Legend Data: Using our CSS classes for nodes.
+    const nodeLegendData = [
+        { label: "Expandable Node", class: "node-expandable" },
+        { label: "Default Node", class: "node-default" }
+    ];
+
+    // Append a group for the node legend. Adjust position as needed.
+    const nodeLegend = svg.append("g")
+        .attr("class", "node-legend")
+        .attr("transform", "translate(20,20)");
+
+    const nodeLegendItems = nodeLegend.selectAll(".node-legend-item")
+        .data(nodeLegendData)
+        .enter()
+        .append("g")
+        .attr("class", "node-legend-item")
+        .attr("transform", (d, i) => `translate(0, ${i * 25})`);
+
+    // Append a circle that takes its style from the CSS class.
+    nodeLegendItems.append("circle")
+        .attr("r", 8)
+        .attr("class", d => d.class);
+
+    // Append text next to the circle.
+    nodeLegendItems.append("text")
+        .attr("x", 15)
+        .attr("y", 5)
+        .text(d => d.label)
+        .attr("fill", "#eee")
+        .attr("font-size", "14px");
+
+    // Edge Legend Data: Use CSS classes defined for edges.
+    const edgeLegendData = [
+        { label: "if_sid", class: "edge-if_sid" },
+        { label: "if_matched_sid", class: "edge-if_matched_sid" },
+        { label: "if_group", class: "edge-if_group" },
+        { label: "if_matched_group", class: "edge-if_matched_group" },
+        { label: "No parent", class: "edge-no_parent" },
+        { label: "Unknown", class: "edge-unknown" }
+    ];
+
+    // Append a group for the edge legend. Adjust vertical position as needed.
+    const edgeLegend = svg.append("g")
+        .attr("class", "edge-legend")
+        .attr("transform", "translate(20,100)");
+
+    const edgeLegendItems = edgeLegend.selectAll(".edge-legend-item")
+        .data(edgeLegendData)
+        .enter()
+        .append("g")
+        .attr("class", "edge-legend-item")
+        .attr("transform", (d, i) => `translate(0, ${i * 25})`);
+
+    // Append a line to represent the edge. The stroke is defined by the CSS class.
+    edgeLegendItems.append("line")
+        .attr("x1", 0)
+        .attr("y1", 8)
+        .attr("x2", 30)
+        .attr("y2", 8)
+        .attr("class", d => d.class)
+        .attr("stroke-width", 4);
+
+    // Append text next to the line.
+    edgeLegendItems.append("text")
+        .attr("x", 40)
+        .attr("y", 12)
+        .text(d => d.label)
+        .attr("fill", "#eee")
+        .attr("font-size", "14px");
+}
+
+// Call buildLegend() after the graph loads.
+buildLegend();
+
 // Initial graph load
 loadInitialGraph();
