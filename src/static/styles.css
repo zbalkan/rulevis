@@ -126,11 +126,11 @@ text {
 }
 
 .edge-no_parent {
-    stroke: #171717;
+    stroke: #6b6b6b;
 }
 
 .edge-unknown {
-    stroke: #999;
+    stroke: #ffffff;
 }
 
 /* Semantic Node Styles */
