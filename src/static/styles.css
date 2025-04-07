@@ -97,6 +97,17 @@ text {
     border-top: 1px solid #444;
 }
 
+.footer a {
+    font-weight: bold;
+    color: white;
+    text-decoration: none;
+    text-transform: uppercase;
+}
+
+.footer a:hover {
+    text-decoration: underline;
+}
+
 /* Semantic Edge Styles */
 .edge-if_sid {
     stroke: blue;
