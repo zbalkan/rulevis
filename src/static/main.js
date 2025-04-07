@@ -162,10 +162,8 @@ function updateGraph(newNodes, newLinks) {
     newNodes.forEach(newNode => {
         const existingNode = nodes.find(node => node.id === newNode.id);
         if (existingNode) {
-            // Update key properties so the node's color/state changes if needed
-            existingNode.has_children = newNode.has_children;
-            existingNode.node_type = newNode.node_type;
-            // Optionally merge other fields like description, groups, etc.
+            // Update the expandable property and any other fields
+            existingNode.expandable = newNode.expandable;
             existingNode.description = newNode.description;
             existingNode.groups = newNode.groups;
         } else {
@@ -207,7 +205,7 @@ function updateGraph(newNodes, newLinks) {
     const nodeSelection = container.selectAll("g.node")
         .data(nodes, d => d.id);
 
-    // Remove old nodes that no longer exist in 'nodes'
+    // Remove old nodes that no longer exist
     nodeSelection.exit().remove();
 
     // Enter selection for new nodes
@@ -223,7 +221,7 @@ function updateGraph(newNodes, newLinks) {
             event.stopPropagation();
             hideContextMenu();
             clearHighlight();
-            if (d.has_children) {
+            if (d.expandable) {
                 expandNode(d.id);
             }
         })
@@ -252,7 +250,7 @@ function updateGraph(newNodes, newLinks) {
 
     nodeEnter.append("circle")
         .attr("r", 10)
-        .attr("class", d => `circle ${d.node_type ? 'node-' + d.node_type : 'node-default'}`);
+        .attr("class", d => d.expandable ? "node-expandable" : "node-default");
 
     nodeEnter.append("text")
         .attr("x", 12)
@@ -262,7 +260,7 @@ function updateGraph(newNodes, newLinks) {
     // Update existing + new nodes in the DOM (to refresh CSS classes, etc.)
     const allNodes = nodeEnter.merge(nodeSelection);
     allNodes.select("circle")
-        .attr("class", d => `circle ${d.node_type ? 'node-' + d.node_type : 'node-default'}`);
+        .attr("class", d => d.expandable ? "node-expandable" : "node-default");
 
     // 5. Link selection/enter/exit
     const linkSelection = container.selectAll("line")
@@ -319,12 +317,11 @@ function expandNode(nodeId) {
             // Immediately add all returned nodes to the displayed set.
             data.nodes.forEach(n => displayedRuleIDs.add(n.id));
 
-            // Force the parent's state to default (grey) right away.
+            // Force the parent's state to non-expandable right away.
             const parentFromResponse = data.nodes.find(n => n.id === nodeId);
             if (parentFromResponse) {
                 parentFromResponse.is_expanded = true;
-                parentFromResponse.node_type = "default";  // Force to default
-                parentFromResponse.has_children = false;     // Assume all children are now displayed
+                parentFromResponse.expandable = false;
             }
 
             // Update the graph with the API response.
@@ -346,8 +343,6 @@ function expandParents(nodeId) {
 
 function dragstarted(event, d) {
     if (!event.active) simulation.alphaTarget(0.3).restart();
-    // Optionally, don't pin the nodes permanently; let them float until rearranged.
-    // d.fx and d.fy are kept until rearrangement is triggered.
     d.fx = d.x;
     d.fy = d.y;
 }
@@ -359,18 +354,14 @@ function dragged(event, d) {
 
 function dragended(event, d) {
     if (!event.active) simulation.alphaTarget(0);
-    // Here we leave d.fx and d.fy as they are (pinned)
-    // so that nodes remain at the dragged position until "rearrange" is triggered.
 }
 
 function handleSearch() {
     const searchInput = document.getElementById("searchBox").value.trim();
     if (!searchInput) return;
 
-    // Try to find the node in the current graph.
     let foundNode = nodes.find(n => n.id === searchInput);
     if (foundNode) {
-        // Node exists in the canvas. Highlight it.
         container.selectAll("g.node")
             .filter(d => d.id === foundNode.id)
             .classed("highlight", true);
@@ -380,16 +371,12 @@ function handleSearch() {
                 .call(zoom.transform, d3.zoomIdentity.translate(width / 2 - foundNode.x, height / 2 - foundNode.y));
         }
     } else {
-        // Node not in current graph. Query the backend.
         fetch(`/api/node/${searchInput}?displayed=${getDisplayedIds()}`)
             .then(res => res.json())
             .then(data => {
-                // Check if the returned data contains the searched node.
                 foundNode = data.nodes.find(n => n.id === searchInput);
                 if (foundNode) {
-                    // Update the graph with the newly returned nodes and edges.
                     updateGraph(data.nodes, data.edges);
-                    // Highlight the node once it's added.
                     container.selectAll("g.node")
                         .filter(d => d.id === searchInput)
                         .classed("highlight", true);
@@ -438,7 +425,7 @@ function showContextMenu(event, d) {
     hideTooltip();
     contextMenu.html("");
 
-    // "Show children" menu item - created disabled initially
+    // "Show children" menu item - initially disabled
     const showChildrenItem = contextMenu.append("div")
         .text("Show children")
         .style("padding", "5px")
@@ -447,18 +434,17 @@ function showContextMenu(event, d) {
         .style("pointer-events", "none")
         .on("click", () => {
             hideContextMenu();
-            if (d.has_children) {
+            if (d.expandable) {
                 expandNode(d.id);
             }
         });
-    if (d.has_children) {
+    if (d.expandable) {
         fetch(`/api/node/${d.id}?displayed=${getDisplayedIds()}`)
             .then(res => res.json())
             .then(data => {
                 let updatedState = data.nodes.find(n => n.id === d.id);
-                d.has_children = updatedState.has_children;
-                d.node_type = updatedState.node_type;
-                if (d.has_children) {
+                d.expandable = updatedState.expandable;
+                if (d.expandable) {
                     showChildrenItem.style("opacity", 1)
                         .style("pointer-events", "auto");
                 } else {
@@ -471,7 +457,7 @@ function showContextMenu(event, d) {
             });
     }
 
-    // "Show parents" menu item - created disabled initially
+    // "Show parents" menu item - initially disabled
     const showParentsItem = contextMenu.append("div")
         .text("Show parents")
         .style("padding", "5px")
@@ -533,7 +519,6 @@ document.addEventListener("click", function (event) {
 let simulationPausedByKey = false;
 
 document.addEventListener("keydown", (event) => {
-    // Check for Space key (key code "Space") or CTRL key (event.ctrlKey)
     if (event.code === "Space" || event.ctrlKey) {
         if (!simulationPausedByKey) {
             simulationPausedByKey = true;
@@ -543,7 +528,6 @@ document.addEventListener("keydown", (event) => {
 });
 
 document.addEventListener("keyup", (event) => {
-    // On keyup, if space or ctrl is released, resume simulation
     if (simulationPausedByKey && (event.code === "Space" || !event.ctrlKey)) {
         simulationPausedByKey = false;
         simulation.alpha(1).restart();
@@ -553,18 +537,13 @@ document.addEventListener("keyup", (event) => {
 // Initial graph load
 loadInitialGraph();
 
-
-
 // ----- Legend Building Logic -----
-// Function to build the legend for nodes and edges
 function buildLegend() {
-    // --- Node Legend ---
     const nodeLegendData = [
         { label: "Expandable Node", class: "node-expandable" },
         { label: "Default Node", class: "node-default" }
     ];
 
-    // Append a group for the node legend at a fixed position.
     const nodeLegend = svg.append("g")
         .attr("class", "legend node-legend")
         .attr("transform", "translate(20,20)");
@@ -576,12 +555,10 @@ function buildLegend() {
         .attr("class", "legend-item")
         .attr("transform", (d, i) => `translate(0, ${i * 25})`);
 
-    // Append a circle for each node legend item. The circle gets its fill from your CSS.
     nodeLegendItems.append("circle")
         .attr("r", 8)
         .attr("class", d => d.class);
 
-    // Append text next to the circle.
     nodeLegendItems.append("text")
         .attr("x", 15)
         .attr("y", 5)
@@ -589,7 +566,6 @@ function buildLegend() {
         .attr("fill", "#eee")
         .attr("font-size", "14px");
 
-    // --- Edge Legend ---
     const edgeLegendData = [
         { label: "if_sid", class: "edge-if_sid" },
         { label: "if_matched_sid", class: "edge-if_matched_sid" },
@@ -599,7 +575,6 @@ function buildLegend() {
         { label: "Unknown", class: "edge-unknown" }
     ];
 
-    // Append a group for the edge legend; position it below the node legend.
     const edgeLegend = svg.append("g")
         .attr("class", "legend edge-legend")
         .attr("transform", "translate(20,100)");
@@ -611,7 +586,6 @@ function buildLegend() {
         .attr("class", "legend-item")
         .attr("transform", (d, i) => `translate(0, ${i * 25})`);
 
-    // Append a line for each edge legend item.
     edgeLegendItems.append("line")
         .attr("x1", 0)
         .attr("y1", 8)
@@ -620,7 +594,6 @@ function buildLegend() {
         .attr("class", d => d.class)
         .attr("stroke-width", 4);
 
-    // Append text next to the line.
     edgeLegendItems.append("text")
         .attr("x", 40)
         .attr("y", 12)
