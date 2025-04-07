@@ -30,7 +30,7 @@ def open_browser():
 
 
 def run_flask_app(graph_path: str) -> None:
-    from flask_app import create_app
+    from visualizer import create_app
     app = create_app(graph_path)  # Load the graph once at startup
     logging.info("Starting Flask app...")
     Timer(1, open_browser).start()

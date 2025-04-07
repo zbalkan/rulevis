@@ -12,7 +12,7 @@ def create_app(graph_path: str) -> Flask:
     with open(graph_path, 'rb') as f:
         G: MultiDiGraph = pickle.load(f)
 
-    app = Flask(__name__)
+    app = Flask("Wazuh Rule Visualizer")
 
     @app.route("/")
     def index():
