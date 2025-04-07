@@ -12,9 +12,8 @@ ENCODING: Final[str] = "utf-8"
 
 
 class GraphGenerator:
-    def __init__(self, paths: list[str], top: int = 0) -> None:
+    def __init__(self, paths: list[str]) -> None:
         self.paths = paths
-        self.top = top
         self.group_membership: dict[str, list[str]] = defaultdict(list)
         self.G = nx.MultiDiGraph()
 
@@ -28,12 +27,8 @@ class GraphGenerator:
 
         print(f'Found {len(xml_files)} XML files in the given paths')
         logging.info(f'Found {len(xml_files)} XML files in the given paths')
-        if self.top > 0:
-            logging.info(f'Picking {self.top} files...')
-            return xml_files[:self.top]
-        else:
-            logging.info('Processing all files...')
-            return xml_files
+        logging.info('Processing all files...')
+        return xml_files
 
     def add_edge_with_type(self, source: str, target: str, relation_type: str) -> None:
         if logging.getLogger().getEffectiveLevel() <= logging.DEBUG:
