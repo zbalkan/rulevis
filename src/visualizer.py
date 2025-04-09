@@ -23,6 +23,7 @@ def create_app(graph_path: str) -> Flask:
             <meta charset="UTF-8">
             <title>Rule Graph Explorer</title>
             <script src="https://d3js.org/d3.v7.min.js"></script>
+            <script src="static/tutorial.js"></script>
             <link rel="stylesheet" href="static/styles.css">
         </head>
         <body>
@@ -42,7 +43,7 @@ def create_app(graph_path: str) -> Flask:
         <div class="content">
             <svg></svg>
             <div id="tooltip" class="tooltip"></div>
-            <script src="static/main.js"></script>
+            <script src="static/graph.js"></script>
         </div>
 
         <div class="footer">
