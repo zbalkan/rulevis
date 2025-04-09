@@ -44,6 +44,60 @@ async function fetchJSON(url, options = {}) {
     }
 }
 
+// --- Helper for wrapping groups text ---
+// Given an array of group names and a maximum length per line,
+// this function joins them with a comma and inserts line breaks (<br>)
+// when the current line exceeds the maximum length.
+function wrapGroups(groups, maxLength) {
+    // groups: array of strings, maxLength: maximum characters per line
+    let result = "";
+    let currentLine = "";
+    groups.forEach((group) => {
+        let addition = (currentLine === "" ? group : ", " + group);
+        // If adding this group would exceed the max, start a new line.
+        if (currentLine.length + addition.length > maxLength && currentLine !== "") {
+            if (result !== "") {
+                result += "<br>";
+            }
+            result += currentLine;
+            currentLine = group; // start new line with current group
+        } else {
+            currentLine += addition;
+        }
+    });
+    if (currentLine) {
+        if (result !== "") {
+            result += "<br>";
+        }
+        result += currentLine;
+    }
+    return result;
+}
+
+// New helper function to generate tooltip HTML as a table-like layout.
+function getTooltipHTML(d) {
+    // Use inline styles to remove borders and add spacing.
+    const tableStyle = "border-collapse: collapse; width: 100%;";
+    const keyStyle = "padding-right: 5px; font-weight: bold; vertical-align: top;";
+    const valueStyle = "vertical-align: top;";
+    // Wrap groups using your wrapGroups function (if available) or join them as needed.
+    let groupsHTML = wrapGroups(d.groups || [], 40);
+    // Alternatively, if wrapGroups isn't desired, you can use: (d.groups || []).join(", ")
+    return `<table style="${tableStyle}">
+                <tr>
+                    <td style="${keyStyle}">ID:</td>
+                    <td style="${valueStyle}">${d.id}</td>
+                </tr>
+                <tr>
+                    <td style="${keyStyle}">Description:</td>
+                    <td style="${valueStyle}">${d.description || "N/A"}</td>
+                </tr>
+                <tr>
+                    <td style="${keyStyle}">Groups:</td>
+                    <td style="${valueStyle}">${groupsHTML}</td>
+                </tr>
+            </table>`;
+}
 // ----- Graph Visualization Logic -----
 // Global set to track displayed rule IDs
 let displayedRuleIDs = new Set();
@@ -237,11 +291,7 @@ function updateNodes() {
             if (contextMenuOpen) return;
             tooltipTimeout = setTimeout(function () {
                 tooltip.transition().duration(TOOLTIP_SHOW_DURATION).style("opacity", 0.9);
-                tooltip.html(
-                    "ID: " + d.id + "<br>" +
-                    "Description: " + (d.description || 'N/A') + "<br>" +
-                    "Groups: " + (d.groups || []).join(', ')
-                )
+                tooltip.html(getTooltipHTML(d))
                     .style("left", (event.pageX + 5) + "px")
                     .style("top", (event.pageY - 28) + "px");
             }, TOOLTIP_SHOW_DELAY);
