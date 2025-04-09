@@ -1,3 +1,34 @@
+// Toast notification code
+// Simple toast notification implementation
+function showNotification(message) {
+    // Check if a notification div already exists
+    let toast = document.getElementById("toastNotification");
+    if (!toast) {
+        toast = document.createElement("div");
+        toast.id = "toastNotification";
+        toast.style.cssText = `
+            position: fixed;
+            top: 120px;
+            right: 40px;
+            background: #800404;
+            color: #eee;
+            padding: 10px 15px;
+            border-radius: 4px;
+            z-index: 3000;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        `;
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.style.opacity = 1;
+
+    // Hide toast after 3 seconds
+    setTimeout(() => {
+        toast.style.opacity = 0;
+    }, 3000);
+}
+
 // ----- Graph Visualization Logic -----
 // Global set to track displayed rule IDs
 let displayedRuleIDs = new Set();
@@ -245,6 +276,10 @@ function loadInitialGraph() {
         .then(res => res.json())
         .then(data => {
             updateGraph(data.nodes, data.edges);
+        })
+        .catch(error => {
+            console.error("Error expanding root: ", error);
+            showNotification("Server not reachable. Please check your connection.");
         });
 }
 
@@ -265,6 +300,10 @@ function expandNode(nodeId) {
 
             // Update the graph with the API response.
             updateGraph(data.nodes, data.edges);
+        })
+        .catch(error => {
+            console.error("Error expanding node: ", error);
+            showNotification("Server not reachable. Please check your connection.");
         });
 }
 
@@ -277,6 +316,10 @@ function expandParents(nodeId) {
                 targetNode.parents_expanded = true;
             }
             updateGraph(data.nodes, data.edges);
+        })
+        .catch(error => {
+            console.error("Error expanding node: ", error);
+            showNotification("Server not reachable. Please check your connection.");
         });
 }
 
@@ -328,9 +371,9 @@ function handleSearch() {
                     alert("Node not found: " + searchInput);
                 }
             })
-            .catch(error => {
+            .catch (error => {
                 console.error("Error fetching node: ", error);
-                alert("Error fetching node: " + searchInput);
+                showNotification("Error fetching node: " + searchInput);
             });
     }
 }
@@ -393,6 +436,7 @@ function showContextMenu(event, d) {
             })
             .catch(error => {
                 console.error("Error fetching children: ", error);
+                showNotification("Server not reachable. Please check your connection.");
             });
     }
 
@@ -425,6 +469,7 @@ function showContextMenu(event, d) {
             })
             .catch(error => {
                 console.error("Error fetching parents: ", error);
+                showNotification("Server not reachable. Please check your connection.");
             });
     }
 
