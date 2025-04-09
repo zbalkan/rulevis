@@ -34,15 +34,24 @@ async function fetchJSON(url, options = {}) {
     try {
         const response = await fetch(url, options);
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            if (response.status === 404) {
+                showNotification("Not found.");
+                throw new Error("Not Found");
+            } else {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
         }
         return await response.json();
     } catch (error) {
-        console.error("Fetch error at " + url, error);
-        showNotification("Server not reachable. Please check your connection.");
+        // For non-404 errors, show the "server not reachable" message.
+        if (error.message !== "Not Found") {
+            console.error("Fetch error at " + url, error);
+            showNotification("Server not reachable. Please check your connection.");
+        }
         throw error;
     }
 }
+
 // Helper functions for repositioning
 function resetToRootPositions() {
     // Choose a smaller radius than the final desired radius, for example 20px
