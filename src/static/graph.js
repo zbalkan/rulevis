@@ -29,6 +29,21 @@ function showNotification(message) {
     }, 3000);
 }
 
+// --- Wrapper for fetch calls ---
+async function fetchJSON(url, options = {}) {
+    try {
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error("Fetch error at " + url, error);
+        showNotification("Server not reachable. Please check your connection.");
+        throw error;
+    }
+}
+
 // ----- Graph Visualization Logic -----
 // Global set to track displayed rule IDs
 let displayedRuleIDs = new Set();
@@ -283,7 +298,6 @@ function updateLinks(fullLinks) {
         });
 }
 
-
 function updateSimulation(fullLinks) {
     simulation.nodes(nodes).on("tick", function () {
         container.selectAll("line")
@@ -299,21 +313,18 @@ function updateSimulation(fullLinks) {
 }
 
 function loadInitialGraph() {
-    fetch("/api/root")
-        .then(res => res.json())
+    fetchJSON("/api/root")
         .then(data => {
             updateGraph(data.nodes, data.edges);
         })
         .catch(error => {
-            console.error("Error expanding root: ", error);
-            showNotification("Server not reachable. Please check your connection.");
+            // The error handling is already done in fetchJSON.
         });
 }
 
 function expandNode(nodeId) {
     // Call API with current displayed node IDs.
-    fetch(`/api/node/${nodeId}?displayed=${getDisplayedIds()}`)
-        .then(res => res.json())
+    fetchJSON(`/api/node/${nodeId}?displayed=${getDisplayedIds()}`)
         .then(data => {
             // Immediately add all returned nodes to the displayed set.
             data.nodes.forEach(n => displayedRuleIDs.add(n.id));
@@ -329,14 +340,12 @@ function expandNode(nodeId) {
             updateGraph(data.nodes, data.edges);
         })
         .catch(error => {
-            console.error("Error expanding node: ", error);
-            showNotification("Server not reachable. Please check your connection.");
+            // The error handling is already done in fetchJSON.
         });
 }
 
 function expandParents(nodeId) {
-    fetch(`/api/parents/${nodeId}?displayed=${getDisplayedIds()}`)
-        .then(res => res.json())
+    fetchJSON(`/api/parents/${nodeId}?displayed=${getDisplayedIds()}`)
         .then(data => {
             const targetNode = nodes.find(n => n.id === nodeId);
             if (targetNode) {
@@ -345,8 +354,7 @@ function expandParents(nodeId) {
             updateGraph(data.nodes, data.edges);
         })
         .catch(error => {
-            console.error("Error expanding node: ", error);
-            showNotification("Server not reachable. Please check your connection.");
+            // The error handling is already done in fetchJSON.
         });
 }
 
@@ -380,8 +388,7 @@ function handleSearch() {
                 .call(zoom.transform, d3.zoomIdentity.translate(width / 2 - foundNode.x, height / 2 - foundNode.y));
         }
     } else {
-        fetch(`/api/node/${searchInput}?displayed=${getDisplayedIds()}`)
-            .then(res => res.json())
+        fetchJSON(`/api/node/${searchInput}?displayed=${getDisplayedIds()}`)
             .then(data => {
                 foundNode = data.nodes.find(n => n.id === searchInput);
                 if (foundNode) {
@@ -398,9 +405,8 @@ function handleSearch() {
                     alert("Node not found: " + searchInput);
                 }
             })
-            .catch (error => {
-                console.error("Error fetching node: ", error);
-                showNotification("Error fetching node: " + searchInput);
+            .catch(error => {
+                // The error handling is already done in fetchJSON.
             });
     }
 }
@@ -448,8 +454,7 @@ function showContextMenu(event, d) {
             }
         });
     if (d.expandable) {
-        fetch(`/api/node/${d.id}?displayed=${getDisplayedIds()}`)
-            .then(res => res.json())
+        fetchJSON(`/api/node/${d.id}?displayed=${getDisplayedIds()}`)
             .then(data => {
                 let updatedState = data.nodes.find(n => n.id === d.id);
                 d.expandable = updatedState.expandable;
@@ -462,8 +467,7 @@ function showContextMenu(event, d) {
                 }
             })
             .catch(error => {
-                console.error("Error fetching children: ", error);
-                showNotification("Server not reachable. Please check your connection.");
+                // The error handling is already done in fetchJSON.
             });
     }
 
@@ -481,8 +485,7 @@ function showContextMenu(event, d) {
             }
         });
     if (!d.parents_expanded) {
-        fetch(`/api/parents/${d.id}?displayed=${getDisplayedIds()}`)
-            .then(res => res.json())
+        fetchJSON(`/api/parents/${d.id}?displayed=${getDisplayedIds()}`)
             .then(data => {
                 let parentIDs = data.nodes.filter(n => n.id !== d.id).map(n => n.id);
                 if (parentIDs.length > 1) {
@@ -495,8 +498,7 @@ function showContextMenu(event, d) {
                 }
             })
             .catch(error => {
-                console.error("Error fetching parents: ", error);
-                showNotification("Server not reachable. Please check your connection.");
+                // The error handling is already done in fetchJSON.
             });
     }
 
