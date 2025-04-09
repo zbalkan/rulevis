@@ -236,6 +236,27 @@ function areParentsDisplayed(node) {
     }
 }
 
+function updateCounter() {
+    let counterDiv = document.getElementById("counter");
+    if (!counterDiv) {
+        counterDiv = document.createElement("div");
+        counterDiv.id = "counter";
+        // Style the counter to appear at the left bottom corner.
+        counterDiv.style.position = "fixed";
+        counterDiv.style.left = "10px";
+        counterDiv.style.bottom = "10px";
+        counterDiv.style.backgroundColor = "rgba(0, 0, 0, 0.6)";
+        counterDiv.style.color = "#eee";
+        counterDiv.style.padding = "5px 10px";
+        counterDiv.style.borderRadius = "4px";
+        counterDiv.style.fontFamily = "sans-serif";
+        counterDiv.style.fontSize = "14px";
+        document.body.appendChild(counterDiv);
+    }
+    // Update counter text: using the lengths of nodes and links arrays.
+    counterDiv.textContent = `Nodes: ${nodes.length} | Edges: ${links.length}`;
+}
+
 // Create custom context menu element (initially hidden)
 const contextMenu = d3.select("body").append("div")
     .attr("id", "contextMenu")
@@ -266,6 +287,9 @@ function updateGraph(newNodes, newLinks) {
     updateNodes();
     updateLinks(fullLinks);
     updateSimulation(fullLinks);
+
+    // Update counter display.
+    updateCounter();
 }
 // Merges new nodes with existing nodes.
 function mergeNodes(newNodes) {
@@ -412,7 +436,7 @@ function updateSimulation(fullLinks) {
     });
     simulation.force("link").links(fullLinks);
     simulation.alphaTarget(0.2).restart();
-    setTimeout(() => simulation.stop(), 5000);
+    setTimeout(() => simulation.stop(), 10000);
 }
 
 function loadInitialGraph() {
