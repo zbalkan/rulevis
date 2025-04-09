@@ -128,19 +128,40 @@ const contextMenu = d3.select("body").append("div")
     .style("z-index", 1000);
 
 function updateGraph(newNodes, newLinks) {
-    // 1. Merge or add nodes
-    newNodes.forEach(newNode => {
-        const existingNode = nodes.find(node => node.id === newNode.id);
+    // Step 1: Merge new nodes and links into our data arrays.
+    mergeNodes(newNodes);
+    mergeLinks(newLinks);
+
+    // Step 2: Build full link objects with node references.
+    var fullLinks = links.map(function (l) {
+        return {
+            ...l,
+            source: nodes.find(function (n) { return n.id === l.source; }),
+            target: nodes.find(function (n) { return n.id === l.target; })
+        };
+    });
+
+    // Step 3: Update the visualizations.
+    updateNodes();
+    updateLinks(fullLinks);
+    updateSimulation(fullLinks);
+}
+// Merges new nodes with existing nodes.
+function mergeNodes(newNodes) {
+    newNodes.forEach(function (newNode) {
+        var existingNode = nodes.find(function (node) {
+            return node.id === newNode.id;
+        });
         if (existingNode) {
-            // Update the expandable property and any other fields
+            // Update properties (only the ones that might change)
             existingNode.expandable = newNode.expandable;
             existingNode.description = newNode.description;
             existingNode.groups = newNode.groups;
         } else {
-            // If it's a brand-new node, try to place it near its parent if known
-            const parentLink = links.find(l => l.target === newNode.id);
+            // If new, try to place it near its parent if known.
+            var parentLink = links.find(function (l) { return l.target === newNode.id; });
             if (parentLink) {
-                const parentNode = nodes.find(n => n.id === parentLink.source);
+                var parentNode = nodes.find(function (n) { return n.id === parentLink.source; });
                 if (parentNode && parentNode.x != null && parentNode.y != null) {
                     newNode.x = parentNode.x + Math.random() * 20 - 10;
                     newNode.y = parentNode.y + Math.random() * 20 - 10;
@@ -153,41 +174,38 @@ function updateGraph(newNodes, newLinks) {
             displayedRuleIDs.add(newNode.id);
         }
     });
+}
 
-    // 2. Merge or add links
-    newLinks.forEach(l => {
-        const exists = links.some(
-            existing => existing.source === l.source && existing.target === l.target
-        );
+// Merges new links with existing links.
+function mergeLinks(newLinks) {
+    newLinks.forEach(function (l) {
+        var exists = links.some(function (existing) {
+            return existing.source === l.source && existing.target === l.target;
+        });
         if (!exists) {
             links.push(l);
         }
     });
+}
 
-    // 3. Create a mapped version of links with node objects as source/target
-    const fullLinks = links.map(l => ({
-        ...l,
-        source: nodes.find(n => n.id === l.source),
-        target: nodes.find(n => n.id === l.target)
-    }));
+// Update nodes selection: handles enter, update, and exit for nodes.
+function updateNodes() {
+    var nodeSelection = container.selectAll("g.node")
+        .data(nodes, function (d) { return d.id; });
 
-    // 4. Node selection/enter/exit
-    const nodeSelection = container.selectAll("g.node")
-        .data(nodes, d => d.id);
-
-    // Remove old nodes that no longer exist
+    // Remove nodes that no longer exist.
     nodeSelection.exit().remove();
 
-    // Enter selection for new nodes
-    const nodeEnter = nodeSelection.enter().append("g")
+    // Create new nodes.
+    var nodeEnter = nodeSelection.enter().append("g")
         .attr("class", "node")
-        .on("contextmenu", (event, d) => {
+        .on("contextmenu", function (event, d) {
             event.preventDefault();
             event.stopPropagation();
             hideTooltip();
             showContextMenu(event, d);
         })
-        .on("dblclick", (event, d) => {
+        .on("dblclick", function (event, d) {
             event.stopPropagation();
             hideContextMenu();
             clearHighlight();
@@ -200,73 +218,82 @@ function updateGraph(newNodes, newLinks) {
             .on("start", dragstarted)
             .on("drag", dragged)
             .on("end", dragended))
-        .on("mouseover", (event, d) => {
+        .on("mouseover", function (event, d) {
             if (contextMenuOpen) return;
-            tooltipTimeout = setTimeout(() => {
+            tooltipTimeout = setTimeout(function () {
                 tooltip.transition().duration(TOOLTIP_SHOW_DURATION).style("opacity", 0.9);
                 tooltip.html(
-                    `ID: ${d.id}<br>` +
-                    `Description: ${d.description || 'N/A'}<br>` +
-                    `Groups: ${(d.groups || []).join(', ')}`
+                    "ID: " + d.id + "<br>" +
+                    "Description: " + (d.description || 'N/A') + "<br>" +
+                    "Groups: " + (d.groups || []).join(', ')
                 )
                     .style("left", (event.pageX + 5) + "px")
                     .style("top", (event.pageY - 28) + "px");
             }, TOOLTIP_SHOW_DELAY);
         })
-        .on("mouseout", () => {
+        .on("mouseout", function () {
             clearTimeout(tooltipTimeout);
             tooltip.transition().duration(TOOLTIP_HIDE_DURATION).style("opacity", 0);
         });
 
+    // Append circle and text to new nodes.
     nodeEnter.append("circle")
         .attr("r", 10)
-        .attr("class", d => d.expandable ? "node-expandable" : "node-default");
-
+        .attr("class", function (d) {
+            return d.expandable ? "node-expandable" : "node-default";
+        });
     nodeEnter.append("text")
         .attr("x", 12)
         .attr("dy", ".35em")
-        .text(d => d.id);
+        .text(function (d) { return d.id; });
 
-    // Update existing + new nodes in the DOM (to refresh CSS classes, etc.)
-    const allNodes = nodeEnter.merge(nodeSelection);
+    // Merge new nodes with existing ones.
+    var allNodes = nodeEnter.merge(nodeSelection);
+    // Refresh the CSS class for all nodes.
     allNodes.select("circle")
-        .attr("class", d => d.expandable ? "node-expandable" : "node-default");
+        .attr("class", function (d) {
+            return d.expandable ? "node-expandable" : "node-default";
+        });
+}
 
-    // 5. Link selection/enter/exit
-    const linkSelection = container.selectAll("line")
-        .data(fullLinks, d => d.source.id + "-" + d.target.id);
+// Update links selection: handles enter and exit for links.
+function updateLinks(fullLinks) {
+    var linkSelection = container.selectAll("line")
+        .data(fullLinks, function (d) { return d.source.id + "-" + d.target.id; });
 
     linkSelection.exit().remove();
 
     linkSelection.enter()
         .insert("line", ":first-child")
-        .attr("class", d => `edge edge-${d.relation_type || 'unknown'}`)
-        .on("mouseover", (event, d) => {
+        .attr("class", function (d) {
+            return "edge edge-" + (d.relation_type || "unknown");
+        })
+        .on("mouseover", function (event, d) {
             if (contextMenuOpen) return;
-            tooltipTimeout = setTimeout(() => {
+            tooltipTimeout = setTimeout(function () {
                 tooltip.transition().duration(TOOLTIP_SHOW_DURATION).style("opacity", 0.9);
-                tooltip.html(`Relation: ${d.relation_type || 'unknown'}`)
+                tooltip.html("Relation: " + (d.relation_type || "unknown"))
                     .style("left", (event.pageX + 5) + "px")
                     .style("top", (event.pageY - 28) + "px");
             }, TOOLTIP_SHOW_DELAY);
         })
-        .on("mouseout", () => {
+        .on("mouseout", function () {
             clearTimeout(tooltipTimeout);
             tooltip.transition().duration(TOOLTIP_HIDE_DURATION).style("opacity", 0);
         });
+}
 
-    // 6. Update the simulation with the new node/link arrays
-    simulation.nodes(nodes).on("tick", () => {
+
+function updateSimulation(fullLinks) {
+    simulation.nodes(nodes).on("tick", function () {
         container.selectAll("line")
-            .attr("x1", d => d.source.x)
-            .attr("y1", d => d.source.y)
-            .attr("x2", d => d.target.x)
-            .attr("y2", d => d.target.y);
-
+            .attr("x1", function (d) { return d.source.x; })
+            .attr("y1", function (d) { return d.source.y; })
+            .attr("x2", function (d) { return d.target.x; })
+            .attr("y2", function (d) { return d.target.y; });
         container.selectAll("g.node")
-            .attr("transform", d => `translate(${d.x},${d.y})`);
+            .attr("transform", function (d) { return "translate(" + d.x + "," + d.y + ")"; });
     });
-
     simulation.force("link").links(fullLinks);
     simulation.alphaTarget(0.2).restart();
 }
