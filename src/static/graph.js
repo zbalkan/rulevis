@@ -43,6 +43,68 @@ async function fetchJSON(url, options = {}) {
         throw error;
     }
 }
+// Helper functions for repositioning
+function resetToRootPositions() {
+    // Choose a smaller radius than the final desired radius, for example 20px
+    const rootX = width / 2;
+    const rootY = height / 2;
+    nodes.forEach(n => {
+        // Randomize a bit: place within a 20px radius around the center
+        const angle = Math.random() * 2 * Math.PI;
+        const r = Math.random() * 2;
+        n.x = rootX + r * Math.cos(angle);
+        n.y = rootY + r * Math.sin(angle);
+        // Pin the node at that position.
+        n.fx = n.x;
+        n.fy = n.y;
+    });
+}
+
+function releaseNodePins() {
+    nodes.forEach(n => {
+        n.fx = null;
+        n.fy = null;
+    });
+}
+
+/**
+ * Common reposition function.
+ * @param {boolean} clearExisting - If true, clear current graph and load only first-level nodes.
+ *                                  If false, merge first-level nodes with already displayed nodes.
+ */
+function applyReposition(clearExisting) {
+    // Fetch first-level children from virtual root.
+    fetchJSON("/api/root")
+        .then(data => {
+            if (clearExisting) {
+                // For reset: clear all current nodes, links, container, and displayed set.
+                simulation.stop();
+                simulation.nodes([]);
+                simulation.force("link").links([]);
+                simulation.on("tick", null);
+                nodes = [];
+                links = [];
+                container.selectAll("*").remove();
+                displayedRuleIDs.clear();
+            }
+            // update graph with the first-level nodes and edges.
+            updateGraph(data.nodes, data.edges);
+            // Reposition nodes to near the virtual root (with slight spread).
+            resetToRootPositions();
+            // After a short delay, release pins and restart simulation.
+            setTimeout(() => {
+                nodes.forEach(n => {
+                    n.fx = null;
+                    n.fy = null;
+                });
+                simulation.alpha(0.1).alphaDecay(0.2).restart();
+            }, 300);
+        })
+        .catch(error => {
+            // Error is handled in fetchJSON.
+        });
+}
+
 
 // --- Helper for wrapping groups text ---
 // Given an array of group names and a maximum length per line,
@@ -126,29 +188,17 @@ document.getElementById("resetZoom").addEventListener("click", () => {
     svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
 });
 
-// Reset graph button handler
+// Reset Graph: Display ONLY first-level children of virtual root.
 document.getElementById("resetGraph").addEventListener("click", () => {
-    simulation.stop();
-    simulation.nodes([]);
-    simulation.force("link").links([]);
-    simulation.on("tick", null);
-    nodes.length = 0;
-    links.length = 0;
-    container.selectAll("*").remove();
-    displayedRuleIDs.clear();
-    svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
-    loadInitialGraph();
+    // Use clearExisting = true
+    applyReposition(true);
 });
 
-// Rearrange Graph button handler
+// Rearrange Graph: Display first-level children of virtual root
+// PLUS the already displayed nodes (which remain in the nodes array).
 document.getElementById("rearrangeGraph").addEventListener("click", () => {
-    // Release pinned positions for all nodes.
-    nodes.forEach(d => {
-        d.fx = null;
-        d.fy = null;
-    });
-    // Reheat the simulation so the layout recalculates.
-    simulation.alpha(1).restart();
+    // Use clearExisting = false so that mergeNodes() preserves existing nodes.
+    applyReposition(false);
 });
 
 const tooltip = d3.select("#tooltip");
@@ -162,9 +212,11 @@ const height = window.innerHeight * 0.9;
 
 const simulation = d3.forceSimulation()
     .force("link", d3.forceLink().id(d => d.id).distance(150))
-    .force("charge", d3.forceManyBody().strength(-120))
+    .force("charge", d3.forceManyBody().strength(-80))
     .force("center", d3.forceCenter(width / 2, height / 2))
-    .velocityDecay(0.4);
+    .force("radial", d3.forceRadial(150, width / 2, height / 2).strength(0.15))
+    .velocityDecay(0.2)
+    .alphaDecay(0.1);
 
 let nodes = [];
 let links = [];
@@ -360,6 +412,7 @@ function updateSimulation(fullLinks) {
     });
     simulation.force("link").links(fullLinks);
     simulation.alphaTarget(0.2).restart();
+    setTimeout(() => simulation.stop(), 5000);
 }
 
 function loadInitialGraph() {
@@ -409,7 +462,7 @@ function expandParents(nodeId) {
 }
 
 function dragstarted(event, d) {
-    if (!event.active) simulation.alphaTarget(0.3).restart();
+    if (!event.active) simulation.alphaTarget(0.2).restart();
     d.fx = d.x;
     d.fy = d.y;
 }
