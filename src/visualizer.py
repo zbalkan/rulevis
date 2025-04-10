@@ -103,10 +103,11 @@ def create_app(graph_path: str) -> Flask:
             expandable = len([child for child in G.successors(
                 nid) if child not in displayed]) > 0
 
+            attributes = G.nodes[nid].items()
             node_data = {
                 "id": nid,
-                **{k: v for k, v in G.nodes[nid].items() if k != "expandable"},
-                "expandable": expandable  # single boolean property
+                **{k: v for k, v in attributes if k != "expandable"},
+                "expandable": expandable
             }
             nodes.append(node_data)
 
@@ -134,9 +135,11 @@ def create_app(graph_path: str) -> Flask:
             expandable = len([child for child in G.successors(
                 nid) if child not in displayed]) > 0
 
+            attributes = G.nodes[nid].items()
+
             node_data = {
                 "id": nid,
-                **{k: v for k, v in G.nodes[nid].items() if k != "expandable"},
+                **{k: v for k, v in attributes if k != "expandable"},
                 "expandable": expandable
             }
             nodes.append(node_data)

@@ -64,17 +64,22 @@ class GraphGenerator:
             if_group = element.findtext('if_group', None)
             if_matched_group = element.findtext('if_matched_group', None)
 
-            children = [(i.tag, i.text) for i in element]
-            rule_description = self.extract_rule_description(children)
-            all_groups = self.extract_rule_groups(inherited_groups, children)
+            attributes = [(i.tag, i.text) for i in element]
+            rule_description = self.extract_rule_description(attributes)
+            all_groups = self.extract_rule_groups(inherited_groups, attributes)
 
-            self.G.add_node(rule_id, groups=all_groups,
-                            description=rule_description)
-            for group in all_groups:
-                self.group_membership[group].append(rule_id)
+            if self.G.nodes.get(rule_id) is not None:
+                logging.debug(
+                    f"Duplicate rule ID found: {rule_id}. Skipping this rule.")
 
-            self.add_relationship_edges(
-                rule_id, if_sid, if_matched_sid, if_group, if_matched_group)
+            else:
+                self.G.add_node(rule_id, groups=all_groups,
+                                description=rule_description)
+                for group in all_groups:
+                    self.group_membership[group].append(rule_id)
+
+                self.add_relationship_edges(
+                    rule_id, if_sid, if_matched_sid, if_group, if_matched_group)
 
         elif element.tag == 'group':
             group_attribute = element.get('name', '')
@@ -92,11 +97,11 @@ class GraphGenerator:
                 all_groups.extend(child[1].split(','))
         return all_groups
 
-    def extract_rule_description(self, children: list[tuple[str, Optional[str]]]) -> Optional[str]:
+    def extract_rule_description(self, attributes: list[tuple[str, Optional[str]]]) -> Optional[str]:
         description: list[str] = []
-        for child in children:
-            if child[0] == 'description':
-                d = child[1]
+        for attr in attributes:
+            if attr[0] == 'description':
+                d = attr[1]
                 if d:
                     description.append(d)
         if len(description) > 0:
@@ -124,7 +129,7 @@ class GraphGenerator:
             try:
                 parsed_xml = ET.fromstring(wrapped_content)
                 root = parsed_xml
-                for child in root.iter():
+                for child in root:
                     self.parse_groups_and_rules(child, [])
             except Exception as e:
                 logging.error(f"Error parsing {xml_file}: {e}", exc_info=True)
