@@ -1,7 +1,6 @@
 import logging
 import os
 import pickle
-import sys
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from typing import Final, Optional
@@ -12,10 +11,11 @@ ENCODING: Final[str] = "utf-8"
 
 
 class GraphGenerator:
-    def __init__(self, paths: list[str]) -> None:
+    def __init__(self, paths: list[str], graph_file: str) -> None:
         self.paths = paths
         self.group_membership: dict[str, list[str]] = defaultdict(list)
         self.G = nx.MultiDiGraph()
+        self.graph_file: str = graph_file
 
     def get_all_xml_files(self) -> list[str]:
         xml_files: list[str] = []
@@ -149,19 +149,11 @@ class GraphGenerator:
         print("First-level children (connected to root):",
               len(list(self.G.successors("0"))))
 
-    def save_graph(self, output_path: str) -> None:
+    def save_graph(self) -> None:
         try:
+            output_path = self.graph_file
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             pickle.dump(self.G, open(output_path, 'wb'))
             logging.info(f"Graph saved to {output_path}")
         except Exception as e:
             logging.error(f"Error saving graph: {e}", exc_info=True)
-
-
-def get_root_dir() -> str:
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    elif __file__:
-        return os.path.dirname(__file__)
-    else:
-        return './'

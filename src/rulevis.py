@@ -5,6 +5,7 @@ import argparse
 import logging
 import os
 import sys
+import tempfile
 import webbrowser
 from threading import Timer
 from typing import Final
@@ -17,32 +18,44 @@ DESCRIPTION: Final[str] = f"{APP_NAME} ({APP_VERSION}) is a Wazuh rule visualiza
 ENCODING: Final[str] = "utf-8"
 
 
-def generate_graph(paths: list[str], output: str) -> None:
-    logging.info("Generating rule graph...")
-    generator = GraphGenerator(paths=paths)
-    generator.build_graph_from_xml()
-    generator.save_graph('./graph.pickle')
-    logging.info(f"Graph saved to {output}")
+class Rulevis():
 
+    def __init__(self) -> None:
+        self.graph_path: str = tempfile.TemporaryFile(delete=False).name
+        logging.info(f"Temporary graph file created at {self.graph_path}")
 
-def open_browser():
-    webbrowser.open_new('http://localhost:5000/')
+    def __del__(self) -> None:
+        try:
+            if hasattr(self, 'graph_path') and os.path.exists(self.graph_path):
+                os.remove(self.graph_path)
+                logging.info(
+                    f"Temporary graph file {self.graph_path} deleted.")
+        except Exception as e:
+            logging.error(f"Error deleting temporary graph file: {e}")
 
+    def generate_graph(self, paths: list[str]) -> None:
+        logging.info("Generating rule graph...")
+        generator = GraphGenerator(paths=paths, graph_file=self.graph_path)
+        generator.build_graph_from_xml()
+        generator.save_graph()
+        logging.info("Graph generation complete.")
 
-def run_flask_app(graph_path: str) -> None:
-    from visualizer import create_app
-    app = create_app(graph_path)  # Load the graph once at startup
-    logging.info("Starting Flask app...")
-    Timer(1, open_browser).start()
-    app.run(debug=True, use_reloader=False)
+    def open_browser(self, ) -> None:
+        webbrowser.open_new('http://localhost:5000/')
 
+    def run_flask_app(self, ) -> None:
+        from visualizer import create_app
+        app = create_app(self.graph_path)  # Load the graph once at startup
+        logging.info("Starting Flask app...")
+        Timer(1, self.open_browser).start()
+        app.run(debug=True, use_reloader=False)
 
-def validate_paths(paths: list[str]) -> None:
-    for path in paths:
-        if not os.path.isdir(path):
-            logging.error(f"Invalid directory path: {path}", exc_info=True)
-            print(f"Error: Invalid directory path: {path}")
-            sys.exit(1)
+    def validate_paths(self, paths: list[str]) -> None:
+        for path in paths:
+            if not os.path.isdir(path):
+                logging.error(f"Invalid directory path: {path}", exc_info=True)
+                print(f"Error: Invalid directory path: {path}")
+                sys.exit(1)
 
 
 def main() -> None:
@@ -53,17 +66,15 @@ def main() -> None:
 
     parser.add_argument("--path", "-p", dest="path", required=True, type=str,
                         help="Path to the Wazuh rule directories. Comma-separated multiple paths are accepted.")
-    parser.add_argument("--output", "-o", default="graph.pickle",
-                        help="Path to output gpickle file")
 
     args: argparse.Namespace = parser.parse_args()
     paths: list[str] = [p for p in str(args.path).split(',') if p != '']
-    output: str = str(args.output)
+    logging.info(f"Paths: {paths}")
 
-    validate_paths(paths)
-
-    generate_graph(paths, output)
-    run_flask_app(output)
+    rulevis = Rulevis()
+    rulevis.validate_paths(paths)
+    rulevis.generate_graph(paths)
+    rulevis.run_flask_app()
 
 
 if __name__ == "__main__":
