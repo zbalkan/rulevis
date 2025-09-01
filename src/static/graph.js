@@ -95,19 +95,15 @@ function applyReposition(clearExisting) {
                 links = [];
                 container.selectAll("*").remove();
                 displayedRuleIDs.clear();
+                updateCounter();
             }
             // update graph with the first-level nodes and edges.
             updateGraph(data.nodes, data.edges);
             // Reposition nodes to near the virtual root (with slight spread).
             resetToRootPositions();
             // After a short delay, release pins and restart simulation.
-            setTimeout(() => {
-                nodes.forEach(n => {
-                    n.fx = null;
-                    n.fy = null;
-                });
-                simulation.alpha(0.1).alphaDecay(0.2).restart();
-            }, 300);
+            releaseNodePins();
+            simulation.alpha(0.1).alphaDecay(0.2).restart();
         })
         .catch(error => {
             // Error is handled in fetchJSON.
