@@ -1,3 +1,21 @@
+// --- Global State ---
+let nodes = [];
+let links = [];
+
+// Global set to track displayed rule IDs
+let displayedRuleIDs = new Set();
+
+// Flag to indicate if the context menu is open (freeze state)
+let contextMenuOpen = false;
+
+// Flag to indicate if simulation is paused via keyboard
+let simulationPausedByKey = false;
+
+let tooltipTimeout;
+const TOOLTIP_SHOW_DELAY = 500;
+const TOOLTIP_HIDE_DURATION = 300;
+const TOOLTIP_SHOW_DURATION = 200;
+
 // Toast notification code
 // Simple toast notification implementation
 function showNotification(message) {
@@ -106,7 +124,7 @@ function applyReposition(clearExisting) {
             simulation.alpha(0.1).alphaDecay(0.2).restart();
         })
         .catch(error => {
-            // Error is handled in fetchJSON.
+            console.error("Error during reposition:", error);
         });
 }
 
@@ -166,10 +184,6 @@ function getTooltipHTML(d) {
             </table>`;
 }
 // ----- Graph Visualization Logic -----
-// Global set to track displayed rule IDs
-let displayedRuleIDs = new Set();
-// Flag to indicate if the context menu is open (freeze state)
-let contextMenuOpen = false;
 
 const svg = d3.select("svg");
 const container = svg.append("g");
@@ -207,10 +221,6 @@ document.getElementById("rearrangeGraph").addEventListener("click", () => {
 });
 
 const tooltip = d3.select("#tooltip");
-let tooltipTimeout;
-const TOOLTIP_SHOW_DELAY = 500;
-const TOOLTIP_HIDE_DURATION = 300;
-const TOOLTIP_SHOW_DURATION = 200;
 
 const width = window.innerWidth;
 const height = window.innerHeight * 0.9;
@@ -219,26 +229,15 @@ const simulation = d3.forceSimulation()
     .force("link", d3.forceLink().id(d => d.id).distance(150))
     .force("charge", d3.forceManyBody().strength(-80))
     .force("center", d3.forceCenter(width / 2, height / 2))
-    .force("radial", d3.forceRadial(150, width / 2, height / 2).strength(0.15))
-    .velocityDecay(0.2)
-    .alphaDecay(0.1);
+    // .force("radial", d3.forceRadial(150, width / 2, height / 2).strength(0.15))
+    .velocityDecay(0.4)
+    .alphaDecay(0.5);
 
-let nodes = [];
-let links = [];
 
 // Helper function to hide tooltip
 function hideTooltip() {
     clearTimeout(tooltipTimeout);
     tooltip.transition().duration(TOOLTIP_HIDE_DURATION).style("opacity", 0);
-}
-
-// (Helper areParentsDisplayed remains available if needed.)
-function areParentsDisplayed(node) {
-    if (node.parent_ids && node.parent_ids.length > 0) {
-        return node.parent_ids.every(pid => displayedRuleIDs.has(pid));
-    } else {
-        return displayedRuleIDs.has("0");
-    }
 }
 
 function updateCounter() {
@@ -275,79 +274,46 @@ const contextMenu = d3.select("body").append("div")
     .style("z-index", 1000);
 
 function updateGraph(newNodes, newLinks) {
-    // Step 1: Merge new nodes and links into our data arrays.
-    mergeNodes(newNodes);
+    const newIds = (newNodes || []).map(n => n.id).filter(id => !displayedRuleIDs.has(id));
+
+    const nodeMap = mergeNodes(newNodes);
+
     mergeLinks(newLinks);
 
-    // Step 2: Build full link objects with node references.
-    var fullLinks = links.map(function (l) {
-        return {
-            ...l,
-            source: nodes.find(function (n) { return n.id === l.source; }),
-            target: nodes.find(function (n) { return n.id === l.target; })
-        };
-    });
+    // This now runs *after* data is merged, so `displayedRuleIDs` is up-to-date.
+    if (newIds.length > 0) {
+        linkUpExistingNodes();
+    }
 
-    // Step 3: Update the visualizations.
-    updateNodes();
-    updateLinks(fullLinks);
-    updateSimulation(fullLinks);
+     // After all data is merged, check every node to see if it should be considered "expanded".
+    nodes.forEach(node => {
+        const all_children_ids = node.children_ids || [];
 
-    // Update counter display.
-    updateCounter();
-}
-// Merges new nodes with existing nodes.
-function mergeNodes(newNodes) {
-    newNodes.forEach(function (newNode) {
-        var existingNode = nodes.find(function (node) {
-            return node.id === newNode.id;
-        });
-        if (existingNode) {
-            // Update properties (only the ones that might change)
-            existingNode.expandable = newNode.expandable;
-            existingNode.description = newNode.description;
-            existingNode.groups = newNode.groups;
+        if (all_children_ids.length === 0) {
+            // If the node has no children, it can't be expanded.
+            node.expandable = false;
+            node.is_expanded = true; // Mark leaf nodes as "expanded" for consistent styling.
         } else {
-            // If new, try to place it near its parent if known.
-            var parentLink = links.find(function (l) { return l.target === newNode.id; });
-            if (parentLink) {
-                var parentNode = nodes.find(function (n) { return n.id === parentLink.source; });
-                if (parentNode && parentNode.x != null && parentNode.y != null) {
-                    newNode.x = parentNode.x + Math.random() * 20 - 10;
-                    newNode.y = parentNode.y + Math.random() * 20 - 10;
-                }
+            // Check if EVERY child from the complete list is currently on screen.
+            const allChildrenAreVisible = all_children_ids.every(childId => displayedRuleIDs.has(childId));
+
+            if (allChildrenAreVisible) {
+                // All possible children are on screen. This node is fully expanded.
+                node.expandable = false;
+                node.is_expanded = true;
+            } else {
+                // Some children are still hidden. This node is still expandable.
+                node.expandable = true;
+                node.is_expanded = false;
             }
-            // Initialize additional state
-            newNode.is_expanded = newNode.is_expanded || false;
-            newNode.parents_expanded = newNode.parents_expanded || false;
-            nodes.push(newNode);
-            displayedRuleIDs.add(newNode.id);
         }
     });
-}
 
-// Merges new links with existing links.
-function mergeLinks(newLinks) {
-    newLinks.forEach(function (l) {
-        var exists = links.some(function (existing) {
-            return existing.source === l.source && existing.target === l.target;
-        });
-        if (!exists) {
-            links.push(l);
-        }
-    });
-}
-
-// Update nodes selection: handles enter, update, and exit for nodes.
-function updateNodes() {
-    var nodeSelection = container.selectAll("g.node")
-        .data(nodes, function (d) { return d.id; });
-
-    // Remove nodes that no longer exist.
+    // --- D3 VISUALIZATION BINDING ---
+    const nodeSelection = container.selectAll("g.node").data(nodes, d => d.id);
     nodeSelection.exit().remove();
 
-    // Create new nodes.
-    var nodeEnter = nodeSelection.enter().append("g")
+    const nodeEnter = nodeSelection.enter().append("g")
         .attr("class", "node")
         .on("contextmenu", function (event, d) {
             event.preventDefault();
@@ -359,18 +325,15 @@ function updateNodes() {
             event.stopPropagation();
             hideContextMenu();
             clearHighlight();
-            if (d.expandable) {
-                expandNode(d.id);
-            }
+            if (d.expandable) expandNode(d.id);
         })
         .call(d3.drag()
-            .filter(function (event) { return event.button === 0; })
             .on("start", dragstarted)
             .on("drag", dragged)
             .on("end", dragended))
         .on("mouseover", function (event, d) {
             if (contextMenuOpen) return;
-            tooltipTimeout = setTimeout(function () {
+            tooltipTimeout = setTimeout(() => {
                 tooltip.transition().duration(TOOLTIP_SHOW_DURATION).style("opacity", 0.9);
                 tooltip.html(getTooltipHTML(d))
                     .style("left", (event.pageX + 5) + "px")
@@ -378,70 +341,98 @@ function updateNodes() {
             }, TOOLTIP_SHOW_DELAY);
         })
         .on("mouseout", function () {
-            clearTimeout(tooltipTimeout);
-            tooltip.transition().duration(TOOLTIP_HIDE_DURATION).style("opacity", 0);
+            hideTooltip();
         });
 
-    // Append circle and text to new nodes.
-    nodeEnter.append("circle")
-        .attr("r", 10)
-        .attr("class", function (d) {
-            return d.expandable ? "node-expandable" : "node-default";
-        });
+    nodeEnter.append("circle").attr("r", 10);
     nodeEnter.append("text")
         .attr("x", 12)
         .attr("dy", ".35em")
-        .text(function (d) { return d.id; });
+        .text(d => d.id);
 
-    // Merge new nodes with existing ones.
-    var allNodes = nodeEnter.merge(nodeSelection);
-    // Refresh the CSS class for all nodes.
-    allNodes.select("circle")
-        .attr("class", function (d) {
-            return d.expandable ? "node-expandable" : "node-default";
+    nodeEnter.merge(nodeSelection)
+        .select("circle")
+        .attr("class", d => {
+            // If the node has been expanded OR it was never expandable, it's a "default" node (grey).
+            // Otherwise, it's an "expandable" node (blue).
+            if (d.is_expanded || !d.expandable) {
+                return "node-default";
+            } else {
+                return "node-expandable";
+            }
         });
-}
 
-// Update links selection: handles enter and exit for links.
-function updateLinks(fullLinks) {
-    var linkSelection = container.selectAll("line")
-        .data(fullLinks, function (d) { return d.source.id + "-" + d.target.id; });
-
+    const fullLinks = links.map(l => ({ ...l, source: nodeMap.get(l.source), target: nodeMap.get(l.target) })).filter(l => l.source && l.target);
+    const linkSelection = container.selectAll("line").data(fullLinks, d => `${d.source.id}-${d.target.id}`);
     linkSelection.exit().remove();
+    linkSelection.enter().insert("line", ":first-child").attr("class", d => `edge edge-${d.relation_type || "unknown"}`);
 
-    linkSelection.enter()
-        .insert("line", ":first-child")
-        .attr("class", function (d) {
-            return "edge edge-" + (d.relation_type || "unknown");
-        })
-        .on("mouseover", function (event, d) {
-            if (contextMenuOpen) return;
-            tooltipTimeout = setTimeout(function () {
-                tooltip.transition().duration(TOOLTIP_SHOW_DURATION).style("opacity", 0.9);
-                tooltip.html("Relation: " + (d.relation_type || "unknown"))
-                    .style("left", (event.pageX + 5) + "px")
-                    .style("top", (event.pageY - 28) + "px");
-            }, TOOLTIP_SHOW_DELAY);
-        })
-        .on("mouseout", function () {
-            clearTimeout(tooltipTimeout);
-            tooltip.transition().duration(TOOLTIP_HIDE_DURATION).style("opacity", 0);
-        });
-}
-
-function updateSimulation(fullLinks) {
-    simulation.nodes(nodes).on("tick", function () {
-        container.selectAll("line")
-            .attr("x1", function (d) { return d.source.x; })
-            .attr("y1", function (d) { return d.source.y; })
-            .attr("x2", function (d) { return d.target.x; })
-            .attr("y2", function (d) { return d.target.y; });
-        container.selectAll("g.node")
-            .attr("transform", function (d) { return "translate(" + d.x + "," + d.y + ")"; });
+    // --- SIMULATION UPDATE ---
+    simulation.nodes(nodes).on("tick", () => {
+        container.selectAll("line").attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+        container.selectAll("g.node").attr("transform", d => `translate(${d.x},${d.y})`);
     });
     simulation.force("link").links(fullLinks);
-    simulation.alphaTarget(0.2).restart();
-    setTimeout(() => simulation.stop(), 10000);
+    simulation.alphaTarget(0.5).restart();
+    if (window.stopTimeout) clearTimeout(window.stopTimeout);
+    window.stopTimeout = setTimeout(() => {
+        simulation.alphaTarget(0.5); // Set the target to 0, allowing it to cool and stop.
+    }, 5000); // Let it run for at least 5 seconds before it's allowed to stop.
+
+    updateCounter();
+}
+
+function mergeLinks(newLinks) {
+    (newLinks || []).forEach(newLink => {
+        if (!links.some(l => l.source === newLink.source && l.target === newLink.target)) {
+            links.push(newLink);
+        }
+    });
+}
+
+function mergeNodes(newNodes) {
+    const nodeMap = new Map(nodes.map(n => [n.id, n]));
+    (newNodes || []).forEach(newNode => {
+        const existingNode = nodeMap.get(newNode.id);
+        if (existingNode) {
+            // Node already exists. Preserve its core properties (position, velocity)
+            // and merge the new properties (like 'expandable' or 'is_expanded') onto it.
+            Object.assign(existingNode, newNode);
+        } else {
+            // This is a brand new node. Add it to the map.
+            nodeMap.set(newNode.id, newNode);
+            displayedRuleIDs.add(newNode.id);
+        }
+    });
+    nodes = Array.from(nodeMap.values());
+    return nodeMap;
+}
+
+function linkUpExistingNodes() {
+    const allDisplayed = Array.from(displayedRuleIDs);
+
+    fetchJSON('/api/connections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: allDisplayed }),
+    })
+    .then(data => {
+        const newLinks = data.edges || [];
+
+        // Only call updateGraph if there are genuinely new links to add.
+        const newLinksToAdd = newLinks.filter(newLink =>
+            !links.some(l => l.source === newLink.source && l.target === newLink.target)
+        );
+
+        if (newLinksToAdd.length > 0) {
+            // Call the main updateGraph function. It will handle merging the new links.
+            // We pass an empty array for nodes because we are only adding links.
+            updateGraph([], newLinksToAdd);
+        }
+    })
+    .catch(error => {
+        console.error("Error linking up existing nodes:", error);
+    });
 }
 
 function loadInitialGraph() {
@@ -455,38 +446,31 @@ function loadInitialGraph() {
 }
 
 function expandNode(nodeId) {
-    // Call API with current displayed node IDs.
     fetchJSON(`/api/node/${nodeId}?displayed=${getDisplayedIds()}`)
         .then(data => {
-            // Immediately add all returned nodes to the displayed set.
-            data.nodes.forEach(n => displayedRuleIDs.add(n.id));
-
-            // Force the parent's state to non-expandable right away.
-            const parentFromResponse = data.nodes.find(n => n.id === nodeId);
-            if (parentFromResponse) {
-                parentFromResponse.is_expanded = true;
-                parentFromResponse.expandable = false;
+            const parentNode = data.nodes.find(n => n.id === nodeId);
+            if (parentNode) {
+                parentNode.is_expanded = true;
+                parentNode.expandable = false; // The server should do this, but we can enforce it.
             }
-
-            // Update the graph with the API response.
             updateGraph(data.nodes, data.edges);
         })
         .catch(error => {
-            // The error handling is already done in fetchJSON.
+            console.error(`Error expanding node ${nodeId}:`, error);
         });
 }
 
 function expandParents(nodeId) {
     fetchJSON(`/api/parents/${nodeId}?displayed=${getDisplayedIds()}`)
         .then(data => {
-            const targetNode = nodes.find(n => n.id === nodeId);
-            if (targetNode) {
-                targetNode.parents_expanded = true;
-            }
+            // Mark the node as having its parents expanded to prevent re-fetching.
+            const targetNode = data.nodes.find(n => n.id === nodeId);
+            if (targetNode) targetNode.parents_expanded = true;
+
             updateGraph(data.nodes, data.edges);
         })
         .catch(error => {
-            // The error handling is already done in fetchJSON.
+            console.error(`Error expanding parents for ${nodeId}:`, error);
         });
 }
 
@@ -502,44 +486,96 @@ function dragged(event, d) {
 }
 
 function dragended(event, d) {
-    if (!event.active) simulation.alphaTarget(0);
+    // The `event` object is passed directly to the function in D3 v7.
+    // We check `event.active` to see if a simulation "tick" is still running from the drag.
+    if (!event.active) {
+        simulation.alphaTarget(0);
+    }
+
+    // If the simulation is NOT paused by the user's keypress, release the node's pin.
+    if (!simulationPausedByKey) {
+        d.fx = null;
+        d.fy = null;
+    }
 }
 
 function handleSearch() {
     const searchInput = document.getElementById("searchBox").value.trim();
     if (!searchInput) return;
 
-    let foundNode = nodes.find(n => n.id === searchInput);
+    clearHighlight();
+
+    const foundNode = nodes.find(n => n.id === searchInput);
+
     if (foundNode) {
-        container.selectAll("g.node")
-            .filter(d => d.id === foundNode.id)
-            .classed("highlight", true);
-        simulation.stop();
-        if (foundNode.x != null && foundNode.y != null) {
-            svg.transition().duration(750)
-                .call(zoom.transform, d3.zoomIdentity.translate(width / 2 - foundNode.x, height / 2 - foundNode.y));
-        }
+        // CASE 1: Node is already on screen. Just highlight and center.
+        highlightAndCenterNode(searchInput);
     } else {
-        fetchJSON(`/api/node/${searchInput}?displayed=${getDisplayedIds()}`)
+        // CASE 2: Node is NOT on screen. Fetch it and its parent relationships.
+        fetchJSON(`/api/parents/${searchInput}?displayed=${getDisplayedIds()}`)
             .then(data => {
-                foundNode = data.nodes.find(n => n.id === searchInput);
-                if (foundNode) {
-                    updateGraph(data.nodes, data.edges);
-                    container.selectAll("g.node")
-                        .filter(d => d.id === searchInput)
-                        .classed("highlight", true);
-                    simulation.stop();
-                    if (foundNode.x != null && foundNode.y != null) {
-                        svg.transition().duration(750)
-                            .call(zoom.transform, d3.zoomIdentity.translate(width / 2 - foundNode.x, height / 2 - foundNode.y));
-                    }
+                const searchedNodeData = data.nodes.find(n => n.id === searchInput);
+
+                if (searchedNodeData) {
+                    // --- INTELLIGENT PROCESSING LOGIC ---
+
+                    // 1. Prepare the new node to be added.
+                    const newNodesToAdd = [searchedNodeData];
+
+                    // 2. Prepare a list for edges that we will conditionally add.
+                    const newLinksToAdd = [];
+
+                    // 3. Iterate through the edges returned by the API.
+                    data.edges.forEach(edge => {
+                        // An edge from this API is always { source: PARENT, target: CHILD }.
+                        // We only care about edges pointing TO our searched node.
+                        if (edge.target === searchInput) {
+                            const parentId = edge.source;
+                            // 4. CRUCIAL CHECK: Is the parent already on screen?
+                            if (displayedRuleIDs.has(parentId)) {
+                                // Yes, so we will add this edge.
+                                newLinksToAdd.push(edge);
+                            }
+                        }
+                    });
+
+                    // 5. Update the graph with ONLY the searched node and the valid edges.
+                    updateGraph(newNodesToAdd, newLinksToAdd);
+
+                    // 6. Allow D3 to render, then highlight and center the new node.
+                    setTimeout(() => {
+                        highlightAndCenterNode(searchInput);
+                    }, 100);
+
                 } else {
-                    alert("Node not found: " + searchInput);
+                    showNotification("Node not found: " + searchInput);
                 }
             })
             .catch(error => {
-                // The error handling is already done in fetchJSON.
+                // Error is handled by fetchJSON.
             });
+    }
+}
+
+// The highlightAndCenterNode helper function from the previous step remains the same.
+function highlightAndCenterNode(nodeId) {
+    const nodeToHighlight = nodes.find(n => n.id === nodeId);
+    if (!nodeToHighlight) return;
+
+    container.selectAll("g.node")
+        .filter(d => d.id === nodeId)
+        .classed("highlight", true);
+
+    simulation.stop();
+
+    if (nodeToHighlight.x != null && nodeToHighlight.y != null) {
+        const currentTransform = d3.zoomTransform(svg.node());
+        const newTransform = d3.zoomIdentity
+            .translate(width / 2, height / 2)
+            .scale(currentTransform.k)
+            .translate(-nodeToHighlight.x, -nodeToHighlight.y);
+
+        svg.transition().duration(750).call(zoom.transform, newTransform);
     }
 }
 
@@ -557,7 +593,9 @@ document.getElementById("searchBox").addEventListener("keyup", (event) => {
 // ----- Highlight Reset Logic -----
 function clearHighlight() {
     container.selectAll("g.node").classed("highlight", false);
-    simulation.restart();
+    if (!simulationPausedByKey && !contextMenuOpen) {
+        simulation.restart();
+    }
 }
 
 // Helper: Return comma-separated list of displayed node IDs.
@@ -660,22 +698,25 @@ document.addEventListener("click", function (event) {
     }
 });
 
-// Flag to indicate if simulation is paused via keyboard
-let simulationPausedByKey = false;
 
 document.addEventListener("keydown", (event) => {
-    if (event.code === "Space" || event.ctrlKey) {
-        if (!simulationPausedByKey) {
-            simulationPausedByKey = true;
-            simulation.stop();
-        }
+    // Use `event.key` for modern browsers, and check for spacebar or Ctrl.
+    if ((event.key === " " || event.key === "Control") && !simulationPausedByKey) {
+        event.preventDefault(); // Prevents spacebar from scrolling the page
+        simulationPausedByKey = true;
+        simulation.stop();
     }
 });
 
 document.addEventListener("keyup", (event) => {
-    if (simulationPausedByKey && (event.code === "Space" || !event.ctrlKey)) {
+    // Check if the key that was released is the one we are tracking.
+    if (simulationPausedByKey && (event.key === " " || event.key === "Control")) {
         simulationPausedByKey = false;
-        simulation.alpha(1).restart();
+        // Only release the node pins if the user is not currently dragging.
+        if (!d3.event.active) {
+             releaseNodePins();
+             simulation.alpha(1).restart();
+        }
     }
 });
 

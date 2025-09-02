@@ -145,6 +145,16 @@ class GraphGenerator:
         for node in first_level_rules:
             self.add_edge_with_type(synthetic_root, node, "root")
 
+        # Pre-calculate and store all children for every node.
+        # This is crucial for the frontend to know if a node is fully expanded.
+        print("Pre-calculating child relationships...")
+        for node_id in list(self.G.nodes):
+            # G.successors(node_id) returns an iterator of all direct children
+            children_ids = list(self.G.successors(node_id))
+            # Store this list as a new attribute on the node itself.
+            self.G.nodes[node_id]['children_ids'] = children_ids
+        print("Child relationship calculation complete.")
+
         print("Total nodes:", self.G.number_of_nodes())
         print("First-level children (connected to root):",
               len(list(self.G.successors("0"))))

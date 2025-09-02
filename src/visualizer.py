@@ -154,4 +154,27 @@ def create_app(graph_path: str) -> Flask:
         ]
         return jsonify({"nodes": nodes, "edges": edges})
 
+    @app.route("/api/connections", methods=["POST"])
+    def get_connections_between_nodes():
+        # Get the list of node IDs from the request body.
+        node_ids = request.json.get("ids", [])
+        if not node_ids:
+            return jsonify({"nodes": [], "edges": []})
+
+        # Create a subgraph containing only the nodes present on the user's screen.
+        subgraph = G.subgraph(node_ids)
+
+        # Find all edges within this subgraph.
+        edges = [
+            {
+                "source": u,
+                "target": v,
+                "relation_type": data.get("relation_type", "unknown")
+            }
+            for u, v, data in subgraph.edges(data=True)
+        ]
+
+        # Return only the edges. The nodes are already on the client.
+        return jsonify({"nodes": [], "edges": edges})
+
     return app
