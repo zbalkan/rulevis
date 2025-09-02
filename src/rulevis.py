@@ -41,7 +41,9 @@ class Rulevis():
         logging.info("Graph generation complete.")
 
     def open_browser(self, ) -> None:
-        webbrowser.open_new('http://localhost:5000/')
+        new_url = 'http://localhost:5000/'
+        webbrowser.open_new(new_url)
+        print(f"Access the app over {new_url}")
 
     def run_flask_app(self, ) -> None:
         from visualizer import create_app
