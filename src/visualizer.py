@@ -23,7 +23,6 @@ def create_app(graph_path: str) -> Flask:
             <meta charset="UTF-8">
             <title>Rule Graph Explorer</title>
             <script src="https://d3js.org/d3.v7.min.js"></script>
-            <script src="static/tutorial.js"></script>
             <link rel="stylesheet" href="static/styles.css">
         </head>
         <body>
@@ -42,8 +41,13 @@ def create_app(graph_path: str) -> Flask:
 
         <div class="content">
             <svg></svg>
-            <div id="tooltip" class="tooltip"></div>
-            <script src="static/graph.js"></script>
+        </div>
+
+        <div id="detailsPanel" class="details-panel">
+            <button id="detailsCloseBtn" class="details-close-btn">&times;</button>
+            <div id="detailsContent" class="details-content">
+                <p class="details-placeholder">Click on a node to see its details.</p>
+            </div>
         </div>
 
         <div class="footer">
@@ -56,6 +60,9 @@ def create_app(graph_path: str) -> Flask:
                emblems and images are registered trademarks of their respective owners.
             </p>
         </div>
+
+        <script src="static/tutorial.js"></script>
+        <script src="static/graph.js"></script>
         </body>
         </html>
         """)
@@ -176,5 +183,40 @@ def create_app(graph_path: str) -> Flask:
 
         # Return only the edges. The nodes are already on the client.
         return jsonify({"nodes": [], "edges": edges})
+
+    @app.route("/api/details/<node_id>", methods=["GET"])
+    def get_node_details(node_id: str):
+        if node_id not in G:
+            return jsonify({"error": f"Node '{node_id}' not found"}), 404
+
+        node_data = G.nodes[node_id]
+
+        # Find all parents from the master graph
+        parents = [
+            {
+                "id": parent_id,
+                "relation_type": G.get_edge_data(parent_id, node_id)[0].get("relation_type", "unknown")
+            }
+            for parent_id in G.predecessors(node_id)
+        ]
+
+        # Find all children from the master graph
+        children = [
+            {
+                "id": child_id,
+                "relation_type": G.get_edge_data(node_id, child_id)[0].get("relation_type", "unknown")
+            }
+            for child_id in G.successors(node_id)
+        ]
+
+        response = {
+            "id": node_id,
+            "description": node_data.get("description"),
+            "groups": node_data.get("groups", []),
+            "parents": parents,
+            "children": children
+        }
+
+        return jsonify(response)
 
     return app

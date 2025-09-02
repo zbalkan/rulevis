@@ -1,6 +1,7 @@
 // --- Global State ---
 let nodes = [];
 let links = [];
+let nodeMap = new Map();
 
 // Global set to track displayed rule IDs
 let displayedRuleIDs = new Set();
@@ -10,11 +11,6 @@ let contextMenuOpen = false;
 
 // Flag to indicate if simulation is paused via keyboard
 let simulationPausedByKey = false;
-
-let tooltipTimeout;
-const TOOLTIP_SHOW_DELAY = 500;
-const TOOLTIP_HIDE_DURATION = 300;
-const TOOLTIP_SHOW_DURATION = 200;
 
 // Toast notification code
 // Simple toast notification implementation
@@ -45,6 +41,74 @@ function showNotification(message) {
     setTimeout(() => {
         toast.style.opacity = 0;
     }, 3000);
+}
+
+/**
+ * Fetches complete details for a node and displays them in an interactive panel.
+ * @param {object} d - The D3 data object for the selected node.
+ */
+function showDetailsPanel(d) {
+    const panel = document.getElementById("detailsPanel");
+    const content = document.getElementById("detailsContent");
+
+    content.innerHTML = `<h3>Details for Rule: ${d.id}</h3><p><i>Loading full details...</i></p>`;
+    panel.classList.add("visible");
+
+    fetchJSON(`/api/details/${d.id}`)
+        .then(details => {
+            // --- Format Parents ---
+            let parentsList = '<p>No parents.</p>';
+            if (details.parents && details.parents.length > 0) {
+                parentsList = `<ul>${details.parents.map(p => {
+                    const isDisplayed = displayedRuleIDs.has(p.id);
+                    // If not displayed, add onclick to search for it.
+                    const clickAction = !isDisplayed ? `onclick="handleSearchById('${p.id}')"` : '';
+                    const li_class = isDisplayed ? '' : 'class="not-displayed"';
+                    return `<li ${li_class} ${clickAction}><strong>${p.relation_type}:</strong> ${p.id}</li>`;
+                }).join('')}</ul>`;
+            }
+
+            // --- Format Children ---
+            let childrenList = '<p>No children.</p>';
+            if (details.children && details.children.length > 0) {
+                childrenList = `<ul>${details.children.map(c => {
+                    const isDisplayed = displayedRuleIDs.has(c.id);
+                    // If not displayed, add onclick to search for it.
+                    const clickAction = !isDisplayed ? `onclick="handleSearchById('${c.id}')"` : '';
+                    const li_class = isDisplayed ? '' : 'class="not-displayed"';
+                    return `<li ${li_class} ${clickAction}><strong>${c.relation_type}:</strong> ${c.id}</li>`;
+                }).join('')}</ul>`;
+            }
+
+            // --- Format Groups ---
+            let groupsList = (details.groups && details.groups.length > 0)
+                ? `<ul>${details.groups.map(g => `<li>${g}</li>`).join('')}</ul>`
+                : '<p>No groups assigned.</p>';
+
+            // --- Update the panel with the final HTML ---
+            content.innerHTML = `
+                <h3>Details for Rule: ${details.id}</h3>
+                <p><strong>Description:</strong> ${details.description || 'N/A'}</p>
+                <h4>Parent Rules</h4>
+                ${parentsList}
+                <h4>Child Rules</h4>
+                ${childrenList}
+                <h4>Groups</h4>
+                ${groupsList}
+            `;
+        })
+        .catch(error => {
+            content.innerHTML = `<h3>Details for Rule: ${d.id}</h3><p style="color: red;">Could not load full details.</p>`;
+            console.error(`Error fetching details for ${d.id}:`, error);
+        });
+}
+
+/**
+ * Hides the details panel.
+ */
+function hideDetailsPanel() {
+    const panel = document.getElementById("detailsPanel");
+    panel.classList.remove("visible");
 }
 
 // --- Wrapper for fetch calls ---
@@ -159,30 +223,6 @@ function wrapGroups(groups, maxLength) {
     return result;
 }
 
-// New helper function to generate tooltip HTML as a table-like layout.
-function getTooltipHTML(d) {
-    // Use inline styles to remove borders and add spacing.
-    const tableStyle = "border-collapse: collapse; width: 100%;";
-    const keyStyle = "padding-right: 5px; font-weight: bold; vertical-align: top;";
-    const valueStyle = "vertical-align: top;";
-    // Wrap groups using your wrapGroups function (if available) or join them as needed.
-    let groupsHTML = wrapGroups(d.groups || [], 40);
-    // Alternatively, if wrapGroups isn't desired, you can use: (d.groups || []).join(", ")
-    return `<table style="${tableStyle}">
-                <tr>
-                    <td style="${keyStyle}">ID:</td>
-                    <td style="${valueStyle}">${d.id}</td>
-                </tr>
-                <tr>
-                    <td style="${keyStyle}">Description:</td>
-                    <td style="${valueStyle}">${d.description || "N/A"}</td>
-                </tr>
-                <tr>
-                    <td style="${keyStyle}">Groups:</td>
-                    <td style="${valueStyle}">${groupsHTML}</td>
-                </tr>
-            </table>`;
-}
 // ----- Graph Visualization Logic -----
 
 const svg = d3.select("svg");
@@ -220,8 +260,6 @@ document.getElementById("rearrangeGraph").addEventListener("click", () => {
     applyReposition(false);
 });
 
-const tooltip = d3.select("#tooltip");
-
 const width = window.innerWidth;
 const height = window.innerHeight * 0.9;
 
@@ -232,13 +270,6 @@ const simulation = d3.forceSimulation()
     // .force("radial", d3.forceRadial(150, width / 2, height / 2).strength(0.15))
     .velocityDecay(0.4)
     .alphaDecay(0.5);
-
-
-// Helper function to hide tooltip
-function hideTooltip() {
-    clearTimeout(tooltipTimeout);
-    tooltip.transition().duration(TOOLTIP_HIDE_DURATION).style("opacity", 0);
-}
 
 function updateCounter() {
     let counterDiv = document.getElementById("counter");
@@ -276,7 +307,7 @@ const contextMenu = d3.select("body").append("div")
 function updateGraph(newNodes, newLinks) {
     const newIds = (newNodes || []).map(n => n.id).filter(id => !displayedRuleIDs.has(id));
 
-    const nodeMap = mergeNodes(newNodes);
+    nodeMap = mergeNodes(newNodes);
 
     mergeLinks(newLinks);
 
@@ -318,8 +349,13 @@ function updateGraph(newNodes, newLinks) {
         .on("contextmenu", function (event, d) {
             event.preventDefault();
             event.stopPropagation();
-            hideTooltip();
             showContextMenu(event, d);
+        })
+        .on("click", function(event, d) {
+            // This will not interfere with dblclick. D3 handles the distinction.
+            clearHighlight();
+            d3.select(this).classed("highlight", true);
+            showDetailsPanel(d);
         })
         .on("dblclick", function (event, d) {
             event.stopPropagation();
@@ -330,19 +366,7 @@ function updateGraph(newNodes, newLinks) {
         .call(d3.drag()
             .on("start", dragstarted)
             .on("drag", dragged)
-            .on("end", dragended))
-        .on("mouseover", function (event, d) {
-            if (contextMenuOpen) return;
-            tooltipTimeout = setTimeout(() => {
-                tooltip.transition().duration(TOOLTIP_SHOW_DURATION).style("opacity", 0.9);
-                tooltip.html(getTooltipHTML(d))
-                    .style("left", (event.pageX + 5) + "px")
-                    .style("top", (event.pageY - 28) + "px");
-            }, TOOLTIP_SHOW_DELAY);
-        })
-        .on("mouseout", function () {
-            hideTooltip();
-        });
+            .on("end", dragended));
 
     nodeEnter.append("circle").attr("r", 10);
     nodeEnter.append("text")
@@ -557,6 +581,20 @@ function handleSearch() {
     }
 }
 
+/**
+ * A wrapper for the search functionality that can be called directly
+ * with a specific rule ID.
+ * @param {string} ruleId - The ID of the rule to search for and display.
+ */
+function handleSearchById(ruleId) {
+    // Set the value of the search box (for visual consistency)
+    const searchBox = document.getElementById("searchBox");
+    searchBox.value = ruleId;
+
+    // Call the main search handler
+    handleSearch();
+}
+
 // The highlightAndCenterNode helper function from the previous step remains the same.
 function highlightAndCenterNode(nodeId) {
     const nodeToHighlight = nodes.find(n => n.id === nodeId);
@@ -565,7 +603,7 @@ function highlightAndCenterNode(nodeId) {
     container.selectAll("g.node")
         .filter(d => d.id === nodeId)
         .classed("highlight", true);
-
+    showDetailsPanel(nodeToHighlight); 
     simulation.stop();
 
     if (nodeToHighlight.x != null && nodeToHighlight.y != null) {
@@ -593,6 +631,7 @@ document.getElementById("searchBox").addEventListener("keyup", (event) => {
 // ----- Highlight Reset Logic -----
 function clearHighlight() {
     container.selectAll("g.node").classed("highlight", false);
+    hideDetailsPanel();
     if (!simulationPausedByKey && !contextMenuOpen) {
         simulation.restart();
     }
@@ -607,7 +646,6 @@ function getDisplayedIds() {
 function showContextMenu(event, d) {
     simulation.stop();
     contextMenuOpen = true;
-    hideTooltip();
     contextMenu.html("");
 
     // "Show children" menu item - initially disabled
@@ -718,6 +756,11 @@ document.addEventListener("keyup", (event) => {
              simulation.alpha(1).restart();
         }
     }
+});
+
+document.getElementById("detailsCloseBtn").addEventListener("click", () => {
+    hideDetailsPanel();
+    clearHighlight();
 });
 
 // Initial graph load

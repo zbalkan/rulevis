@@ -12,19 +12,6 @@ svg {
     border: 1px solid #444;
 }
 
-.tooltip {
-    position: absolute;
-    text-align: left;
-    padding: 8px;
-    font: 12px sans-serif;
-    background: #333;
-    color: #eee;
-    border: 1px solid #888;
-    border-radius: 4px;
-    pointer-events: none;
-    opacity: 0;
-}
-
 button {
     background: #333;
     color: #eee;
@@ -152,4 +139,113 @@ text {
     stroke: yellow;
     stroke-width: 3px;
     transition: stroke 0.3s ease;
+}
+
+.details-panel {
+    position: fixed;
+    top: 115px; /* Position below the navbar */
+    right: -400px; /* Start off-screen */
+    width: 380px;
+    height: calc(80vh - 40px); /* Adjust height to fit above the footer */
+    background-color: #2a2a2a;
+    border-left: 2px solid #444;
+    box-shadow: -5px 0 15px rgba(0,0,0,0.2);
+    transition: right 0.4s ease-in-out;
+    z-index: 1001;
+    display: flex;
+    flex-direction: column;
+}
+
+.details-panel.visible {
+    right: 0; /* Slide into view */
+}
+
+.details-close-btn {
+    position: absolute;
+    top: 5px;
+    left: 10px;
+    background: none;
+    border: none;
+    color: #aaa;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.details-close-btn:hover {
+    color: #fff;
+}
+
+.details-content {
+    padding: 20px;
+    padding-top: 40px; /* Leave space for close button */
+    overflow-y: auto; /* Allow scrolling for long content */
+    height: 100%;
+}
+
+.details-placeholder {
+    color: #888;
+    font-style: italic;
+}
+
+.details-content h3 {
+    color: #4e9af1;
+    margin-top: 0;
+    border-bottom: 1px solid #444;
+    padding-bottom: 10px;
+}
+
+.details-content p {
+    margin: 5px 0 15px 0;
+    line-height: 1.5;
+}
+
+.details-content strong {
+    color: #ccc;
+}
+
+.details-content ul {
+    list-style: none;
+    padding-left: 15px;
+    margin-bottom: 15px;
+}
+
+.details-content li {
+    background-color: #333;
+    padding: 5px 8px;
+    border-radius: 4px;
+    margin-bottom: 5px;
+}
+
+.details-content li.not-displayed {
+    opacity: 0.6;
+    font-style: italic;
+    background-color: #222; /* Darker background for non-visible items */
+}
+
+.details-content li.not-displayed::after {
+    content: " (not shown)";
+    color: #888;
+    font-size: 0.9em;
+    margin-left: 5px;
+}
+
+.details-content li.not-displayed:hover {
+    opacity: 1.0; /* Become fully opaque on hover */
+    font-style: normal;
+    background-color: #3a4a5f; /* A bluish highlight color */
+    cursor: pointer;
+    border-left: 3px solid #4e9af1;
+    padding-left: 5px; /* Adjust padding to account for the new border */
+}
+
+.details-content h4 {
+    color: #ccc;
+    margin-top: 20px;
+    margin-bottom: 10px;
+    font-size: 16px;
+    border-bottom: 1px solid #444;
+    padding-bottom: 5px;
 }
