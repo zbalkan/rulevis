@@ -75,6 +75,19 @@ text {
     text-decoration: underline;
 }
 
+.content {
+    /* This ensures the content area doesn't create its own scrollbars */
+    overflow: hidden;
+}
+
+canvas {
+    width: 100%;
+    height: 80vh; /* This matches the original SVG height */
+    background-color: #121212;
+    border: 1px solid #444;
+    display: block; /* Important: removes extra space below the element */
+}
+
 .footer {
     background-color: rgb(0, 0, 0);
     color: white;
@@ -248,4 +261,23 @@ text {
     font-size: 16px;
     border-bottom: 1px solid #444;
     padding-bottom: 5px;
+}
+
+.details-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    /* Prevents the button from making the header too tall */
+    margin-bottom: -5px; 
+}
+
+.expand-all-btn {
+    padding: 2px 8px;
+    font-size: 12px;
+    background-color: #4a4a4a;
+    border-color: #888;
+}
+
+.expand-all-btn:hover {
+    background-color: #5a5a5a;
 }

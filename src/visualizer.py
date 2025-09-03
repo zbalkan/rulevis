@@ -40,7 +40,7 @@ def create_app(graph_path: str) -> Flask:
         </div>
 
         <div class="content">
-            <svg></svg>
+            <canvas></canvas>
         </div>
 
         <div id="detailsPanel" class="details-panel">
@@ -100,7 +100,8 @@ def create_app(graph_path: str) -> Flask:
             return jsonify({"error": f"Node '{node_id}' not found"}), 404
 
         # Get the set of displayed IDs from the query string.
-        displayed: set[str] = set(request.args.get("displayed", "").split(",")) - {""}
+        displayed: set[str] = set(request.args.get(
+            "displayed", "").split(",")) - {""}
 
         children = list(G.successors(node_id))
 
@@ -125,39 +126,6 @@ def create_app(graph_path: str) -> Flask:
                 "relation_type": G.get_edge_data(node_id, child)[0].get("relation_type", "unknown")
             }
             for child in children
-        ]
-        return jsonify({"nodes": nodes, "edges": edges})
-
-    @app.route("/api/parents/<node_id>", methods=["GET"])
-    def get_node_parents(node_id: str):
-        if node_id not in G:
-            return jsonify({"error": f"Node '{node_id}' not found"}), 404
-
-        displayed: set[str] = set(request.args.get(
-            "displayed", "").split(",")) - {""}
-        parents = list(G.predecessors(node_id))
-
-        nodes: list[dict] = []
-        for nid in [node_id] + parents:
-            expandable = len([child for child in G.successors(
-                nid) if child not in displayed]) > 0
-
-            attributes = G.nodes[nid].items()
-
-            node_data = {
-                "id": nid,
-                **{k: v for k, v in attributes if k != "expandable"},
-                "expandable": expandable
-            }
-            nodes.append(node_data)
-
-        edges = [
-            {
-                "source": parent,
-                "target": node_id,
-                "relation_type": G.get_edge_data(parent, node_id)[0].get("relation_type", "unknown")
-            }
-            for parent in parents
         ]
         return jsonify({"nodes": nodes, "edges": edges})
 
@@ -218,5 +186,46 @@ def create_app(graph_path: str) -> Flask:
         }
 
         return jsonify(response)
+
+    @app.route("/api/search/<node_id>", methods=["GET"])
+    def search_for_node(node_id: str):
+        if node_id not in G:
+            return jsonify({"error": f"Node '{node_id}' not found"}), 404
+
+        # Get the set of IDs the client already has on screen.
+        displayed: set[str] = set(request.args.get("displayed", "").split(",")) - {""}
+
+        # 1. Get the data for the node we searched for.
+        node_data = G.nodes[node_id]
+        nodes_to_return = [{
+            "id": node_id,
+            **{k: v for k, v in node_data.items() if k != "expandable"},
+            # We can calculate 'expandable' here as well.
+            "expandable": any(child not in displayed for child in G.successors(node_id))
+        }]
+
+        # 2. Find all parents and children of the searched node.
+        parents = G.predecessors(node_id)
+        children = G.successors(node_id)
+
+        # 3. Filter edges: only include edges that connect to a node already on screen.
+        edges_to_return = []
+        for parent_id in parents:
+            if parent_id in displayed:
+                edges_to_return.append({
+                    "source": parent_id,
+                    "target": node_id,
+                    "relation_type": G.get_edge_data(parent_id, node_id)[0].get("relation_type", "unknown")
+                })
+        
+        for child_id in children:
+            if child_id in displayed:
+                edges_to_return.append({
+                    "source": node_id,
+                    "target": child_id,
+                    "relation_type": G.get_edge_data(node_id, child_id)[0].get("relation_type", "unknown")
+                })
+
+        return jsonify({"nodes": nodes_to_return, "edges": edges_to_return})
 
     return app
