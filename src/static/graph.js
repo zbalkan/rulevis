@@ -122,7 +122,7 @@ const simulation = d3.forceSimulation()
     .on("tick", render);
 
 const zoom = d3.zoom()
-    .scaleExtent([0.1, 5])
+    .scaleExtent([0.02, 5])
     .on("zoom", (event) => {
         transform = event.transform;
         render();
