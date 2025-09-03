@@ -477,6 +477,11 @@ document.addEventListener("keyup", (event) => {
     }
 });
 
+document.addEventListener("contextmenu", (event) => {
+    // Prevent the default browser context menu from appearing anywhere on the page.
+    event.preventDefault();
+});
+
 canvas.on("click", (event) => {
     const node = findNodeAt(event.offsetX, event.offsetY);
     if (node) {
@@ -487,7 +492,6 @@ canvas.on("click", (event) => {
         clearHighlight();
     }
 });
-
 
 canvas.call(d3.drag()
     .container(canvas.node())
