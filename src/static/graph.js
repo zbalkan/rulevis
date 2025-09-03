@@ -211,6 +211,64 @@ function linkUpExistingNodes() {
 }
 
 // --- Rendering Logic ---
+function buildLegend() {
+    const nodeLegendData = [
+        { label: "Expandable Node", color: "steelblue" },
+        { label: "Default Node", color: "grey" }
+    ];
+
+    const edgeLegendData = [
+        { label: "if_sid", color: getEdgeColor("if_sid") },
+        { label: "if_matched_sid", color: getEdgeColor("if_matched_sid") },
+        { label: "if_group", color: getEdgeColor("if_group") },
+        { label: "if_matched_group", color: getEdgeColor("if_matched_group") },
+        { label: "No parent", color: getEdgeColor("no_parent") },
+        { label: "Unknown", color: getEdgeColor("unknown") }
+    ];
+
+    const legendX = 20;
+    let legendY = 30;
+    const itemSpacing = 25;
+    const textOffset = 15;
+
+    // --- Set styles for legend text ---
+    context.font = "14px sans-serif";
+    context.fillStyle = "#eee";
+
+    // --- Draw Node Legend ---
+    nodeLegendData.forEach(item => {
+        // Draw the circle
+        context.beginPath();
+        context.arc(legendX, legendY, 8, 0, 2 * Math.PI);
+        context.fillStyle = item.color;
+        context.fill();
+
+        // Draw the text
+        context.fillStyle = "#eee"; // Reset color for text
+        context.fillText(item.label, legendX + textOffset, legendY + 5);
+        
+        legendY += itemSpacing;
+    });
+
+    // --- Add spacing and draw Edge Legend ---
+    legendY += 20; // Extra space between node and edge legends
+
+    edgeLegendData.forEach(item => {
+        // Draw the line
+        context.beginPath();
+        context.moveTo(legendX - 10, legendY);
+        context.lineTo(legendX + 20, legendY);
+        context.strokeStyle = item.color;
+        context.lineWidth = 4; // Make the line thick and visible
+        context.stroke();
+
+        // Draw the text
+        context.fillText(item.label, legendX + textOffset + 15, legendY + 5);
+
+        legendY += itemSpacing;
+    });
+}
+
 function render() {
     context.save();
     context.clearRect(0, 0, width * devicePixelRatio, height * devicePixelRatio);
@@ -247,6 +305,7 @@ function render() {
     });
 
     context.restore();
+    buildLegend();
 }
 
 function getNodeColor(d) {
