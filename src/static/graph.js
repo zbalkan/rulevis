@@ -275,7 +275,6 @@ function render() {
     context.translate(transform.x, transform.y);
     context.scale(transform.k, transform.k);
 
-    // Draw links
     context.strokeStyle = "#999";
     context.lineWidth = 1.5 / transform.k;
     links.forEach(link => {
@@ -286,7 +285,6 @@ function render() {
         context.stroke();
     });
 
-    // Draw nodes
     nodes.forEach(node => {
         context.beginPath();
         context.arc(node.x, node.y, 10, 0, 2 * Math.PI);
@@ -298,11 +296,16 @@ function render() {
             context.lineWidth = 3 / transform.k;
             context.stroke();
         }
-
-        context.fillStyle = "#fff";
-        context.font = `${12 / transform.k}px sans-serif`;
-        context.fillText(node.id, node.x + 15, node.y + 4);
     });
+
+    const textVisibilityThreshold = 0.8;
+    if (transform.k >= textVisibilityThreshold) {
+        nodes.forEach(node => {
+            context.fillStyle = "#fff";
+            context.font = `${12 / transform.k}px sans-serif`;
+            context.fillText(node.id, node.x + 15, node.y + 4);
+        });
+    }
 
     context.restore();
     buildLegend();
