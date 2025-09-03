@@ -447,7 +447,6 @@ document.getElementById("resetZoom").addEventListener("click", () => {
     canvas.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
 });
 document.getElementById("resetGraph").addEventListener("click", () => resetGraph(true));
-document.getElementById("rearrangeGraph").addEventListener("click", () => resetGraph(false));
 document.getElementById("searchBtn").addEventListener("click", handleSearch);
 document.getElementById("searchBox").addEventListener("keyup", e => e.key === "Enter" && handleSearch());
 document.getElementById("detailsCloseBtn").addEventListener("click", clearHighlight);
