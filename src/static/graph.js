@@ -165,6 +165,20 @@ function updateGraph(newNodesData, newLinksData, onUpdateComplete = null) {
         linkUpExistingNodes();
     }
 
+     nodes.forEach(node => {
+        const childrenIds = node.children_ids || [];
+        
+        if (childrenIds.length === 0) {
+            node.expandable = false;
+            node.is_expanded = true;
+        } else {
+            const allChildrenAreVisible = childrenIds.every(childId => displayedRuleIDs.has(childId));
+            
+            node.expandable = !allChildrenAreVisible;
+            node.is_expanded = allChildrenAreVisible;
+        }
+    });
+
     // If a callback function is provided, set it up to run after the next tick.
     if (onUpdateComplete) {
         simulation.on("tick.callback", () => {
@@ -266,7 +280,14 @@ function getDisplayedIds() {
 
 function expandNode(nodeId) {
     fetchJSON(`/api/node/${nodeId}?displayed=${getDisplayedIds()}`)
-        .then(data => updateGraph(data.nodes, data.edges));
+        .then(data =>
+        {
+            updateGraph(data.nodes, data.edges);
+            const parentNode = nodeMap.get(nodeId);
+            if (parentNode) {
+                showDetailsPanel(parentNode);
+            }
+        });
 }
 
 function handleSearch() {
@@ -371,6 +392,31 @@ document.getElementById("rearrangeGraph").addEventListener("click", () => resetG
 document.getElementById("searchBtn").addEventListener("click", handleSearch);
 document.getElementById("searchBox").addEventListener("keyup", e => e.key === "Enter" && handleSearch());
 document.getElementById("detailsCloseBtn").addEventListener("click", clearHighlight);
+document.addEventListener("keydown", (event) => {
+    // We only care about the Space key and only if the simulation isn't already paused.
+    // We also check that the user isn't typing in the search box.
+    if (event.key === " " && document.activeElement !== document.getElementById('searchBox')) {
+        // Prevent the default spacebar action (like scrolling).
+        event.preventDefault();
+
+        if (!simulationPausedByKey) {
+            simulationPausedByKey = true;
+            simulation.stop();
+            showNotification("Simulation paused");
+        }
+    }
+});
+
+document.addEventListener("keyup", (event) => {
+    // We only care if the key was the one that paused the simulation.
+    if (event.key === " " && simulationPausedByKey) {
+        simulationPausedByKey = false;
+        
+        // Restart the simulation with a gentle nudge.
+        simulation.alpha(0.3).restart();
+        showNotification("Simulation resumed");
+    }
+});
 
 canvas.on("click", (event) => {
     const node = findNodeAt(event.offsetX, event.offsetY);
@@ -382,6 +428,7 @@ canvas.on("click", (event) => {
         clearHighlight();
     }
 });
+
 
 canvas.call(d3.drag()
     .container(canvas.node())
