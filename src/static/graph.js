@@ -451,10 +451,12 @@ document.getElementById("searchBtn").addEventListener("click", handleSearch);
 document.getElementById("searchBox").addEventListener("keyup", e => e.key === "Enter" && handleSearch());
 document.getElementById("detailsCloseBtn").addEventListener("click", clearHighlight);
 document.addEventListener("keydown", (event) => {
-    // We only care about the Space key and only if the simulation isn't already paused.
-    // We also check that the user isn't typing in the search box.
+    if (event.key === "Escape" && highlightedNodeId) {
+        event.preventDefault();
+        clearHighlight();
+        return;
+    }
     if (event.key === " " && document.activeElement !== document.getElementById('searchBox')) {
-        // Prevent the default spacebar action (like scrolling).
         event.preventDefault();
 
         if (!simulationPausedByKey) {
