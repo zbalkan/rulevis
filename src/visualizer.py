@@ -9,8 +9,6 @@ from networkx import MultiDiGraph
 def create_app(graph_path: str) -> Flask:
     if not os.path.isfile(graph_path):
         raise FileNotFoundError(f"Graph file not found: {graph_path}")
-    if not graph_path.endswith(".pkl"):
-        raise ValueError("Unexpected graph file extension; expected .pkl")
 
     with open(graph_path, "rb") as f:
         G: MultiDiGraph = pickle.load(f)
