@@ -232,8 +232,6 @@ function updateGraph(newNodesData, newLinksData, onUpdateComplete = null) {
     simulation.nodes(nodes);
     simulation.force("link").links(links);
     simulation.alpha(1).restart();
-
-    updateCounter();
 }
 
 function linkUpExistingNodes() {
@@ -376,6 +374,7 @@ function render() {
 
     context.restore();
     buildLegend();
+    drawCounter();
 }
 
 function findNodeAt(x, y) {
@@ -587,18 +586,18 @@ canvas.call(d3.drag()
     })
 );
 
-function updateCounter() {
-    let counterDiv = document.getElementById("counter");
-    if (!counterDiv) {
-        counterDiv = document.createElement("div");
-        counterDiv.id = "counter";
-        counterDiv.style.cssText = `
-            position: fixed; left: 10px; bottom: 10px; background: rgba(0,0,0,0.6);
-            color: #eee; padding: 5px 10px; border-radius: 4px; font-family: sans-serif;
-        `;
-        document.body.appendChild(counterDiv);
-    }
-    counterDiv.textContent = `Nodes: ${nodes.length} | Edges: ${links.length}`;
+function drawCounter() {
+    const counterText = `Nodes: ${nodes.length} | Edges: ${links.length}`;
+    const xPos = 20; // Padding from the left edge
+    const yPos = height - 20; // Padding from the bottom edge (height is the canvas height)
+
+    // Set the font style for the counter text.
+    context.font = "14px sans-serif";
+    context.fillStyle = STYLES.legend.text; // Reuse the legend text color.
+    context.textAlign = "left"; // Align text to the left of the xPos.
+
+    // Draw the text.
+    context.fillText(counterText, xPos, yPos);
 }
 
 resetGraph(true);
