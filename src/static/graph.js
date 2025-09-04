@@ -142,14 +142,18 @@ async function fetchJSON(url, options = {}) {
 // --- Canvas and D3 Setup ---
 const canvas = d3.select("canvas");
 const context = canvas.node().getContext("2d");
-const width = window.innerWidth;
-const height = window.innerHeight * 0.8;
+
+// Get the actual dimensions of the canvas element AFTER the CSS has positioned it.
+const rect = canvas.node().getBoundingClientRect();
+const width = rect.width;
+const height = rect.height;
 
 const devicePixelRatio = window.devicePixelRatio || 1;
+
+// Set the canvas drawing buffer size.
 canvas.attr('width', width * devicePixelRatio);
 canvas.attr('height', height * devicePixelRatio);
-canvas.style('width', `${width}px`);
-canvas.style('height', `${height}px`);
+
 context.scale(devicePixelRatio, devicePixelRatio);
 
 let transform = d3.zoomIdentity;
