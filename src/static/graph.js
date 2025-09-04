@@ -296,6 +296,32 @@ function buildLegend() {
     });
 }
 
+function drawArrowhead(source, target) {
+    const headLength = 6; // The length of the arrowhead's sides.
+    const nodeRadius = 10; // The radius of the target node's circle.
+
+    // Calculate the angle of the edge.
+    const angle = Math.atan2(target.y - source.y, target.x - source.x);
+
+    const tipX = target.x - nodeRadius * Math.cos(angle);
+    const tipY = target.y - nodeRadius * Math.sin(angle);
+
+    context.beginPath();
+    context.moveTo(tipX, tipY);
+
+    context.lineTo(
+        tipX - headLength * Math.cos(angle - Math.PI / 6),
+        tipY - headLength * Math.sin(angle - Math.PI / 6)
+    );
+    context.lineTo(
+        tipX - headLength * Math.cos(angle + Math.PI / 6),
+        tipY - headLength * Math.sin(angle + Math.PI / 6)
+    );
+    
+    context.closePath();
+    context.fill();
+}
+
 function render() {
     context.save();
     context.clearRect(0, 0, width * devicePixelRatio, height * devicePixelRatio);
@@ -304,11 +330,19 @@ function render() {
 
     context.lineWidth = 1.5 / transform.k;
     links.forEach(link => {
+        const edgeColor = STYLES.edges[link.relation_type] || STYLES.edges.unknown;
+        
+        // 1. Draw the main edge line.
         context.beginPath();
         context.moveTo(link.source.x, link.source.y);
         context.lineTo(link.target.x, link.target.y);
-        context.strokeStyle = STYLES.edges[link.relation_type] || STYLES.edges.unknown;
+        context.strokeStyle = edgeColor;
         context.stroke();
+
+        // 2. Draw the arrowhead.
+        // Set the fill style to match the line color for the arrowhead.
+        context.fillStyle = edgeColor;
+        drawArrowhead(link.source, link.target);
     });
 
     const dynamicTextThreshold = 1.0;  // Above this, text size is dynamic.
