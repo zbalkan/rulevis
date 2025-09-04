@@ -225,12 +225,11 @@ function linkUpExistingNodes() {
     })
     .then(data => {
         if (data.edges && data.edges.length > 0) {
-            updateGraph([], data.edges); // Only add new links
+            updateGraph([], data.edges);
         }
     });
 }
 
-// --- Rendering Logic ---
 function buildLegend() {
     const nodeLegendData = [
         { label: "Expandable Node", color: STYLES.nodes.expandable },
@@ -254,7 +253,6 @@ function buildLegend() {
     context.font = "14px sans-serif";
     context.fillStyle = STYLES.legend.text;
 
-    // Draw Node Legend
     nodeLegendData.forEach(item => {
         context.beginPath();
         context.arc(legendX, legendY, 8, 0, 2 * Math.PI);
@@ -267,7 +265,6 @@ function buildLegend() {
 
     legendY += 20;
 
-    // Draw Edge Legend
     edgeLegendData.forEach(item => {
         context.beginPath();
         context.moveTo(legendX - 10, legendY);
@@ -291,7 +288,6 @@ function render() {
         context.beginPath();
         context.moveTo(link.source.x, link.source.y);
         context.lineTo(link.target.x, link.target.y);
-        // Look up color from the style object, with a fallback to the default.
         context.strokeStyle = STYLES.edges[link.relation_type] || STYLES.edges.unknown;
         context.stroke();
     });
@@ -299,12 +295,10 @@ function render() {
     nodes.forEach(node => {
         context.beginPath();
         context.arc(node.x, node.y, 10, 0, 2 * Math.PI);
-        // Determine node state and look up the correct color.
         const nodeColor = (node.expandable && !node.is_expanded) ? STYLES.nodes.expandable : STYLES.nodes.default;
         context.fillStyle = nodeColor;
         context.fill();
 
-        // Handle highlight stroke
         if (node.id === highlightedNodeId) {
             context.strokeStyle = STYLES.nodes.highlight;
             context.lineWidth = 3 / transform.k;
@@ -325,10 +319,9 @@ function render() {
     buildLegend();
 }
 
-// --- User Actions and Event Handlers ---
 function findNodeAt(x, y) {
     const [ix, iy] = transform.invert([x, y]);
-    const radiusSq = 100 / (transform.k * transform.k); // 10px radius squared
+    const radiusSq = 100 / (transform.k * transform.k);
     for (let i = nodes.length - 1; i >= 0; i--) {
         const node = nodes[i];
         const dx = ix - node.x;
@@ -360,10 +353,8 @@ function handleSearch() {
     clearHighlight();
 
     if (nodeMap.has(searchInput)) {
-        // Case 1: Node is already displayed.
         highlightAndCenterNode(searchInput);
     } else {
-        // Case 2: Node is not displayed.
         fetchJSON(`/api/search/${searchInput}?displayed=${getDisplayedIds()}`)
             .then(data => {
                 // Pass a callback function to updateGraph.
@@ -400,7 +391,6 @@ function highlightAndCenterNode(nodeId) {
     showDetailsPanel(node);
     render();
 
-    // Pin the node to guarantee its position.
     node.fx = node.x;
     node.fy = node.y;
 
@@ -412,7 +402,6 @@ function highlightAndCenterNode(nodeId) {
         .scale(targetScale)
         .translate(-node.x, -node.y);
 
-    // Apply the transform. The un-pinning is now handled by clearHighlight.
     canvas.transition()
         .duration(750)
         .call(zoom.transform, newTransform);
@@ -447,7 +436,6 @@ function resetGraph(fullReset) {
     });
 }
 
-// --- Event Listeners ---
 document.getElementById("resetZoom").addEventListener("click", () => {
     canvas.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
 });
@@ -473,18 +461,15 @@ document.addEventListener("keydown", (event) => {
 });
 
 document.addEventListener("keyup", (event) => {
-    // We only care if the key was the one that paused the simulation.
     if (event.key === " " && simulationPausedByKey) {
         simulationPausedByKey = false;
         
-        // Restart the simulation with a gentle nudge.
         simulation.alpha(0.3).restart();
         showNotification("Simulation resumed");
     }
 });
 
 document.addEventListener("contextmenu", (event) => {
-    // Prevent the default browser context menu from appearing anywhere on the page.
     event.preventDefault();
 });
 
@@ -520,7 +505,6 @@ canvas.call(d3.drag()
     })
 );
 
-// --- Misc Helpers ---
 function updateCounter() {
     let counterDiv = document.getElementById("counter");
     if (!counterDiv) {
@@ -535,7 +519,4 @@ function updateCounter() {
     counterDiv.textContent = `Nodes: ${nodes.length} | Edges: ${links.length}`;
 }
 
-
-
-// --- Initial Load ---
 resetGraph(true);
