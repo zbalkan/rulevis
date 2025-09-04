@@ -10,6 +10,26 @@ let displayedRuleIDs = new Set();
 // Flag to indicate if simulation is paused via keyboard
 let simulationPausedByKey = false;
 
+const STYLES = {
+    nodes: {
+        default: 'grey',
+        expandable: 'steelblue',
+        highlight: 'yellow',
+        text: '#fff'
+    },
+    edges: {
+        if_sid: 'blue',
+        if_matched_sid: 'green',
+        if_group: 'red',
+        if_matched_group: 'purple',
+        no_parent: '#6b6b6b',
+        unknown: '#999' // Default edge color
+    },
+    legend: {
+        text: '#eee'
+    }
+};
+
 // --- Toast Notification ---
 function showNotification(message) {
     let toast = document.getElementById("toastNotification");
@@ -213,17 +233,17 @@ function linkUpExistingNodes() {
 // --- Rendering Logic ---
 function buildLegend() {
     const nodeLegendData = [
-        { label: "Expandable Node", color: "steelblue" },
-        { label: "Default Node", color: "grey" }
+        { label: "Expandable Node", color: STYLES.nodes.expandable },
+        { label: "Default Node", color: STYLES.nodes.default }
     ];
 
     const edgeLegendData = [
-        { label: "if_sid", color: getEdgeColor("if_sid") },
-        { label: "if_matched_sid", color: getEdgeColor("if_matched_sid") },
-        { label: "if_group", color: getEdgeColor("if_group") },
-        { label: "if_matched_group", color: getEdgeColor("if_matched_group") },
-        { label: "No parent", color: getEdgeColor("no_parent") },
-        { label: "Unknown", color: getEdgeColor("unknown") }
+        { label: "if_sid", color: STYLES.edges.if_sid },
+        { label: "if_matched_sid", color: STYLES.edges.if_matched_sid },
+        { label: "if_group", color: STYLES.edges.if_group },
+        { label: "if_matched_group", color: STYLES.edges.if_matched_group },
+        { label: "No parent", color: STYLES.edges.no_parent },
+        { label: "Unknown", color: STYLES.edges.unknown }
     ];
 
     const legendX = 20;
@@ -231,40 +251,31 @@ function buildLegend() {
     const itemSpacing = 25;
     const textOffset = 15;
 
-    // --- Set styles for legend text ---
     context.font = "14px sans-serif";
-    context.fillStyle = "#eee";
+    context.fillStyle = STYLES.legend.text;
 
-    // --- Draw Node Legend ---
+    // Draw Node Legend
     nodeLegendData.forEach(item => {
-        // Draw the circle
         context.beginPath();
         context.arc(legendX, legendY, 8, 0, 2 * Math.PI);
         context.fillStyle = item.color;
         context.fill();
-
-        // Draw the text
-        context.fillStyle = "#eee"; // Reset color for text
+        context.fillStyle = STYLES.legend.text;
         context.fillText(item.label, legendX + textOffset, legendY + 5);
-        
         legendY += itemSpacing;
     });
 
-    // --- Add spacing and draw Edge Legend ---
-    legendY += 20; // Extra space between node and edge legends
+    legendY += 20;
 
+    // Draw Edge Legend
     edgeLegendData.forEach(item => {
-        // Draw the line
         context.beginPath();
         context.moveTo(legendX - 10, legendY);
         context.lineTo(legendX + 20, legendY);
         context.strokeStyle = item.color;
-        context.lineWidth = 4; // Make the line thick and visible
+        context.lineWidth = 4;
         context.stroke();
-
-        // Draw the text
         context.fillText(item.label, legendX + textOffset + 15, legendY + 5);
-
         legendY += itemSpacing;
     });
 }
@@ -275,24 +286,27 @@ function render() {
     context.translate(transform.x, transform.y);
     context.scale(transform.k, transform.k);
 
-    context.strokeStyle = "#999";
     context.lineWidth = 1.5 / transform.k;
     links.forEach(link => {
         context.beginPath();
         context.moveTo(link.source.x, link.source.y);
         context.lineTo(link.target.x, link.target.y);
-        context.strokeStyle = getEdgeColor(link.relation_type);
+        // Look up color from the style object, with a fallback to the default.
+        context.strokeStyle = STYLES.edges[link.relation_type] || STYLES.edges.unknown;
         context.stroke();
     });
 
     nodes.forEach(node => {
         context.beginPath();
         context.arc(node.x, node.y, 10, 0, 2 * Math.PI);
-        context.fillStyle = getNodeColor(node);
+        // Determine node state and look up the correct color.
+        const nodeColor = (node.expandable && !node.is_expanded) ? STYLES.nodes.expandable : STYLES.nodes.default;
+        context.fillStyle = nodeColor;
         context.fill();
 
+        // Handle highlight stroke
         if (node.id === highlightedNodeId) {
-            context.strokeStyle = "yellow";
+            context.strokeStyle = STYLES.nodes.highlight;
             context.lineWidth = 3 / transform.k;
             context.stroke();
         }
@@ -301,7 +315,7 @@ function render() {
     const textVisibilityThreshold = 0.8;
     if (transform.k >= textVisibilityThreshold) {
         nodes.forEach(node => {
-            context.fillStyle = "#fff";
+            context.fillStyle = STYLES.nodes.text;
             context.font = `${12 / transform.k}px sans-serif`;
             context.fillText(node.id, node.x + 15, node.y + 4);
         });
@@ -309,18 +323,6 @@ function render() {
 
     context.restore();
     buildLegend();
-}
-
-function getNodeColor(d) {
-    return (d.expandable && !d.is_expanded) ? "steelblue" : "grey";
-}
-
-function getEdgeColor(relationType) {
-    const colors = {
-        "if_sid": "blue", "if_matched_sid": "green", "if_group": "red",
-        "if_matched_group": "purple", "no_parent": "#6b6b6b"
-    };
-    return colors[relationType] || "#ffffff";
 }
 
 // --- User Actions and Event Handlers ---
