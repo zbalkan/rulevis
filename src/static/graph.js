@@ -292,6 +292,9 @@ function render() {
         context.stroke();
     });
 
+    const dynamicTextThreshold = 1.0;  // Above this, text size is dynamic.
+    const textVisibilityThreshold = 0.4; // Below this, text is hidden.
+
     nodes.forEach(node => {
         context.beginPath();
         context.arc(node.x, node.y, 10, 0, 2 * Math.PI);
@@ -304,16 +307,19 @@ function render() {
             context.lineWidth = 3 / transform.k;
             context.stroke();
         }
-    });
 
-    const textVisibilityThreshold = 0.8;
-    if (transform.k >= textVisibilityThreshold) {
-        nodes.forEach(node => {
+        const k = transform.k;
+        if (k >= dynamicTextThreshold) {
             context.fillStyle = STYLES.nodes.text;
-            context.font = `${12 / transform.k}px sans-serif`;
+            context.font = `${12 / k}px sans-serif`;
             context.fillText(node.id, node.x + 15, node.y + 4);
-        });
-    }
+
+        } else if (k >= textVisibilityThreshold) {
+            context.fillStyle = STYLES.nodes.text;
+            context.font = `10px sans-serif`;
+            context.fillText(node.id, node.x + 15, node.y + 4);
+        }
+    });
 
     context.restore();
     buildLegend();
