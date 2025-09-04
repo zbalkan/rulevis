@@ -55,7 +55,7 @@ function showDetailsPanel(d) {
     content.innerHTML = `<h3>Details for Rule: ${d.id}</h3><p><i>Loading full details...</i></p>`;
     panel.classList.add("visible");
 
-    fetchJSON(`/api/details/${d.id}`)
+    fetchJSON(`/api/nodes?id=${d.id}&neighbors=both&include=details`)
         .then(details => {
             const hasUndisplayedParents = details.parents && details.parents.some(p => !displayedRuleIDs.has(p.id));
             const allParentIds = (details.parents || []).map(p => p.id).join(',');
@@ -237,7 +237,7 @@ function updateGraph(newNodesData, newLinksData, onUpdateComplete = null) {
 }
 
 function linkUpExistingNodes() {
-    fetchJSON('/api/connections', {
+    fetchJSON('/api/edges', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: Array.from(displayedRuleIDs) }),
@@ -361,7 +361,8 @@ function getDisplayedIds() {
 }
 
 function expandNode(nodeId) {
-    fetchJSON(`/api/node/${nodeId}?displayed=${getDisplayedIds()}`)
+    
+    fetchJSON(`/api/nodes?id=${nodeId}&neighbors=children&displayed=${getDisplayedIds()}`)
         .then(data =>
         {
             updateGraph(data.nodes, data.edges);
@@ -383,15 +384,7 @@ function expandAllParents(nodeId, parentIdsString) {
         return;
     }
 
-    // Call our new batch API endpoint.
-    fetchJSON('/api/batch-nodes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            ids: undisplayedParentIds,
-            displayed: getDisplayedIds() 
-        }),
-    })
+    fetchJSON(`/api/nodes?ids=${undisplayedParentIds}&neighbors=children&displayed=${getDisplayedIds()}`)
     .then(data => {
         // Update the graph with the new nodes and edges.
         updateGraph(data.nodes, data.edges);
@@ -412,7 +405,7 @@ function handleSearch() {
     if (nodeMap.has(searchInput)) {
         highlightAndCenterNode(searchInput);
     } else {
-        fetchJSON(`/api/search/${searchInput}?displayed=${getDisplayedIds()}`)
+        fetchJSON(`/api/nodes?mode=search&id=${searchInput}&displayed=${getDisplayedIds()}`)
             .then(data => {
                 // Pass a callback function to updateGraph.
                 // This function will be executed only after the simulation
@@ -487,7 +480,7 @@ function resetGraph(fullReset) {
         nodeMap.clear();
         displayedRuleIDs.clear();
     }
-    fetchJSON("/api/root").then(data => {
+    fetchJSON("/api/nodes?mode=root").then(data => {
         updateGraph(data.nodes, data.edges);
         canvas.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
     });

@@ -1,19 +1,60 @@
 import os
 import pickle
+from typing import Any
 
-from flask import Flask, jsonify, render_template_string, request, Response
+from flask import Flask, jsonify, render_template_string, request
+from flask.wrappers import Response
 from networkx import MultiDiGraph
 
-
 def create_app(graph_path: str) -> Flask:
-    if not os.path.exists(graph_path):
+    if not os.path.isfile(graph_path):
         raise FileNotFoundError(f"Graph file not found: {graph_path}")
+    if not graph_path.endswith(".pkl"):
+        raise ValueError("Unexpected graph file extension; expected .pkl")
 
-    with open(graph_path, 'rb') as f:
+    with open(graph_path, "rb") as f:
         G: MultiDiGraph = pickle.load(f)
 
     app = Flask(__name__)
 
+    # ---------- shared helpers ----------
+    def serialize_node(nid: str, displayed: set[str] | None = None) -> dict[str, Any]:
+        attrs = G.nodes[nid]
+        if displayed is None:
+            # caller doesn't care about expandable computation
+            return {"id": nid, **{k: v for k, v in attrs.items() if k != "expandable"}}
+        expandable = any(child not in displayed for child in G.successors(nid))
+        return {
+            "id": nid,
+            **{k: v for k, v in attrs.items() if k != "expandable"},
+            "expandable": expandable,
+        }
+
+    def neighbors_payload(nid: str, which: str) -> dict[str, list[dict[str, Any]]]:
+
+        parents = (
+            [{"id": p, "relation_type": relation_type(p, nid)} for p in G.predecessors(nid)]
+            if which in ("parents", "both") else []
+        )
+        children = (
+            [{"id": c, "relation_type": relation_type(nid, c)} for c in G.successors(nid)]
+            if which in ("children", "both") else []
+        )
+        return {"parents": parents, "children": children}
+
+    def relation_type(u: str, v: str) -> str:
+        data = G.get_edge_data(u, v)
+        if not data:
+            return "unknown"
+        return next(iter(data.values()), {}).get("relation_type", "unknown")
+    
+    def make_edge(u: str, v: str) -> dict[str, Any]:
+        return {"source": u, "target": v, "relation_type": relation_type(u, v)}
+
+    def error(message: str, code: int = 400) -> tuple[Response, int]:
+        return jsonify({"error": message}), code
+
+    # ---------- UI ----------
     @app.route("/")
     def index():
         return render_template_string("""
@@ -64,206 +105,116 @@ def create_app(graph_path: str) -> Flask:
         <script src="static/graph.js"></script>
         </body>
         </html>
-        """)
+""")
 
-    @app.route("/api/root", methods=["GET"])
-    def get_root_node():
-        root = '0'
-        if root not in G:
-            return jsonify({"error": "Root node not found"}), 404
+    # ---------- Consolidated APIs ----------
+    @app.route("/api/nodes", methods=["GET"])
+    def nodes():
+        """
+        Unifies: root, single node + neighbors, details, search, batch.
+        Query params:
+          mode: root | search (optional)
+          id: target node id for single/search
+          ids: comma-separated list for batch
+          neighbors: none | parents | children | both (default=children when id given)
+          include: details to include node metadata fields
+          displayed: comma-separated ids used to compute 'expandable' and to filter search edges
+        """
+        mode = request.args.get("mode", "").strip().lower()
+        node_id = request.args.get("id", "").strip()
+        ids_param = request.args.get("ids", "").strip()
+        neighbor_mode = request.args.get("neighbors", "").strip().lower() or ("children" if node_id else "none")
+        include_details = request.args.get("include", "").strip().lower() == "details"
+        displayed: set[str] = set(filter(None, request.args.get("displayed", "").split(",")))
 
-        children = list(G.successors(root))
-        all_ids = [root] + children
-        nodes = [
-            {
-                "id": nid,
-                **{k: v for k, v in G.nodes[nid].items() if k != "expandable"},
-                "is_expanded": (nid == root),
-                "expandable": False if nid == root else (G.out_degree(nid) > 0)
-            }
-            for nid in all_ids
-        ]
-        edges = [
-            {
-                "source": root,
-                "target": child,
-                "relation_type": "no_parent"
-            }
-            for child in children
-        ]
-        return jsonify({"nodes": nodes, "edges": edges})
+        # Mode: root graph (root + its immediate children)
+        if mode == "root":
+            root = "0"
+            if root not in G:
+                return error("Root node not found", 404)
+            children = list(G.successors(root))
+            nodes = [serialize_node(root, displayed)] + [serialize_node(c, displayed) for c in children]
+            edges = [{"source": root, "target": c, "relation_type": "no_parent"} for c in children]
+            return jsonify({"nodes": nodes, "edges": edges})
 
-    @app.route("/api/node/<node_id>", methods=["GET"])
-    def get_node_children(node_id: str):
-        if node_id not in G:
-            return jsonify({"error": f"Node '{node_id}' not found"}), 404
+        # Mode: batch fetch by ids (with optional displayed to compute expandables and edges)
+        if ids_param:
+            node_ids = [nid for nid in ids_param.split(",") if nid]
+            if not node_ids:
+                return jsonify({"nodes": [], "edges": []})
+            nodes = [serialize_node(nid, displayed) for nid in node_ids if nid in G]
+            all_relevant = set(node_ids) | displayed
+            sub_edges = [
+                make_edge(u, v)
+                for u, v in G.subgraph(all_relevant).edges()
+                if u in node_ids or v in node_ids
+            ]
+            return jsonify({"nodes": nodes, "edges": sub_edges})
 
-        # Get the set of displayed IDs from the query string.
-        displayed: set[str] = set(request.args.get(
-            "displayed", "").split(",")) - {""}
+        if node_id and node_id in G:
+            node_obj = serialize_node(node_id, displayed)
+        else:
+            node_obj = None
 
-        children = list(G.successors(node_id))
+        # Mode: search for a node id, return node plus edges only to displayed set
+        if mode == "search":
+            if not node_id or node_id not in G:
+                return error(f"Node '{node_id}' not found", 404)
 
-        nodes: list[dict] = []
-        for nid in [node_id] + children:
-            # Determine undisplayed children for the node
-            expandable = len([child for child in G.successors(
-                nid) if child not in displayed]) > 0
+            edges = []
+            for p in G.predecessors(node_id):
+                if p in displayed:
+                    edges.append(make_edge(p, node_id))
+            for c in G.successors(node_id):
+                if c in displayed:
+                    edges.append(make_edge(node_id, c))
+            return jsonify({"nodes": [node_obj], "edges": edges})
 
-            attributes = G.nodes[nid].items()
-            node_data = {
-                "id": nid,
-                **{k: v for k, v in attributes if k != "expandable"},
-                "expandable": expandable
-            }
-            nodes.append(node_data)
-
-        edges = [
-            {
-                "source": node_id,
-                "target": child,
-                "relation_type": G.get_edge_data(node_id, child)[0].get("relation_type", "unknown")
-            }
-            for child in children
-        ]
-        return jsonify({"nodes": nodes, "edges": edges})
-
-    @app.route("/api/connections", methods=["POST"])
-    def get_connections_between_nodes():
-        # Get the list of node IDs from the request body.
-        node_ids = request.json.get("ids", [])
-        if not node_ids:
-            return jsonify({"nodes": [], "edges": []})
-
-        # Create a subgraph containing only the nodes present on the user's screen.
-        subgraph = G.subgraph(node_ids)
-
-        # Find all edges within this subgraph.
-        edges = [
-            {
-                "source": u,
-                "target": v,
-                "relation_type": data.get("relation_type", "unknown")
-            }
-            for u, v, data in subgraph.edges(data=True)
-        ]
-
-        # Return only the edges. The nodes are already on the client.
-        return jsonify({"nodes": [], "edges": edges})
-
-    @app.route("/api/details/<node_id>", methods=["GET"])
-    def get_node_details(node_id: str):
-        if node_id not in G:
-            return jsonify({"error": f"Node '{node_id}' not found"}), 404
-
-        node_data = G.nodes[node_id]
-
-        # Find all parents from the master graph
-        parents = [
-            {
-                "id": parent_id,
-                "relation_type": G.get_edge_data(parent_id, node_id)[0].get("relation_type", "unknown")
-            }
-            for parent_id in G.predecessors(node_id)
-        ]
-
-        # Find all children from the master graph
-        children = [
-            {
-                "id": child_id,
-                "relation_type": G.get_edge_data(node_id, child_id)[0].get("relation_type", "unknown")
-            }
-            for child_id in G.successors(node_id)
-        ]
-
-        response = {
-            "id": node_id,
-            "description": node_data.get("description"),
-            "groups": node_data.get("groups", []),
-            "parents": parents,
-            "children": children
-        }
-
-        return jsonify(response)
-
-    @app.route("/api/search/<node_id>", methods=["GET"])
-    def search_for_node(node_id: str):
-        if node_id not in G:
-            return jsonify({"error": f"Node '{node_id}' not found"}), 404
-
-        # Get the set of IDs the client already has on screen.
-        displayed: set[str] = set(request.args.get("displayed", "").split(",")) - {""}
-
-        # 1. Get the data for the node we searched for.
-        node_data = G.nodes[node_id]
-        nodes_to_return = [{
-            "id": node_id,
-            **{k: v for k, v in node_data.items() if k != "expandable"},
-            # We can calculate 'expandable' here as well.
-            "expandable": any(child not in displayed for child in G.successors(node_id))
-        }]
-
-        # 2. Find all parents and children of the searched node.
-        parents = G.predecessors(node_id)
-        children = G.successors(node_id)
-
-        # 3. Filter edges: only include edges that connect to a node already on screen.
-        edges_to_return = []
-        for parent_id in parents:
-            if parent_id in displayed:
-                edges_to_return.append({
-                    "source": parent_id,
-                    "target": node_id,
-                    "relation_type": G.get_edge_data(parent_id, node_id)[0].get("relation_type", "unknown")
-                })
-        
-        for child_id in children:
-            if child_id in displayed:
-                edges_to_return.append({
-                    "source": node_id,
-                    "target": child_id,
-                    "relation_type": G.get_edge_data(node_id, child_id)[0].get("relation_type", "unknown")
+        # Mode: single node with optional neighbors and details
+        if node_id:
+            if node_id not in G:
+                return error(f"Node '{node_id}' not found", 404)
+            if include_details:
+                node_data = G.nodes[node_id]
+                neigh = neighbors_payload(node_id, "both")  # avoid name clash with neighbor_mode
+                return jsonify({
+                    "id": node_id,
+                    "description": node_data.get("description"),
+                    "groups": node_data.get("groups", []),
+                    "parents": neigh["parents"],
+                    "children": neigh["children"]
                 })
 
-        return jsonify({"nodes": nodes_to_return, "edges": edges_to_return})
+            nodes = [node_obj]
+            edges = []
 
-    @app.route("/api/batch-nodes", methods=["POST"])
-    def get_batch_nodes()->  Response:
-        data = request.json
-        if data is None:
-            return Response()
+            if neighbor_mode in {"parents", "children", "both"}:
+                if neighbor_mode in {"parents", "both"}:
+                    for p in G.predecessors(node_id):
+                        nodes.append(serialize_node(p, displayed))
+                        edges.append(make_edge(p, node_id))
+                if neighbor_mode in {"children", "both"}:
+                    for c in G.successors(node_id):
+                        nodes.append(serialize_node(c, displayed))
+                        edges.append(make_edge(node_id, c))
 
-        node_ids: list[str] = data.get("ids", [])
-        displayed_ids = data.get("displayed", '').split(',')
+            return jsonify({"nodes": nodes, "edges": edges})
 
+        # Default: nothing matched
+        return error("Specify one of: mode=root | mode=search&id=..., or id=..., or ids=...", 400)
+
+    @app.route("/api/edges", methods=["POST"])
+    def edges():
+        """
+        Unifies: /api/connections
+        Body: { "ids": ["a","b","c"] }
+        Returns all edges among provided ids.
+        """
+        payload = request.get_json(silent=True) or {}
+        node_ids = payload.get("ids", [])
         if not node_ids:
             return jsonify({"nodes": [], "edges": []})
-
-        # Get the node data for all requested IDs.
-        nodes_data = [
-            {
-                "id": nid,
-                **{k: v for k, v in G.nodes[nid].items() if k != "expandable"},
-                # We will let the client recalculate the 'expandable' state.
-            }
-            for nid in node_ids if nid in G
-        ]
-
-        # Find all edges connecting the new nodes to the already displayed nodes.
-        # This includes edges between the new nodes themselves.
-        all_relevant_nodes = set(node_ids).union(displayed_ids)
-        
-        subgraph = G.subgraph(all_relevant_nodes)
-        
-        edges_data = [
-            {
-                "source": u,
-                "target": v,
-                "relation_type": d.get("relation_type", "unknown")
-            }
-            for u, v, d in subgraph.edges(data=True) if u in node_ids or v in node_ids
-        ]
-
-        return jsonify({"nodes": nodes_data, "edges": edges_data})
+        edges_list = [make_edge(u, v) for u, v in G.subgraph(node_ids).edges()]
+        return jsonify({"nodes": [], "edges": edges_list})
 
     return app
