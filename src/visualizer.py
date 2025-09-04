@@ -1,7 +1,7 @@
 import os
 import pickle
 
-from flask import Flask, jsonify, render_template_string, request
+from flask import Flask, jsonify, render_template_string, request, Response
 from networkx import MultiDiGraph
 
 
@@ -226,5 +226,44 @@ def create_app(graph_path: str) -> Flask:
                 })
 
         return jsonify({"nodes": nodes_to_return, "edges": edges_to_return})
+
+    @app.route("/api/batch-nodes", methods=["POST"])
+    def get_batch_nodes()->  Response:
+        data = request.json
+        if data is None:
+            return Response()
+
+        node_ids: list[str] = data.get("ids", [])
+        displayed_ids = data.get("displayed", '').split(',')
+
+        if not node_ids:
+            return jsonify({"nodes": [], "edges": []})
+
+        # Get the node data for all requested IDs.
+        nodes_data = [
+            {
+                "id": nid,
+                **{k: v for k, v in G.nodes[nid].items() if k != "expandable"},
+                # We will let the client recalculate the 'expandable' state.
+            }
+            for nid in node_ids if nid in G
+        ]
+
+        # Find all edges connecting the new nodes to the already displayed nodes.
+        # This includes edges between the new nodes themselves.
+        all_relevant_nodes = set(node_ids).union(displayed_ids)
+        
+        subgraph = G.subgraph(all_relevant_nodes)
+        
+        edges_data = [
+            {
+                "source": u,
+                "target": v,
+                "relation_type": d.get("relation_type", "unknown")
+            }
+            for u, v, d in subgraph.edges(data=True) if u in node_ids or v in node_ids
+        ]
+
+        return jsonify({"nodes": nodes_data, "edges": edges_data})
 
     return app

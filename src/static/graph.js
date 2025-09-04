@@ -57,9 +57,14 @@ function showDetailsPanel(d) {
 
     fetchJSON(`/api/details/${d.id}`)
         .then(details => {
-             const hasUndisplayedChildren = details.children && details.children.some(child => !displayedRuleIDs.has(child.id));
-            
-            const expandButtonHTML = hasUndisplayedChildren
+            const hasUndisplayedParents = details.parents && details.parents.some(p => !displayedRuleIDs.has(p.id));
+            const allParentIds = (details.parents || []).map(p => p.id).join(',');
+            const parentExpandBtn = hasUndisplayedParents
+                ? `<button class="expand-all-btn" onclick="expandAllParents('${d.id}', '${allParentIds}')">Expand All</button>`
+                : '';
+
+            const hasUndisplayedChildren = details.children && details.children.some(c => !displayedRuleIDs.has(c.id));
+            const childExpandBtn = hasUndisplayedChildren
                 ? `<button class="expand-all-btn" onclick="expandNode('${d.id}')">Expand All</button>`
                 : '';
     
@@ -79,11 +84,16 @@ function showDetailsPanel(d) {
             content.innerHTML = `
                 <h3>Details for Rule: ${details.id}</h3>
                 <p><strong>Description:</strong> ${details.description || 'N/A'}</p>
-                <h4>Parent Rules</h4>${renderList(details.parents, 'parents')}
+                
+                <div class="details-header">
+                    <h4>Parent Rules</h4>
+                    ${parentExpandBtn}
+                </div>
+                ${renderList(details.parents, 'parents')}
                 
                 <div class="details-header">
                     <h4>Child Rules</h4>
-                    ${expandButtonHTML}
+                    ${childExpandBtn}
                 </div>
                 ${renderList(details.children, 'children')}
 
@@ -104,18 +114,27 @@ function hideDetailsPanel() {
 async function fetchJSON(url, options = {}) {
     try {
         const response = await fetch(url, options);
+
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            const message = errorData.error || `HTTP error! status: ${response.status}`;
+            const message = errorData.error || `Error: ${response.status} ${response.statusText}`;
+            
             showNotification(message);
-            throw new Error(message);
+            
+            const httpError = new Error(message );
+            httpError.isHandled = true;
+            throw httpError;
         }
-        return await response.json();
+
+        return await response.json( );
+
     } catch (error) {
-        console.error("Fetch error at " + url, error);
-        if (!error.message.includes("HTTP")) {
-            showNotification("Server not reachable.");
+        if (error.isHandled) {
+            throw error;
         }
+
+        showNotification("Server not reachable. Please check connection.");
+
         throw error;
     }
 }
@@ -353,6 +372,38 @@ function expandNode(nodeId) {
         });
 }
 
+function expandAllParents(nodeId, parentIdsString) {
+    const parentIds = parentIdsString.split(',');
+    
+    // Filter out any parents that are already on the screen.
+    const undisplayedParentIds = parentIds.filter(id => !displayedRuleIDs.has(id));
+
+    if (undisplayedParentIds.length === 0) {
+        showNotification("All parent nodes are already displayed.");
+        return;
+    }
+
+    // Call our new batch API endpoint.
+    fetchJSON('/api/batch-nodes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            ids: undisplayedParentIds,
+            displayed: getDisplayedIds() 
+        }),
+    })
+    .then(data => {
+        // Update the graph with the new nodes and edges.
+        updateGraph(data.nodes, data.edges);
+
+        // Re-render the details panel to show the updated state.
+        const sourceNode = nodeMap.get(nodeId);
+        if (sourceNode) {
+            showDetailsPanel(sourceNode);
+        }
+    });
+}
+
 function handleSearch() {
     const searchInput = document.getElementById("searchBox").value.trim();
     if (!searchInput) return;
@@ -442,9 +493,7 @@ function resetGraph(fullReset) {
     });
 }
 
-document.getElementById("resetZoom").addEventListener("click", () => {
-    canvas.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
-});
+document.getElementById("resetZoom").addEventListener("click", () => handleSearchById(0));
 document.getElementById("resetGraph").addEventListener("click", () => resetGraph(true));
 document.getElementById("searchBtn").addEventListener("click", handleSearch);
 document.getElementById("searchBox").addEventListener("keyup", e => e.key === "Enter" && handleSearch());
