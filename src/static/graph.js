@@ -449,7 +449,7 @@ function showStatsPanel() {
                 let listHtml = `<h4>${title}</h4><ul>`;
                 items.forEach(item => {
                     const isDisplayed = displayedRuleIDs.has(item.id);
-                    const clickAction = !isDisplayed ? `onclick="handleSearchById('${item.id}')"` : '';
+                    const clickAction = `onclick="handleSearchById('${item.id}')"`;
                     const li_class = isDisplayed ? '' : 'class="not-displayed"';
                     let detail = '';
                     if (item.count !== undefined){ detail = `(${item.count})`;}
