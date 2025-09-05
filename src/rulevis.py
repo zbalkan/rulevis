@@ -69,7 +69,6 @@ class Rulevis():
         analyzer.write_to_json(self.stats_path, self.heatmap_path)
         logging.info("Stats generation complete.")
 
-
     def open_browser(self, ) -> None:
         new_url = 'http://localhost:5000/'
         webbrowser.open_new(new_url)

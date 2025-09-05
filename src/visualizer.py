@@ -7,6 +7,7 @@ from flask import Flask, jsonify, render_template_string, request
 from flask.wrappers import Response
 from networkx import MultiDiGraph
 
+
 def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
     if not os.path.isfile(graph_path):
         raise FileNotFoundError(f"Graph file not found: {graph_path}")
@@ -23,7 +24,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
             STATS_DATA = json.load(f)
             # Simple validation to ensure keys exist
             required_keys = [
-                "top_direct_descendants", "top_indirect_descendants", 
+                "top_direct_descendants", "top_indirect_descendants",
                 "top_direct_ancestors", "top_indirect_ancestors", "isolated_rules"
             ]
             if not all(key in STATS_DATA for key in required_keys):
@@ -33,7 +34,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
 
     if not os.path.isfile(heatmap_path):
         raise FileNotFoundError(f"Heatmap file not found: {heatmap_path}")
-    
+
     with open(heatmap_path, "r") as f:
         try:
             HEATMAP_DATA = json.load(f)
@@ -59,14 +60,14 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         if not data:
             return "unknown"
         return next(iter(data.values()), {}).get("relation_type", "unknown")
-    
+
     def make_edge(u: str, v: str) -> dict[str, Any]:
         return {"source": u, "target": v, "relation_type": relation_type(u, v)}
 
     def error(message: str, code: int = 400) -> tuple[Response, int]:
         return jsonify({"error": message}), code
 
-    def _handle_root(displayed: set[str]) -> Union[Response, tuple[Response,int]]:
+    def _handle_root(displayed: set[str]) -> Union[Response, tuple[Response, int]]:
         root = "0"
         if root not in G:
             return error("Root node not found", 404)
@@ -75,7 +76,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         edges = [{"source": root, "target": c, "relation_type": "no_parent"} for c in children]
         return jsonify({"nodes": nodes, "edges": edges})
 
-    def _handle_batch(ids_param: str, displayed: set[str]) -> Union[Response, tuple[Response,int]]:
+    def _handle_batch(ids_param: str, displayed: set[str]) -> Union[Response, tuple[Response, int]]:
         node_ids = [nid for nid in ids_param.split(",") if nid]
         if not node_ids:
             return jsonify({"nodes": [], "edges": []})
@@ -88,10 +89,10 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         ]
         return jsonify({"nodes": nodes, "edges": sub_edges})
 
-    def _handle_search(node_id: str, displayed: set[str]) -> Union[Response, tuple[Response,int]]:
+    def _handle_search(node_id: str, displayed: set[str]) -> Union[Response, tuple[Response, int]]:
         if node_id not in G:
             return error(f"Node '{node_id}' not found", 404)
-        
+
         node_obj = serialize_node(node_id, displayed)
         edges = []
         for p in G.predecessors(node_id):
@@ -102,7 +103,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                 edges.append(make_edge(node_id, c))
         return jsonify({"nodes": [node_obj], "edges": edges})
 
-    def _handle_single_node(node_id: str, neighbor_mode: str, include_details: bool, displayed: set[str]) -> Union[Response, tuple[Response,int]]:
+    def _handle_single_node(node_id: str, neighbor_mode: str, include_details: bool, displayed: set[str]) -> Union[Response, tuple[Response, int]]:
         if node_id not in G:
             return error(f"Node '{node_id}' not found", 404)
 
@@ -201,7 +202,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
 
     # ---------- Consolidated APIs ----------
     @app.route("/api/nodes", methods=["GET"])
-    def nodes() -> Union[Response, tuple[Response,int]]:
+    def nodes() -> Union[Response, tuple[Response, int]]:
         """
         Dispatches requests to the appropriate handler based on query params.
         """
@@ -214,12 +215,13 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
 
         if mode == "root":
             return _handle_root(displayed)
-        
+
         if ids_param:
             return _handle_batch(ids_param, displayed)
 
         if mode == "search":
-            if not node_id: return error("mode=search requires an 'id' parameter", 400)
+            if not node_id:
+                return error("mode=search requires an 'id' parameter", 400)
             return _handle_search(node_id, displayed)
 
         if node_id:
@@ -250,5 +252,5 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
     def heatmap() -> Response:
         """Serves the pre-calculated heatmap data."""
         return jsonify(HEATMAP_DATA)
-    
+
     return app
