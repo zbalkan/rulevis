@@ -240,3 +240,62 @@ canvas {
 .expand-all-btn:hover {
     background-color: #5a5a5a;
 }
+
+.heatmap-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: none; /* Hidden by default */
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.heatmap-modal.visible {
+    display: flex; /* Show the modal */
+}
+
+.heatmap-container {
+    position: relative;
+    width: 90vw;
+    height: 90vh;
+    background-color: #1a1a1a;
+    border: 1px solid #555;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+.heatmap-close-btn {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 36px;
+    color: #aaa;
+    background: none;
+    border: none;
+    cursor: pointer;
+    z-index: 2001;
+}
+.heatmap-close-btn:hover {
+    color: #fff;
+}
+
+#heatmapContent {
+    width: 100%;
+    height: 100%;
+    overflow: hidden; /* The SVG inside will handle its own zooming */
+}
+
+/* Styles for the heatmap cells */
+.heatmap-tile {
+    stroke: #1a1a1a;
+    stroke-width: 1px;
+}
+
+.heatmap-tile text {
+    fill: white;
+    font-size: 12px;
+    pointer-events: none; /* Allow clicks to pass through to the rectangle */
+}

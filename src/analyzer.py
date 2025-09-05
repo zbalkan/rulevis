@@ -1,4 +1,6 @@
+from collections import defaultdict
 import logging
+import math
 import pickle
 import json
 import os
@@ -61,7 +63,6 @@ class Analyzer:
             n for n in real_nodes
             if self.G.out_degree(n) == 0 and list(self.G.predecessors(n)) == ['0']
         ]
-        top_5_isolated_rules = isolated_rules[:5]
 
         # --- Format the Output ---
         stats = {
@@ -69,22 +70,81 @@ class Analyzer:
             "top_indirect_descendants": [{"id": n, "count": indirect_descendants_counts[n]} for n in top_5_indirect_descendants],
             "top_direct_ancestors": [{"id": n, "count": in_degrees[n]} for n in top_5_direct_ancestors],
             "top_indirect_ancestors": [{"id": n, "count": indirect_ancestors_counts[n]} for n in top_5_indirect_ancestors],
-            "top_isolated_rules": [{"id": n, "note": "No children, root is only parent"} for n in top_5_isolated_rules]
+            "isolated_rules": [{"id": n} for n in isolated_rules]
         }
         
         return stats
 
-    def write_to_json(self, output_path: str) -> None:
+    def calculate_heatmap_data(self, block_size: int = 10) -> dict:
         """
-        Calculates the statistics and writes them to a JSON file.
+        Generates data for a block-based heatmap, showing rule ID occupancy.
+        The heatmap range is dynamically calculated based on the highest rule ID found.
 
         Args:
-            output_path (str): The path to the output JSON file.
+            block_size (int): The size of each ID range block (e.g., 10).
+
+        Returns:
+            dict: A dictionary containing the list of blocks and metadata.
         """
+        all_rule_ids = {int(n) for n in self.G.nodes() if n.isdigit() and n != '0'}
+        
+        if not all_rule_ids:
+            # Handle case where there are no integer rules
+            return {"metadata": {"block_size": block_size, "max_id": 0, "total_blocks": 0}, "blocks": []}
+
+        # --- START: DYNAMIC MAX ID CALCULATION ---
+        
+        # 1. Find the actual maximum rule ID from the data.
+        actual_max_id = max(all_rule_ids)
+        
+        # 2. Calculate the upper bound for the heatmap range.
+        #    We use math.ceil to round up to the next full block.
+        #    For example, if max ID is 101234 and block size is 1000, this becomes:
+        #    ceil(101234 / 1000) * 1000  =>  ceil(101.234) * 1000  =>  102 * 1000  =>  102000
+        dynamic_max_range = math.ceil(actual_max_id / block_size) * block_size
+        
+        # Ensure we have at least one block even if max_id is small
+        dynamic_max_range = max(dynamic_max_range, block_size)
+
+        # --- END: DYNAMIC MAX ID CALCULATION ---
+        
+        blocks = []
+        # Use the dynamically calculated range for the loop
+        for i in range(0, dynamic_max_range, block_size):
+            start_range = i
+            end_range = i + block_size - 1
+            
+            count = sum(1 for rule_id in all_rule_ids if start_range <= rule_id <= end_range)
+            
+            blocks.append({
+                "id": f"{start_range}-{end_range}",
+                "count": count
+            })
+            
+        return {
+            "metadata": {
+                "block_size": block_size,
+                "max_id": dynamic_max_range, # Report the calculated max range
+                "total_blocks": len(blocks)
+            },
+            "blocks": blocks
+        }
+
+    def write_to_json(self, stats_output_path: str, heatmap_output_path: str) -> None:
+        """Calculates all data and writes to respective files."""
+        # --- Stats ---
         logging.info("Calculating graph statistics...")
         stats_data = self.calculate_statistics()
-        
-        logging.info(f"Writing statistics to {output_path}...")
-        with open(output_path, "w") as f:
+        logging.info(f"Writing statistics to {stats_output_path}...")
+        with open(stats_output_path, "w") as f:
             json.dump(stats_data, f, indent=4)
-        logging.info("Done.")
+        
+        # --- Heatmap ---
+        logging.info("Calculating heatmap data...")
+        heatmap_data = self.calculate_heatmap_data()
+        logging.info(f"Writing heatmap data to {heatmap_output_path}...")
+        with open(heatmap_output_path, "w") as f:
+            json.dump(heatmap_data, f, indent=2)
+            
+        logging.info("All analysis complete.")
+

@@ -16,6 +16,7 @@ let displayedRuleIDs = new Set();
 let simulationPausedByKey = false;
 let transform = d3.zoomIdentity;
 let statsPanelOpen = false;
+let heatmapModalOpen = false;
 
 // =================================================================================
 // 2. INITIALIZATION
@@ -450,7 +451,9 @@ function showStatsPanel() {
                     const isDisplayed = displayedRuleIDs.has(item.id);
                     const clickAction = !isDisplayed ? `onclick="handleSearchById('${item.id}')"` : '';
                     const li_class = isDisplayed ? '' : 'class="not-displayed"';
-                    const detail = item.count !== undefined ? `(${item.count})` : `(${item.note})`;
+                    let detail = '';
+                    if (item.count !== undefined){ detail = `(${item.count})`;}
+                    if (item.note !== undefined){ detail = `(${item.note})`;}
                     listHtml += `<li ${li_class} ${clickAction}><strong>${item.id}</strong> ${detail}</li>`;
                 });
                 listHtml += '</ul>';
@@ -463,7 +466,7 @@ function showStatsPanel() {
                 ${renderStatsList(stats.top_indirect_descendants, "Most Total Children (Highest Impact)")}
                 ${renderStatsList(stats.top_direct_ancestors, "Most Direct Parents")}
                 ${renderStatsList(stats.top_indirect_ancestors, "Most Total Parents (Complex Dependencies)")}
-                ${renderStatsList(stats.top_isolated_rules, "Top Isolated Rules")}
+                ${renderStatsList(stats.isolated_rules, "Isolated Rules")}
             `;
         })
         .catch(error => {
@@ -475,6 +478,107 @@ function showStatsPanel() {
 function hideStatsPanel() {
     document.getElementById("statsPanel").classList.remove("visible");
     statsPanelOpen = false;
+}
+
+function showHeatmap() {
+    const modal = document.getElementById("heatmapModal");
+    const content = document.getElementById("heatmapContent");
+    content.innerHTML = '<p style="color: #eee; padding: 20px;">Loading Heatmap...</p>';
+    modal.classList.add("visible");
+    heatmapModalOpen = true;
+
+    fetchJSON('/api/heatmap')
+        .then(data => {
+            renderHeatmap(data);
+        })
+        .catch(error => {
+            content.innerHTML = '<p style="color: red; padding: 20px;">Could not load heatmap data.</p>';
+        });
+}
+
+function hideHeatmap() {
+    document.getElementById("heatmapModal").classList.remove("visible");
+    heatmapModalOpen = false;
+}
+
+function renderHeatmap(data) {
+    const content = d3.select("#heatmapContent");
+    content.html(""); // Clear previous content
+
+    const { width, height } = content.node().getBoundingClientRect();
+
+    const svg = content.append("svg")
+        .attr("width", width)
+        .attr("height", height)
+        .attr("viewBox", [0, 0, width, height]);
+
+    const g = svg.append("g"); // Group for zooming
+
+    const blocks = data.blocks;
+    const metadata = data.metadata;
+
+    // --- START: NEW RENDERING LOGIC ---
+
+    // 1. Define the Color Scale
+    // This scale maps a count to a color.
+    // Domain: [0, 1, 2-5, 6-10, >10]
+    // Range:  [gray, light-red, mid-red, bright-red, intense-red]
+    const color = d3.scaleThreshold()
+        .domain([1, 2, 6, 11]) // The upper bound of each range
+        .range([
+            "#444444", // 0 rules (unused)
+            "#8B0000", // 1 rule (dark red)
+            "#B22222", // 2-5 rules (firebrick)
+            "#FF4500", // 6-10 rules (orangered)
+            "#FF0000"  // >10 rules (pure red)
+        ]);
+
+    // 2. Calculate Grid Layout
+    const margin = { top: 30, right: 20, bottom: 20, left: 20 };
+    const gridSize = 12; // The size of each square in pixels
+    const gridCols = Math.floor((width - margin.left - margin.right) / gridSize);
+    const gridRows = Math.ceil(blocks.length / gridCols);
+
+    // 3. Create the Grid
+    const cells = g.selectAll("rect")
+        .data(blocks)
+        .join("rect")
+            .attr("x", (d, i) => (i % gridCols) * gridSize + margin.left)
+            .attr("y", (d, i) => Math.floor(i / gridCols) * gridSize + margin.top)
+            .attr("width", gridSize - 1) // -1 for a small gap
+            .attr("height", gridSize - 1)
+            .attr("fill", d => color(d.count))
+            .style("cursor", "pointer")
+            .on("click", (event, d) => {
+                // When a block is clicked, search for the first rule in that range
+                const firstRuleId = d.id.split('-')[0];
+                hideHeatmap();
+                handleSearchById(firstRuleId);
+            });
+
+    // 4. Add Tooltips
+    cells.append("title")
+        .text(d => `Rule Range: ${d.id}\nUsed IDs: ${d.count}`);
+
+    // 5. Add a Title
+    g.append("text")
+        .attr("x", width / 2)
+        .attr("y", 20)
+        .attr("text-anchor", "middle")
+        .style("font-size", "16px")
+        .style("fill", "#eee")
+        .text(`Rule ID Occupancy (Block Size: ${metadata.block_size})`);
+
+    // --- END: NEW RENDERING LOGIC ---
+
+    // Add zoom behavior to the SVG
+    const zoom = d3.zoom()
+        .scaleExtent([1, 8])
+        .on("zoom", (event) => {
+            g.attr("transform", event.transform);
+        });
+    
+    svg.call(zoom);
 }
 
 async function fetchJSON(url, options = {}) {
@@ -512,7 +616,10 @@ document.getElementById("statsCloseBtn").addEventListener("click", hideStatsPane
 // --- Keyboard Shortcuts ---
 document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
-        if (highlightedNodeId) {
+        if (heatmapModalOpen) {
+            event.preventDefault();
+            hideHeatmap();
+        } else if (highlightedNodeId) {
             event.preventDefault();
             clearHighlight();
         } else if (statsPanelOpen) {
@@ -542,7 +649,8 @@ document.addEventListener("keyup", (event) => {
 document.addEventListener("contextmenu", (event) => {
     event.preventDefault();
 });
-
+document.getElementById("showHeatmapBtn").addEventListener("click", showHeatmap);
+document.getElementById("heatmapCloseBtn").addEventListener("click", hideHeatmap);
 // --- Canvas Interactions ---
 canvas.on("click", (event) => {
     const node = findNodeAt(event.offsetX, event.offsetY);

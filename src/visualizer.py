@@ -7,7 +7,7 @@ from flask import Flask, jsonify, render_template_string, request
 from flask.wrappers import Response
 from networkx import MultiDiGraph
 
-def create_app(graph_path: str, stats_path: str) -> Flask:
+def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
     if not os.path.isfile(graph_path):
         raise FileNotFoundError(f"Graph file not found: {graph_path}")
 
@@ -24,13 +24,21 @@ def create_app(graph_path: str, stats_path: str) -> Flask:
             # Simple validation to ensure keys exist
             required_keys = [
                 "top_direct_descendants", "top_indirect_descendants", 
-                "top_direct_ancestors", "top_indirect_ancestors", "top_isolated_rules"
+                "top_direct_ancestors", "top_indirect_ancestors", "isolated_rules"
             ]
             if not all(key in STATS_DATA for key in required_keys):
                 raise ValueError("Stats file is missing required keys.")
         except (json.JSONDecodeError, ValueError) as e:
             raise RuntimeError(f"Stats file '{stats_path}' is corrupted or invalid: {e}")
 
+    if not os.path.isfile(heatmap_path):
+        raise FileNotFoundError(f"Heatmap file not found: {heatmap_path}")
+    
+    with open(heatmap_path, "r") as f:
+        try:
+            HEATMAP_DATA = json.load(f)
+        except json.JSONDecodeError:
+            raise RuntimeError(f"Heatmap file '{heatmap_path}' is corrupted.")
     app = Flask(__name__)
 
     # ---------- shared helpers ----------
@@ -140,6 +148,7 @@ def create_app(graph_path: str, stats_path: str) -> Flask:
                 <div class="navbar-title">Interactive Rule Graph Explorer</div>
             </div>
             <div class="navbar-links">
+                <button id="showHeatmapBtn">Show Heatmap</button>
                 <button id="showStatsBtn">Show Stats</button>
                 <button id="resetZoom">Reset Zoom</button>
                 <button id="resetGraph">Reset Graph</button>
@@ -163,6 +172,13 @@ def create_app(graph_path: str, stats_path: str) -> Flask:
             <button id="statsCloseBtn" class="details-close-btn">&times;</button>
             <div id="statsContent" class="details-content">
                 <p class="details-placeholder">Statistics loading...</p>
+            </div>
+        </div>
+
+        <div id="heatmapModal" class="heatmap-modal">
+            <div class="heatmap-container">
+                <button id="heatmapCloseBtn" class="heatmap-close-btn">&times;</button>
+                <div id="heatmapContent"></div>
             </div>
         </div>
 
@@ -230,4 +246,9 @@ def create_app(graph_path: str, stats_path: str) -> Flask:
         """Serves the pre-calculated graph statistics."""
         return jsonify(STATS_DATA)
 
+    @app.route("/api/heatmap", methods=["GET"])
+    def heatmap() -> Response:
+        """Serves the pre-calculated heatmap data."""
+        return jsonify(HEATMAP_DATA)
+    
     return app

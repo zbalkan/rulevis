@@ -26,7 +26,10 @@ class Rulevis():
         logging.info(f"Temporary graph file created at {self.graph_path}")
 
         self.stats_path: str = tempfile.TemporaryFile(delete=False).name
-        logging.info(f"Temporary stats file created at {self.graph_path}")
+        logging.info(f"Temporary stats file created at {self.stats_path}")
+
+        self.heatmap_path: str = tempfile.TemporaryFile(delete=False).name
+        logging.info(f"Temporary heatmap file created at {self.heatmap_path}")
 
     def __del__(self) -> None:
         try:
@@ -45,6 +48,14 @@ class Rulevis():
         except Exception as e:
             logging.error(f"Error deleting temporary stats file: {e}")
 
+        try:
+            if hasattr(self, 'heatmap_path') and os.path.exists(self.heatmap_path):
+                os.remove(self.heatmap_path)
+                logging.info(
+                    f"Temporary heatmap file {self.heatmap_path} deleted.")
+        except Exception as e:
+            logging.error(f"Error deleting temporary heatmap file: {e}")
+
     def generate_graph(self, paths: list[str]) -> None:
         logging.info("Generating rule graph...")
         generator = GraphGenerator(paths=paths, graph_file=self.graph_path)
@@ -55,8 +66,9 @@ class Rulevis():
     def generate_stats(self) -> None:
         logging.info("Generating rule stats...")
         analyzer = Analyzer(self.graph_path)
-        analyzer.write_to_json(self.stats_path)
+        analyzer.write_to_json(self.stats_path, self.heatmap_path)
         logging.info("Stats generation complete.")
+
 
     def open_browser(self, ) -> None:
         new_url = 'http://localhost:5000/'
@@ -65,7 +77,7 @@ class Rulevis():
 
     def run_flask_app(self, ) -> None:
         from visualizer import create_app
-        app = create_app(self.graph_path, self.stats_path)
+        app = create_app(self.graph_path, self.stats_path, self.heatmap_path)
         logging.info("Starting Flask app...")
         Timer(1, self.open_browser).start()
         app.run(debug=True, use_reloader=False)
