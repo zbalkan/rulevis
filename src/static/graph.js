@@ -573,7 +573,7 @@ function renderHeatmap(data) {
 
     // Add zoom behavior to the SVG
     const zoom = d3.zoom()
-        .scaleExtent([1, 8])
+        .scaleExtent([0.2, 8])
         .on("zoom", (event) => {
             g.attr("transform", event.transform);
         });
