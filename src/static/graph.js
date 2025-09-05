@@ -15,6 +15,7 @@ let highlightedNodeId = null;
 let displayedRuleIDs = new Set();
 let simulationPausedByKey = false;
 let transform = d3.zoomIdentity;
+let statsPanelOpen = false;
 
 // =================================================================================
 // 2. INITIALIZATION
@@ -203,6 +204,9 @@ function handleSearch() {
 }
 
 function handleSearchById(ruleId) {
+    if (statsPanelOpen) {
+        hideStatsPanel();
+    }
     document.getElementById("searchBox").value = ruleId;
     handleSearch();
 }
@@ -430,6 +434,49 @@ function hideDetailsPanel() {
     document.getElementById("detailsPanel").classList.remove("visible");
 }
 
+function showStatsPanel() {
+    const panel = document.getElementById("statsPanel");
+    const content = document.getElementById("statsContent");
+    content.innerHTML = `<h3>Graph Statistics</h3><p><i>Loading...</i></p>`;
+    panel.classList.add("visible");
+    statsPanelOpen = true;
+
+    fetchJSON('/api/stats')
+        .then(stats => {
+            const renderStatsList = (items, title) => {
+                if (!items || items.length === 0) return `<h4>${title}</h4><p>No data.</p>`;
+                let listHtml = `<h4>${title}</h4><ul>`;
+                items.forEach(item => {
+                    const isDisplayed = displayedRuleIDs.has(item.id);
+                    const clickAction = !isDisplayed ? `onclick="handleSearchById('${item.id}')"` : '';
+                    const li_class = isDisplayed ? '' : 'class="not-displayed"';
+                    const detail = item.count !== undefined ? `(${item.count})` : `(${item.note})`;
+                    listHtml += `<li ${li_class} ${clickAction}><strong>${item.id}</strong> ${detail}</li>`;
+                });
+                listHtml += '</ul>';
+                return listHtml;
+            };
+
+            content.innerHTML = `
+                <h3>Graph Statistics</h3>
+                ${renderStatsList(stats.top_direct_descendants, "Most Direct Children")}
+                ${renderStatsList(stats.top_indirect_descendants, "Most Total Children (Highest Impact)")}
+                ${renderStatsList(stats.top_direct_ancestors, "Most Direct Parents")}
+                ${renderStatsList(stats.top_indirect_ancestors, "Most Total Parents (Complex Dependencies)")}
+                ${renderStatsList(stats.top_isolated_rules, "Top Isolated Rules")}
+            `;
+        })
+        .catch(error => {
+            content.innerHTML = `<h3>Graph Statistics</h3><p style="color: red;">Could not load statistics.</p>`;
+            console.error("Error fetching stats:", error);
+        });
+}
+
+function hideStatsPanel() {
+    document.getElementById("statsPanel").classList.remove("visible");
+    statsPanelOpen = false;
+}
+
 async function fetchJSON(url, options = {}) {
     try {
         const response = await fetch(url, options);
@@ -460,12 +507,18 @@ document.getElementById("resetGraph").addEventListener("click", () => resetGraph
 document.getElementById("searchBtn").addEventListener("click", handleSearch);
 document.getElementById("searchBox").addEventListener("keyup", e => { if (e.key === "Enter") handleSearch(); });
 document.getElementById("detailsCloseBtn").addEventListener("click", clearHighlight);
-
+document.getElementById("showStatsBtn").addEventListener("click", showStatsPanel);
+document.getElementById("statsCloseBtn").addEventListener("click", hideStatsPanel);
 // --- Keyboard Shortcuts ---
 document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && highlightedNodeId) {
-        event.preventDefault();
-        clearHighlight();
+    if (event.key === "Escape") {
+        if (highlightedNodeId) {
+            event.preventDefault();
+            clearHighlight();
+        } else if (statsPanelOpen) {
+            event.preventDefault();
+            hideStatsPanel();
+        }
         return;
     }
     if (event.key === " " && document.activeElement !== document.getElementById('searchBox')) {

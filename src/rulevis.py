@@ -10,6 +10,7 @@ import webbrowser
 from threading import Timer
 from typing import Final
 
+from analyzer import Analyzer
 from generator import GraphGenerator
 
 APP_NAME: Final[str] = 'rulevis'
@@ -24,6 +25,9 @@ class Rulevis():
         self.graph_path: str = tempfile.TemporaryFile(delete=False).name
         logging.info(f"Temporary graph file created at {self.graph_path}")
 
+        self.stats_path: str = tempfile.TemporaryFile(delete=False).name
+        logging.info(f"Temporary stats file created at {self.graph_path}")
+
     def __del__(self) -> None:
         try:
             if hasattr(self, 'graph_path') and os.path.exists(self.graph_path):
@@ -33,12 +37,26 @@ class Rulevis():
         except Exception as e:
             logging.error(f"Error deleting temporary graph file: {e}")
 
+        try:
+            if hasattr(self, 'stats_path') and os.path.exists(self.stats_path):
+                os.remove(self.stats_path)
+                logging.info(
+                    f"Temporary stats file {self.stats_path} deleted.")
+        except Exception as e:
+            logging.error(f"Error deleting temporary stats file: {e}")
+
     def generate_graph(self, paths: list[str]) -> None:
         logging.info("Generating rule graph...")
         generator = GraphGenerator(paths=paths, graph_file=self.graph_path)
         generator.build_graph_from_xml()
         generator.save_graph()
         logging.info("Graph generation complete.")
+
+    def generate_stats(self) -> None:
+        logging.info("Generating rule stats...")
+        analyzer = Analyzer(self.graph_path)
+        analyzer.write_to_json(self.stats_path)
+        logging.info("Stats generation complete.")
 
     def open_browser(self, ) -> None:
         new_url = 'http://localhost:5000/'
@@ -47,7 +65,7 @@ class Rulevis():
 
     def run_flask_app(self, ) -> None:
         from visualizer import create_app
-        app = create_app(self.graph_path)  # Load the graph once at startup
+        app = create_app(self.graph_path, self.stats_path)
         logging.info("Starting Flask app...")
         Timer(1, self.open_browser).start()
         app.run(debug=True, use_reloader=False)
@@ -76,6 +94,7 @@ def main() -> None:
     rulevis = Rulevis()
     rulevis.validate_paths(paths)
     rulevis.generate_graph(paths)
+    rulevis.generate_stats()
     rulevis.run_flask_app()
 
 

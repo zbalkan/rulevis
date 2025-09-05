@@ -1,3 +1,4 @@
+import json
 import os
 import pickle
 from typing import Any, Union
@@ -6,12 +7,29 @@ from flask import Flask, jsonify, render_template_string, request
 from flask.wrappers import Response
 from networkx import MultiDiGraph
 
-def create_app(graph_path: str) -> Flask:
+def create_app(graph_path: str, stats_path: str) -> Flask:
     if not os.path.isfile(graph_path):
         raise FileNotFoundError(f"Graph file not found: {graph_path}")
 
+    if not os.path.isfile(stats_path):
+        raise FileNotFoundError(f"Stats file not found: {stats_path}")
+
     with open(graph_path, "rb") as f:
         G: MultiDiGraph = pickle.load(f)
+
+    with open(stats_path, "r") as f:
+        try:
+            # Validate that the stats file is valid JSON
+            STATS_DATA = json.load(f)
+            # Simple validation to ensure keys exist
+            required_keys = [
+                "top_direct_descendants", "top_indirect_descendants", 
+                "top_direct_ancestors", "top_indirect_ancestors", "top_isolated_rules"
+            ]
+            if not all(key in STATS_DATA for key in required_keys):
+                raise ValueError("Stats file is missing required keys.")
+        except (json.JSONDecodeError, ValueError) as e:
+            raise RuntimeError(f"Stats file '{stats_path}' is corrupted or invalid: {e}")
 
     app = Flask(__name__)
 
@@ -27,18 +45,6 @@ def create_app(graph_path: str) -> Flask:
             **{k: v for k, v in attrs.items() if k != "expandable"},
             "expandable": expandable,
         }
-
-    def neighbors_payload(nid: str, which: str) -> dict[str, list[dict[str, Any]]]:
-
-        parents = (
-            [{"id": p, "relation_type": relation_type(p, nid)} for p in G.predecessors(nid)]
-            if which in ("parents", "both") else []
-        )
-        children = (
-            [{"id": c, "relation_type": relation_type(nid, c)} for c in G.successors(nid)]
-            if which in ("children", "both") else []
-        )
-        return {"parents": parents, "children": children}
 
     def relation_type(u: str, v: str) -> str:
         data = G.get_edge_data(u, v)
@@ -134,6 +140,7 @@ def create_app(graph_path: str) -> Flask:
                 <div class="navbar-title">Interactive Rule Graph Explorer</div>
             </div>
             <div class="navbar-links">
+                <button id="showStatsBtn">Show Stats</button>
                 <button id="resetZoom">Reset Zoom</button>
                 <button id="resetGraph">Reset Graph</button>
                 <input type="text" id="searchBox" placeholder="Search Rule ID">
@@ -149,6 +156,13 @@ def create_app(graph_path: str) -> Flask:
             <button id="detailsCloseBtn" class="details-close-btn">&times;</button>
             <div id="detailsContent" class="details-content">
                 <p class="details-placeholder">Click on a node to see its details.</p>
+            </div>
+        </div>
+
+        <div id="statsPanel" class="details-panel">
+            <button id="statsCloseBtn" class="details-close-btn">&times;</button>
+            <div id="statsContent" class="details-content">
+                <p class="details-placeholder">Statistics loading...</p>
             </div>
         </div>
 
@@ -210,5 +224,10 @@ def create_app(graph_path: str) -> Flask:
             return jsonify({"nodes": [], "edges": []})
         edges_list = [make_edge(u, v) for u, v in G.subgraph(node_ids).edges()]
         return jsonify({"nodes": [], "edges": edges_list})
+
+    @app.route("/api/stats", methods=["GET"])
+    def stats() -> Response:
+        """Serves the pre-calculated graph statistics."""
+        return jsonify(STATS_DATA)
 
     return app
