@@ -524,7 +524,7 @@ function renderHeatmap(data) {
     // Domain: [0, 1, 2-5, 6-10, >10]
     // Range:  [gray, light-red, mid-red, bright-red, intense-red]
     const color = d3.scaleThreshold()
-        .domain([1, 2, 6, 11]) // The upper bound of each range
+        .domain([1, 2, 6, 8]) // The upper bound of each range
         .range([
             "#444444", // 0 rules (unused)
             "#8B0000", // 1 rule (dark red)
