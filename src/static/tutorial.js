@@ -56,9 +56,11 @@ function showTutorial() {
                   Default (leaf node)</li>
             </ul>
           </li>
-          <li><strong>Right-click</strong> on a node to open a context menu with options (e.g. expand children or parents).</li>
-          <li><strong>Double-click</strong> on a node to expand its children.</li>
-          <li><strong>Pause simulation:</strong> Hold <strong>Space</strong> or <strong>CTRL</strong> to pause the force simulation, then release to resume.</li>
+          <li><strong>Search: </strong>Search rules by rule ID and dislay in the graph.</li>
+          <li><strong>Details panel: </strong>Shows details about the selected rule. You can access parent and child rules.</li>
+          <li><strong>Heatmap: </strong>Shows the rule ID blocks of 10 to show the usable spaces.</li>
+          <li><strong>Stats: </strong>Shows statistics about the parsed rules.</li>
+          <li><strong>Pause simulation:</strong> Hold <strong>Space</strong> to pause the force simulation, then release to resume.</li>
           <li><strong>Warning:</strong> Expanding too many nodes may make the graph complex and slow down the simulation.</li>
         </ul>
         <button id="tutorialCloseButton" style="padding:8px 16px;border:none;border-radius:4px;background:#444;color:#eee;cursor:pointer;">
