@@ -18,6 +18,11 @@ let transform = d3.zoomIdentity;
 let statsPanelOpen = false;
 let heatmapModalOpen = false;
 
+let heatmapRequestSeq = 0;
+let currentBlockSize = 100;
+let currentK = 1;
+let heatmapZoomInitialized = false;
+
 // =================================================================================
 // 2. INITIALIZATION
 // =================================================================================
@@ -487,13 +492,9 @@ function showHeatmap() {
     modal.classList.add("visible");
     heatmapModalOpen = true;
 
-    fetchJSON('/api/heatmap')
-        .then(data => {
-            renderHeatmap(data);
-        })
-        .catch(error => {
-            content.innerHTML = '<p style="color: red; padding: 20px;">Could not load heatmap data.</p>';
-        });
+    ensureHeatmapDOM();           // build container/svg/loader if missing
+    setupHeatmapZoom();           // idempotent
+    renderHeatmap(currentBlockSize);
 }
 
 function hideHeatmap() {
@@ -501,84 +502,165 @@ function hideHeatmap() {
     heatmapModalOpen = false;
 }
 
-function renderHeatmap(data) {
-    const content = d3.select("#heatmapContent");
-    content.html(""); // Clear previous content
+function renderHeatmap(blockSize) {
+  const container = document.getElementById("heatmapContainer");
+  const svg = d3.select("#heatmapSvg");
+  const viewport = d3.select("#heatmapViewport");
+  if (!container) return;
 
-    const { width, height } = content.node().getBoundingClientRect();
+  const w = container.clientWidth || 800;
+  const h = container.clientHeight || 600;
+  svg.attr("width", w).attr("height", h);
 
-    const svg = content.append("svg")
-        .attr("width", width)
-        .attr("height", height)
-        .attr("viewBox", [0, 0, width, height]);
+  const seq = ++heatmapRequestSeq;
+  showHeatmapLoader();
 
-    const g = svg.append("g"); // Group for zooming
+  fetchJSON(`/api/heatmap?block_size=${blockSize}`)
+    .then(data => {
+      if (seq !== heatmapRequestSeq) return; // stale response
+      const blocks = data.blocks || [];
 
-    const blocks = data.blocks;
-    const metadata = data.metadata;
+      const cellSize = 12;
+      const cols = Math.max(1, Math.floor(w / cellSize));
 
-    // --- START: NEW RENDERING LOGIC ---
+      // color function
+      let colorFn;
+      if (blockSize === 1) {
+        colorFn = d => (d.count > 0 ? "#FF0000" : "#444444");
+      } else {
+        const thresholds = pickThresholds(blockSize);
+        const range = ["#444444","#8B0000","#B22222","#FF4500","#FF0000"].slice(0, thresholds.length + 1);
+        const scale = d3.scaleThreshold().domain(thresholds).range(range);
+        colorFn = d => scale(d.count || 0);
+      }
 
-    // 1. Define the Color Scale
-    // This scale maps a count to a color.
-    // Domain: [0, 1, 2-5, 6-10, >10]
-    // Range:  [gray, light-red, mid-red, bright-red, intense-red]
-    const color = d3.scaleThreshold()
-        .domain([1, 2, 6, 8]) // The upper bound of each range
-        .range([
-            "#444444", // 0 rules (unused)
-            "#8B0000", // 1 rule (dark red)
-            "#B22222", // 2-5 rules (firebrick)
-            "#FF4500", // 6-10 rules (orangered)
-            "#FF0000"  // >10 rules (pure red)
-        ]);
+      // draw into a temp group under the viewport that the zoom controls
+      const temp = viewport.append("g").attr("class", "temp-heatmap");
 
-    // 2. Calculate Grid Layout
-    const margin = { top: 30, right: 20, bottom: 20, left: 20 };
-    const gridSize = 12; // The size of each square in pixels
-    const gridCols = Math.floor((width - margin.left - margin.right) / gridSize);
-    const gridRows = Math.ceil(blocks.length / gridCols);
+      const cells = temp.selectAll("rect")
+        .data(blocks, d => d.id);
 
-    // 3. Create the Grid
-    const cells = g.selectAll("rect")
-        .data(blocks)
-        .join("rect")
-            .attr("x", (d, i) => (i % gridCols) * gridSize + margin.left)
-            .attr("y", (d, i) => Math.floor(i / gridCols) * gridSize + margin.top)
-            .attr("width", gridSize - 1) // -1 for a small gap
-            .attr("height", gridSize - 1)
-            .attr("fill", d => color(d.count))
-            .style("cursor", "pointer")
-            .on("click", (event, d) => {
-                // When a block is clicked, search for the first rule in that range
-                const firstRuleId = d.id.split('-')[0];
-                hideHeatmap();
-                handleSearchById(firstRuleId);
-            });
+      cells.enter()
+        .append("rect")
+        .attr("width", cellSize - 2)
+        .attr("height", cellSize - 2)
+        .merge(cells)
+        .attr("x", (d, i) => (i % cols) * cellSize)
+        .attr("y", (d, i) => Math.floor(i / cols) * cellSize)
+        .attr("fill", d => colorFn(d))
+        .append("title")
+        .text(d => blockSize === 1
+          ? `Rule ID: ${d.id}\n${d.count > 0 ? "Used" : "Unused"}`
+          : `Rule Range: ${d.id}\nUsed IDs: ${d.count || 0}`
+        );
 
-    // 4. Add Tooltips
-    cells.append("title")
-        .text(d => `Rule Range: ${d.id}\nUsed IDs: ${d.count}`);
+      // atomic swap
+      viewport.selectAll("g.heatmap").remove();
+      temp.attr("class", "heatmap");
 
-    // 5. Add a Title
-    g.append("text")
-        .attr("x", width / 2)
-        .attr("y", 20)
-        .attr("text-anchor", "middle")
-        .style("font-size", "16px")
-        .style("fill", "#eee")
-        .text(`Rule ID Occupancy (Block Size: ${metadata.block_size})`);
+      hideHeatmapLoader();
+      currentBlockSize = blockSize;
+    })
+    .catch(err => {
+      if (seq !== heatmapRequestSeq) return;
+      console.error("Heatmap fetch error:", err);
+      hideHeatmapLoader();
+    });
+}
 
-    // --- END: NEW RENDERING LOGIC ---
+function ensureHeatmapDOM() {
+  const content = document.getElementById("heatmapContent");
+  if (!content) return;
 
-    // Add zoom behavior to the SVG
-    const zoom = d3.zoom()
-        .scaleExtent([0.2, 8])
-        .on("zoom", (event) => {
-            g.attr("transform", event.transform);
-        });
-    
-    svg.call(zoom);
+  // Build container only once
+  if (!document.getElementById("heatmapContainer")) {
+    const container = document.createElement("div");
+    container.id = "heatmapContainer";
+
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.id = "heatmapSvg";
+    svg.setAttribute("width", "100%");
+    svg.setAttribute("height", "100%");
+
+    // Viewport group that zoom will transform; draw everything inside it
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.id = "heatmapViewport";
+    svg.appendChild(g);
+
+    const overlay = document.createElement("div");
+    overlay.id = "heatmapLoader";
+    overlay.className = "loader-overlay";
+    overlay.style.cssText =
+      "position:absolute;inset:0;display:none;justify-content:center;align-items:center;background:rgba(0,0,0,0.3);z-index:10;";
+    const spinner = document.createElement("div");
+    spinner.className = "spinner";
+    spinner.style.cssText =
+      "width:40px;height:40px;border:4px solid #ccc;border-top:4px solid #e33;border-radius:50%;animation:spin 0.8s linear infinite;";
+    overlay.appendChild(spinner);
+
+    content.innerHTML = ""; // clear placeholder
+    container.appendChild(svg);
+    container.appendChild(overlay);
+    content.appendChild(container);
+
+    // keyframes only once
+    const style = document.createElement("style");
+    style.textContent = "@keyframes spin{100%{transform:rotate(360deg)}}";
+    document.head.appendChild(style);
+  }
+}
+
+
+// Helper: choose block size from zoom scale
+function pickBlockSize(k) {
+  if (k >= 8) return 1;
+  if (k >= 4) return 10;
+  if (k >= 2) return 50;
+  if (k >= 1) return 100;
+  if (k >= 0.5) return 250;
+  return 500;
+}
+
+// Helper: thresholds by block size
+function pickThresholds(blockSize) {
+  switch (blockSize) {
+    case 10:  return [1, 2, 6, 8];
+    case 50:  return [1, 10, 30, 40];
+    case 100: return [1, 20, 60, 80];
+    case 250: return [1, 50, 150, 200];
+    case 500: return [1, 100, 300, 400];
+    default:  return [1];
+  }
+}
+
+// Setup zoom with semantic block switching
+function setupHeatmapZoom() {
+  if (heatmapZoomInitialized) return;
+  const svg = d3.select("#heatmapSvg");
+  const viewport = d3.select("#heatmapViewport");
+
+  const zoom = d3.zoom()
+    .scaleExtent([0.1, 10])
+    .on("zoom", (event) => {
+      currentK = event.transform.k;
+      viewport.attr("transform",
+        `translate(${event.transform.x},${event.transform.y}) scale(${event.transform.k})`);
+
+      const newBlockSize = pickBlockSize(currentK);
+      if (newBlockSize !== currentBlockSize) renderHeatmap(newBlockSize);
+    });
+
+  svg.call(zoom);
+  heatmapZoomInitialized = true;
+}
+
+function showHeatmapLoader() {
+  const el = document.getElementById("heatmapLoader");
+  if (el) el.style.display = "flex";
+}
+function hideHeatmapLoader() {
+  const el = document.getElementById("heatmapLoader");
+  if (el) el.style.display = "none";
 }
 
 async function fetchJSON(url, options = {}) {

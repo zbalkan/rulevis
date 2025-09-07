@@ -140,6 +140,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         <head>
             <meta charset="UTF-8">
             <title>Rule Graph Explorer</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
             <script src="https://d3js.org/d3.v7.min.js"></script>
             <link rel="stylesheet" href="static/styles.css">
         </head>
@@ -179,8 +180,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         <div id="heatmapModal" class="heatmap-modal">
             <div class="heatmap-container">
                 <button id="heatmapCloseBtn" class="heatmap-close-btn">&times;</button>
-                <div id="heatmapContent"></div>
-            </div>
+                <div id="heatmapContent">
         </div>
 
         <div class="footer">
@@ -194,8 +194,8 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
             </p>
         </div>
 
-        <script src="static/tutorial.js"></script>
-        <script src="static/graph.js"></script>
+        <script src="static/tutorial.js" defer></script>
+        <script src="static/graph.js" defer></script>
         </body>
         </html>
 """)
@@ -249,8 +249,72 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         return jsonify(STATS_DATA)
 
     @app.route("/api/heatmap", methods=["GET"])
-    def heatmap() -> Response:
-        """Serves the pre-calculated heatmap data."""
-        return jsonify(HEATMAP_DATA)
+    def heatmap() -> Union[Response, tuple[Response, int]]:
+        """
+        Serves precomputed heatmap; optionally re-bins by ?block_size=N.
+
+        Response:
+        {
+            "metadata": {"block_size": <int>},
+            "blocks": [{"id": "start-end" | "id", "count": <int>}, ...]
+        }
+        """
+        # 1) Read & sanitize block_size
+        bs = request.args.get("block_size", type=int)
+        if not bs or bs < 1:
+            bs = 1
+
+        # Helper: parse the numeric *start* of a block id.
+        # Accepts "1234", "1200-1299", or "1200–1299" (en dash).
+        def parse_start(idstr: str) -> int:
+            if not idstr:
+                return 0
+            s = str(idstr).strip()
+            # split on hyphen or en dash
+            for sep in ("-", "–"):
+                if sep in s:
+                    s = s.split(sep, 1)[0]
+                    break
+            try:
+                return int(s)
+            except Exception:
+                return 0
+
+        # 2) Base data presence check
+        base = HEATMAP_DATA or {}
+        base_blocks = base.get("blocks", [])
+        if not isinstance(base_blocks, list):
+            return jsonify({"error": "heatmap data unavailable"}), 503
+
+        # 3) block_size == 1  ⇒ normalize to single-ID blocks
+        if bs == 1:
+            out = []
+            for b in base_blocks:
+                start = parse_start(b.get("id"))
+                out.append({"id": str(start), "count": int(b.get("count", 0))})
+            # Sort by numeric id for stable ordering
+            out.sort(key=lambda x: int(x["id"]))
+            return jsonify({"metadata": {"block_size": 1}, "blocks": out})
+
+        # 4) Re-bin for bs > 1
+        acc: dict[str, int] = {}
+        for b in base_blocks:
+            start = parse_start(b.get("id"))
+            base_bucket = (start // bs) * bs
+            key = f"{base_bucket}-{base_bucket + bs - 1}"
+            acc[key] = acc.get(key, 0) + int(b.get("count", 0))
+
+        out = [{"id": k, "count": v} for k, v in acc.items()]
+
+        # Sort by numeric start
+        def sort_key(block):
+            s = str(block["id"]).split("-")[0]
+            try:
+                return int(s)
+            except Exception:
+                return 0
+
+        out.sort(key=sort_key)
+        return jsonify({"metadata": {"block_size": bs}, "blocks": out})
 
     return app
