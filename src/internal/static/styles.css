@@ -326,3 +326,17 @@ canvas {
   animation: spin 0.8s linear infinite;
 }
 @keyframes spin { 100% { transform:rotate(360deg);} }
+
+#heatmapOverlay {
+  position: absolute;
+  bottom: 10px;
+  right: 15px;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  pointer-events: none;
+  font-family: sans-serif;
+  z-index: 2000;
+}

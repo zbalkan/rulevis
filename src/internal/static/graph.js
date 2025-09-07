@@ -560,6 +560,8 @@ function renderHeatmap(blockSize) {
 
       hideHeatmapLoader();
       currentBlockSize = blockSize;
+      const _o = document.getElementById("heatmapOverlay");
+      if (_o) _o.textContent = "Each block resembles " + currentBlockSize + " rules";
     })
     .catch(err => {
       if (seq !== heatmapRequestSeq) return;
@@ -576,6 +578,9 @@ function ensureHeatmapDOM() {
   if (!document.getElementById("heatmapContainer")) {
     const container = document.createElement("div");
     container.id = "heatmapContainer";
+    // make container fill the modal content (so 100% SVG works)
+    container.style.position = "absolute";
+    container.style.inset = "0";
 
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.id = "heatmapSvg";
@@ -587,6 +592,7 @@ function ensureHeatmapDOM() {
     g.id = "heatmapViewport";
     svg.appendChild(g);
 
+    // existing loader overlay (unchanged)
     const overlay = document.createElement("div");
     overlay.id = "heatmapLoader";
     overlay.className = "loader-overlay";
@@ -598,9 +604,17 @@ function ensureHeatmapDOM() {
       "width:40px;height:40px;border:4px solid #ccc;border-top:4px solid #e33;border-radius:50%;animation:spin 0.8s linear infinite;";
     overlay.appendChild(spinner);
 
+    // NEW: small bottom-right label (above loader)
+    const bs = document.createElement("div");
+    bs.id = "heatmapOverlay";
+    bs.textContent = "Each block resembles " + currentBlockSize + " rules";
+    bs.style.cssText =
+      "position:absolute;right:12px;bottom:10px;background:rgba(0,0,0,0.6);color:#fff;font-size:13px;padding:4px 8px;border-radius:4px;pointer-events:none;z-index:11;";
+
     content.innerHTML = ""; // clear placeholder
     container.appendChild(svg);
     container.appendChild(overlay);
+    container.appendChild(bs);     // <-- add label
     content.appendChild(container);
 
     // keyframes only once
@@ -609,6 +623,7 @@ function ensureHeatmapDOM() {
     document.head.appendChild(style);
   }
 }
+
 
 
 // Helper: choose block size from zoom scale
