@@ -10,8 +10,8 @@ import webbrowser
 from threading import Timer
 from typing import Final
 
-from analyzer import Analyzer
-from generator import GraphGenerator
+from internal.analyzer import Analyzer
+from internal.generator import GraphGenerator
 
 APP_NAME: Final[str] = 'rulevis'
 APP_VERSION: Final[str] = '0.1'
@@ -75,7 +75,7 @@ class Rulevis():
         print(f"Access the app over {new_url}")
 
     def run_flask_app(self, ) -> None:
-        from visualizer import create_app
+        from internal.visualizer import create_app
         app = create_app(self.graph_path, self.stats_path, self.heatmap_path)
         logging.info("Starting Flask app...")
         Timer(1, self.open_browser).start()
