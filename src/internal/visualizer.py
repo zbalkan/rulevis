@@ -163,24 +163,23 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
             <canvas></canvas>
         </div>
 
-        <div id="detailsPanel" class="details-panel">
-            <button id="detailsCloseBtn" class="details-close-btn">&times;</button>
-            <div id="detailsContent" class="details-content">
-                <p class="details-placeholder">Click on a node to see its details.</p>
+        <div id="detailsPanel" class="side-panel">
+            <button id="detailsCloseBtn" class="panel-close-btn">×</button>
+            <div id="detailsContent" class="panel-content">
+                <p>Click on a node to see its details.</p>
             </div>
         </div>
 
-        <div id="statsPanel" class="details-panel">
-            <button id="statsCloseBtn" class="details-close-btn">&times;</button>
-            <div id="statsContent" class="details-content">
-                <p class="details-placeholder">Statistics loading...</p>
+        <div id="statsPanel" class="side-panel">
+            <button id="statsCloseBtn" class="panel-close-btn">×</button>
+            <div id="statsContent" class="panel-content">
+                <p>Statistics loading...</p>
             </div>
         </div>
 
-        <div id="heatmapModal" class="heatmap-modal">
-            <div class="heatmap-container">
-                <button id="heatmapCloseBtn" class="heatmap-close-btn">&times;</button>
-                <div id="heatmapContent">
+        <div id="heatmapModal" class="modal-overlay">
+            <div id="heatmapContent">
+            </div>
         </div>
 
         <div class="footer">
