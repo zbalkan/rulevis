@@ -4,7 +4,7 @@ RuleVis is a powerful analysis tool that transforms your Wazuh ruleset into a dy
 
 This tool is designed for security engineers, SOC analysts, and Wazuh administrators who need to understand, maintain, and develop complex custom rulesets.
 
-![General View of RuleVis](https://github.com/zbalkan/rulevis/blob/main/assets/general-view.gif?raw=true)
+![General View of RuleVis](./assets/general-view.gif?raw=true)
 
 ## Features
 
@@ -82,13 +82,13 @@ Once executed, the script will:
 
 Quickly identify the most important and complex rules in your entire ruleset. Click on any rule in the list to instantly navigate to it in the main graph.
 
-![Statistics Panel](https://github.com/zbalkan/rulevis/blob/main/assets/stats-panel.gif?raw=true)
+![Statistics Panel](./assets/stats-panel.gif?raw=true)
 
 ### Rule ID Heatmap
 
 Get a bird's-eye view of your rule ID landscape. Dark gray blocks are unused and available for your custom rules, while brighter red blocks indicate heavily populated ranges. This is invaluable for planning and organizing a large custom ruleset.
 
-![Heatmap View](https://github.com/zbalkan/rulevis/blob/main/assets/heatmap-view.gif?raw=true)
+![Heatmap View](./assets/heatmap-view.gif?raw=true)
 
 ## Technical Overview
 
