@@ -1,115 +1,100 @@
-# rulevis
+# RuleVis: Interactive Wazuh Rule Graph Explorer
 
-A simple tool to visualize the Wazuh ruleset for analysis of connections. It may help finding cycles, duplicates, and redundant rules.
+RuleVis is a powerful analysis tool that transforms your Wazuh ruleset into a dynamic, interactive force-directed graph. It helps you visualize the complex relationships between rules, identify critical dependencies, discover structural issues, and analyze the distribution of your rule IDs.
 
-## Requirements
+This tool is designed for security engineers, SOC analysts, and Wazuh administrators who need to understand, maintain, and develop complex custom rulesets.
 
-- Python 3.9+
-- Wazuh ruleset files including custom rules
+![General View of RuleVis](./assets/general-view.gif?raw=true)
+
+## Features
+
+* **Interactive Graph Visualization:** Renders your entire ruleset as a graph using D3.js and HTML Canvas for high performance.
+* **Dependency Analysis:** Clearly shows parent-child relationships (`if_sid`, `if_group`, etc.) with directed edges.
+* **Node Expansion:** Interactively expand nodes to reveal their parent or child dependencies on demand.
+* **Detailed Rule Information:** Click on any rule to see its full description, groups, and a complete list of its parents and children.
+* **Powerful Search:** Instantly find and focus on any rule by its ID.
+* **Graph Statistics Panel:** Get at-a-glance insights into your ruleset with statistics like:
+  * Top 5 rules with the most direct children (foundational rules).
+  * Top 5 rules with the highest impact (most total descendants).
+  * Top 5 rules with the most complex dependencies.
+  * A list of isolated rules.
+  * Cycles in the rules
+* **Rule ID Heatmap:** Visualize the entire rule ID space from 0 to 100,000+ to see which ID ranges are heavily used and which are available for custom rules.
+* **Keyboard Shortcuts:** Pause the simulation (`Space`), close panels (`Esc`), and more for an efficient workflow.
+
+## The Problem It Solves
+
+Wazuh's rule engine builds a complex, tree-like structure in memory. While powerful, this structure is invisible to the user. It can be difficult to:
+
+* Understand the full impact of changing a single rule.
+* Find redundant rules or overly complex dependency chains.
+* Identify structural issues like circular dependencies, which can impact performance.
+* Know which ID ranges are safe to use for new custom rules.
+
+RuleVis makes these invisible structures visible, turning abstract XML files into a tangible, explorable map.
 
 ## Installation
 
-- Clone this repository
-- Use your preferred virtual environment module for Python and activate
-- use `pip install -r ./requirements.txt` to install dependencies
-- Start using the script
+1. **Clone the repository:**
+
+    ```shell
+    git clone https://github.com/your-username/rulevis.git
+    cd rulevis
+    ```
+
+2. **Create and activate a Python virtual environment:**
+
+    ```shell
+    python -m venv .venv
+    source .venv/bin/activate  # On Windows, use `.venv\Scripts\activate`
+    ```
+
+3. **Install dependencies:**
+
+    ```shell
+    pip install -r requirements.txt
+    ```
 
 ## Usage
 
+The tool is run from the command line. You must provide the path to the directory (or directories) containing your Wazuh rule XML files.
+
 ```shell
-usage: rulevis [-h] --path PATH [--top TOP]
-
-rulevis (0.1) is a Wazuh rule visualization tool.
-
-options:
-  -h, --help            show this help message and exit
-  --path PATH, -p PATH  Path to the Wazuh rule directories. Comma-separated multiple paths are accepted.
-  --top TOP, -t TOP     Top N XML files to process, especially for testing purposes
+python main.py --path /var/ossec/ruleset/rules,/var/ossec/etc/rules
 ```
 
-## Detecting cycles
+**Arguments:**
 
-We can now detect the cycles in the ruleset by default. Choose the color red to filter cycles. Below you can see that 80790 and 80791 are in a cycle due to `if_group` condition that the two ruless call each other. I have observed that these kind of cycles create an issue when the analysisd tries to create a tree of rules. Since a tree by definition should be a directed acyclic graph, the cycles crate recursive calls, and at one point analysisd creates a mesh topology between all possible childs.
+* `--path, -p`: **(Required)** A comma-separated list of paths to your Wazuh rule directories. This should include both the default rules and your custom rules.
+* `-h, --help`: Show the help message.
 
-I once created 8 rules that has the same group name in rule groups, also that is the condition in the `if_group` accidentally. That added around 2 minutes to the start time of the service. So, eliminating them would not only increase load performance but also the rule analysis when a rule in the cycle is hit. This is when the cycle detection came to my mind.
+Once executed, the script will:
 
-![A cycle detected](/assets/cycle.gif)
+1. Parse all `.xml` files in the specified paths.
+2. Build a graph model of the rule relationships.
+3. Pre-calculate statistics and heatmap data.
+4. Start a local web server.
+5. Automatically open the tool in your default web browser.
 
-The detected cycle above are these rules below. As you can see, they use `audit_watch_write` on both in `if_group` condition and setting rule `group`.
+## Key Features in Action
 
-```xml
-  <rule id="80790" level="3">
-    <if_group>audit_watch_write</if_group>
-    <match>type=CREATE</match>
-    <description>Audit: Created: $(audit.file.name).</description>
-    <group>audit_watch_create,audit_watch_write,gdpr_II_5.1.f,gdpr_IV_30.1.g,</group>
-  </rule>
+### Graph Statistics
 
-  <rule id="80791" level="3">
-    <if_group>audit_watch_write</if_group>
-    <match>type=DELETE</match>
-    <description>Audit: Deleted: $(audit.file.name).</description>
-    <mitre>
-      <id>T1070.004</id>
-    </mitre>
-    <group>audit_watch_delete,audit_watch_write,gdpr_II_5.1.f,gdpr_IV_30.1.g,</group>
-  </rule>
-```
+Quickly identify the most important and complex rules in your entire ruleset. Click on any rule in the list to instantly navigate to it in the main graph.
 
-## Note
+![Statistics Panel](./assets/stats-panel.gif?raw=true)
 
-Beware the higher the number of the nodes, the higher the CPU and memory usage, the longer drawing time. Start by using `-t` and increase incrementally to ensure it works.
+### Rule ID Heatmap
 
-## Internals
+Get a bird's-eye view of your rule ID landscape. Dark gray blocks are unused and available for your custom rules, while brighter red blocks indicate heavily populated ranges. This is invaluable for planning and organizing a large custom ruleset.
 
-Wazuh rules are designed with a tree-like structure in mind.
+![Heatmap View](./assets/heatmap-view.gif?raw=true)
 
-```c
-typedef struct _RuleNode {
-    RuleInfo *ruleinfo;
-    struct _RuleNode *next;
-    struct _RuleNode *child;
-} RuleNode;
-```
+## Technical Overview
 
-A rule node is a linked-list node actually. It contains the deserialized data struct parsed through the pseudo-XML rules. Tne `*next` is the thing that allows traversal. But the `*child` allows rules to have child rules either by id, group or category through `<ifsid>`,`<if_matched_sid>`, `<if_group>`, `<if_matched_group>` or `<category>` tags. Mind that the `<category>` check has not been implemented yet. Since it would not be wise to have clusters of rules to match, there is a root node which has a `NULL` value:
+The project is composed of three main Python modules and a JavaScript frontend:
 
-```c
-RuleNode *os_analysisd_rulelist;
-
-/* Create the RuleList */
-void OS_CreateRuleList() {
-    os_analysisd_rulelist = NULL;
-}
-
-/* Get first node from rule */
-RuleNode *OS_GetFirstRule()
-{
-    RuleNode *rulenode_pt = os_analysisd_rulelist;
-    return (rulenode_pt);
-}
-```
-
-Let's visualise what does this mean. The diagram belows shows the root node and 2 rules. They both have one child. The Rule 1 and Rule 2 has no parent-child relationship, so they are added as nodes in the linked-list.
-
-![2 rules ant the root](/assets/tree1.png)
-
-Let's add another rule. Rule 3 is added as next but has a parent-child relationship with Rule 2-child. It may happen via `if_mathched_*` connections.
-
-![3 rules and the root](/assets/tree2.png)
-
-Let's make it complicated. It is possible that a rule may be child of many rules. think about multiple authentication failures. We add a condition, so that Rule 3 is child of Rule 1 and rule 2-child simultaneously.
-
-![3 rules and the root, but it is complicated](/assets/tree3.png)
-
-Now, let's add a Rule 4, and due to the cycle in their conditions, Rule 2 is a child of Rule 4 and vice versa. Sorry for the extra line, I could not get rid of it.
-
-![4 rules and the root, with a cycle](/assets/tree4.png)
-
-If you consider the number of rules, you can find that the topology created with this becomes more complex. That is how `analysisd` works until the release of [the new engine](https://github.com/wazuh/wazuh/issues/24312).
-
-However in my visualization, I ignored the root rule and linked-list as they are an implementation detail of the abstraction of rules in the memory. Therefore, I visualise the rules as DAG in-mind, not a tree-like structure. Though, you can see that there are cycles in the ruleset.
-
-![A screenshot of the whole default ruleset](/assets/full.png)
-
-![A screenshot of a single rule cluster](/assets/single.png)
+1. **`generator.py`:** Parses the Wazuh XML rule files and uses the `networkx` library to build a `MultiDiGraph` object representing the rule relationships. It saves this graph to a temporary file.
+2. **`analyzer.py`:** Loads the graph file and uses `networkx` to perform complex calculations (descendants, ancestors, etc.). It pre-calculates the data needed for the Statistics Panel and the Rule ID Heatmap and saves them to temporary JSON files.
+3. **`visualizer.py`:** A Flask web application that serves the frontend and provides a clean API for the visualization to fetch graph, stats, and heatmap data.
+4. **`graph.js`:** The core frontend logic. It uses **D3.js** for the force simulation and user interactions, and renders the main graph to an **HTML Canvas** for high performance. The interactive heatmap is rendered using **SVG** for its superior event handling and styling capabilities.
