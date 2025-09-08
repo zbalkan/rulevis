@@ -3,7 +3,7 @@ import math
 import pickle
 import json
 import os
-from networkx import MultiDiGraph, descendants, ancestors
+from networkx import MultiDiGraph, descendants, ancestors, nodes_with_selfloops, simple_cycles
 
 
 class Analyzer:
@@ -32,45 +32,64 @@ class Analyzer:
 
     def calculate_statistics(self) -> dict:
         """
-        Calculates all the required statistics for the graph.
-
-        Returns:
-            dict: A dictionary containing all the calculated statistics.
+        Calculates all the required statistics for the graph, ensuring no
+        duplicate cycles are reported.
         """
-        # Exclude the virtual root '0' from our calculations where it makes sense.
         real_nodes = [n for n in self.G.nodes() if n != '0']
 
         # --- Calculate Top 5 Lists ---
-
-        # Direct descendants (Out-Degree)
+        # (This part is correct and remains unchanged)
         out_degrees = {n: self.G.out_degree(n) for n in real_nodes}
-        top_5_direct_descendants = sorted(out_degrees, key=out_degrees.get, reverse=True)[:5]  # type: ignore
+        top_5_direct_descendants = sorted(out_degrees, key=out_degrees.get, reverse=True)[:5]
 
-        # Indirect descendants (Total Descendants)
         indirect_descendants_counts = {n: len(descendants(self.G, n)) for n in real_nodes}
-        top_5_indirect_descendants = sorted(indirect_descendants_counts, key=indirect_descendants_counts.get, reverse=True)[:5]  # type: ignore
+        top_5_indirect_descendants = sorted(indirect_descendants_counts, key=indirect_descendants_counts.get, reverse=True)[:5]
 
-        # Direct ancestors (In-Degree)
         in_degrees = {n: self.G.in_degree(n) for n in real_nodes}
-        top_5_direct_ancestors = sorted(in_degrees, key=in_degrees.get, reverse=True)[:5]  # type: ignore
+        top_5_direct_ancestors = sorted(in_degrees, key=in_degrees.get, reverse=True)[:5]
 
-        # Indirect ancestors (Total Ancestors)
         indirect_ancestors_counts = {n: len(ancestors(self.G, n)) for n in real_nodes}
-        top_5_indirect_ancestors = sorted(indirect_ancestors_counts, key=indirect_ancestors_counts.get, reverse=True)[:5]  # type: ignore
+        top_5_indirect_ancestors = sorted(indirect_ancestors_counts, key=indirect_ancestors_counts.get, reverse=True)[:5]
 
-        # Isolated rules
         isolated_rules = [
             n for n in real_nodes
             if self.G.out_degree(n) == 0 and list(self.G.predecessors(n)) == ['0']
         ]
 
-        # --- Format the Output ---
+        # 1. Find all nodes with self-loops first. This is our definitive list.
+        logging.info("Detecting self-loops (e.g., A -> A)...")
+        self_loop_nodes = set(nodes_with_selfloops(self.G)) # Use a set for efficient lookup
+        logging.info(f"Found {len(self_loop_nodes)} nodes with self-loops: {self_loop_nodes}")
+
+        # 2. Find all other simple cycles.
+        logging.info("Detecting multi-node cycles...")
+        all_simple_cycles = list(simple_cycles(self.G))
+        
+        # 3. Filter out any multi-node cycles that contain a node we've already
+        #    identified as having a self-loop. This prevents double-reporting.
+        multi_node_cycles = [
+            cycle for cycle in all_simple_cycles 
+            if not self_loop_nodes.intersection(cycle)
+        ]
+        
+        
+        logging.info(f"Found {len(multi_node_cycles)} distinct multi-node cycles.")
+        if multi_node_cycles:
+            logging.info(f"Example multi-node cycle: {multi_node_cycles[0]}")
+        
+        # 4. Format the multi-node cycles for display
+        for cycle in multi_node_cycles:
+            if cycle:
+                cycle.append(cycle[0])
+
         stats = {
             "top_direct_descendants": [{"id": n, "count": out_degrees[n]} for n in top_5_direct_descendants],
             "top_indirect_descendants": [{"id": n, "count": indirect_descendants_counts[n]} for n in top_5_indirect_descendants],
             "top_direct_ancestors": [{"id": n, "count": in_degrees[n]} for n in top_5_direct_ancestors],
             "top_indirect_ancestors": [{"id": n, "count": indirect_ancestors_counts[n]} for n in top_5_indirect_ancestors],
-            "isolated_rules": [{"id": n} for n in isolated_rules]
+            "isolated_rules": [{"id": n} for n in isolated_rules],
+            "self_loops": [{"id": n} for n in self_loop_nodes],
+            "cycles": multi_node_cycles
         }
 
         return stats

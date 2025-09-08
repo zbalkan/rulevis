@@ -46,10 +46,10 @@ class DetailsPanel {
         this.content.innerHTML = `<h3>Details for Rule: ${node.id}</h3><p><i>Loading full details...</i></p>`;
         this.panel.classList.add("visible");
         fetchJSON(`/api/nodes?id=${node.id}&neighbors=both&include=details`)
-            .then(details => this.render(details))
-            .catch(error => {
-                this.content.innerHTML = `<h3>Details for Rule: ${node.id}</h3><p style="color: #ff8a8a;">Could not load details.</p>`;
-            });
+        .then(details => this.render(details))
+        .catch(error => {
+            this.content.innerHTML = `<h3>Details for Rule: ${node.id}</h3><p style="color: #ff8a8a;">Could not load details.</p>`;
+        });
     }
     hide() {
         this.panel.classList.remove("visible");
@@ -83,26 +83,74 @@ class StatsPanel {
         this.isOpen = false;
     }
     render(stats) {
+        // Helper for rendering standard lists of nodes with counts
         const renderStatsList = (items, title) => {
             if (!items || items.length === 0) return `<h4>${title}</h4><p>No data.</p>`;
             let listHtml = `<h4>${title}</h4><ul>`;
             items.forEach(item => {
                 const clickAction = `onclick="window.visualizer.handleSearchById('${item.id}')"`;
-                let detail = item.count !== undefined ? `(${item.count})` : (item.note !== undefined ? `(${item.note})` : '');
-                listHtml += `<li class="not-displayed" ${clickAction}><strong>${item.id}</strong> ${detail}</li>`;
+                let detail = item.count !== undefined ? `(${item.count})` : '';
+                listHtml += `<li class="stats-item" ${clickAction}><strong>${item.id}</strong> ${detail}</li>`;
             });
             listHtml += '</ul>';
             return listHtml;
         };
-        this.content.innerHTML = `
-            <h3>Graph Statistics</h3>
-            ${renderStatsList(stats.top_direct_descendants, "Most Direct Children")}
-            ${renderStatsList(stats.top_indirect_descendants, "Most Total Children (Highest Impact)")}
-            ${renderStatsList(stats.top_direct_ancestors, "Most Direct Parents")}
-            ${renderStatsList(stats.top_indirect_ancestors, "Most Total Parents (Complex Dependencies)")}
-            ${renderStatsList(stats.isolated_rules, "Isolated Rules")}
-        `;
-    }
+        
+        const renderAllCycles = (stats) => {
+            const selfLoops = (stats.self_loops || []).map(loop => [loop.id, loop.id]);
+            const multiNodeCycles = stats.cycles || [];
+            const allCycles = [...selfLoops, ...multiNodeCycles];
+            
+            if (allCycles.length === 0) {
+                return `<h4>Detected Cycles</h4><p style="color: #8f8;">No cycles detected. The graph is a DAG (Directed Acyclic Graph).</p>`;
+            }
+            
+            let listHtml = `<h4 style="color: #ff8a8a;">Detected Cycles (${allCycles.length} found)</h4>
+                        <p style="color: #ff8a8a; font-size: 0.9em;">Warning: Cycles indicate circular dependencies.</p>
+                        <div class="cycle-container">`;
+            
+            allCycles.forEach((cycle, index) => {
+                // For display, we want to show the path, e.g., A -> A or A -> B -> A
+                // For highlighting, we only need the unique nodes.
+                const displayNodes = cycle;
+                const uniqueNodes = [...new Set(cycle)];
+                const nodeIdsString = uniqueNodes.join(',');
+                const isSelfLoop = uniqueNodes.length === 1;
+                
+                listHtml += `
+                <div class="cycle-card">
+                    <div class="cycle-header">
+                        <span>${isSelfLoop ? 'Self-Loop' : `Cycle #${index + 1 - selfLoops.length}`}</span>
+                        <button class="cycle-jump-btn" onclick="window.visualizer.highlightCycle('${nodeIdsString}')">
+                            View on Graph
+                        </button>
+                    </div>
+                    <div class="cycle-path">
+                        ${displayNodes.map(nodeId => 
+                `<div class="cycle-node" onclick="window.visualizer.handleSearchById('${nodeId}')">
+                                ${nodeId}
+                            </div>`
+            ).join('<div class="cycle-arrow">→</div>')}
+                    </div>
+                </div>
+            `;
+        });
+        
+        listHtml += '</div>';
+        return listHtml;
+    };
+    
+    this.content.innerHTML = `
+        <h3>Graph Statistics</h3>
+        ${renderStatsList(stats.top_direct_descendants, "Most Direct Children")}
+        ${renderStatsList(stats.top_indirect_descendants, "Most Total Children (Highest Impact)")}
+        ${renderStatsList(stats.top_direct_ancestors, "Most Direct Parents")}
+        ${renderStatsList(stats.top_indirect_ancestors, "Most Total Parents (Complex Dependencies)")}
+        ${renderStatsList(stats.isolated_rules, "Isolated Rules")}
+        <hr class="stats-divider">
+        ${renderAllCycles(stats)}
+    `;
+}
 }
 
 class HeatmapModal {
@@ -114,7 +162,7 @@ class HeatmapModal {
         this.currentBlockSize = 100;
         this.currentK = 1;
         this.zoomInitialized = false;
-        }
+    }
     show() {
         this.modal.classList.add("visible");
         this.isOpen = true;
@@ -232,6 +280,7 @@ class GraphVisualizer {
         this.links = [];
         this.nodeMap = new Map();
         this.highlightedNodeId = null;
+        this.highlightedCycleIds = new Set(); 
         this.displayedRuleIDs = new Set();
         this.simulationPausedByKey = false;
         this.transform = d3.zoomIdentity;
@@ -243,30 +292,30 @@ class GraphVisualizer {
         this.devicePixelRatio = window.devicePixelRatio || 1;
         this.canvas.attr('width', this.width * this.devicePixelRatio).attr('height', this.height * this.devicePixelRatio);
         this.context.scale(this.devicePixelRatio, this.devicePixelRatio);
-
+        
         this.notificationManager = new NotificationManager();
         this.detailsPanel = new DetailsPanel(this);
         this.statsPanel = new StatsPanel(this);
         this.heatmapModal = new HeatmapModal();
-
+        
         this.simulation = d3.forceSimulation()
-            .force("link", d3.forceLink().id(d => d.id).distance(150))
-            .force("charge", d3.forceManyBody().strength(-150)) // Increased repulsion slightly
-            .force("center", d3.forceCenter(this.width / 2, this.height / 2))
-            .on("tick", () => this.render())
-            // Slower decay means more time to stabilize before stopping.
-            // The default is ~0.0228. We're making it cool down much slower.
-            .alphaDecay(0.05) 
-            // Stop the simulation when energy is low, but not practically zero.
-            // This prevents excessive "jitter" at the end.
-            .alphaMin(0.005);
+        .force("link", d3.forceLink().id(d => d.id).distance(150))
+        .force("charge", d3.forceManyBody().strength(-150)) // Increased repulsion slightly
+        .force("center", d3.forceCenter(this.width / 2, this.height / 2))
+        .on("tick", () => this.render())
+        // Slower decay means more time to stabilize before stopping.
+        // The default is ~0.0228. We're making it cool down much slower.
+        .alphaDecay(0.05) 
+        // Stop the simulation when energy is low, but not practically zero.
+        // This prevents excessive "jitter" at the end.
+        .alphaMin(0.005);
         this.zoom = d3.zoom().scaleExtent([0.02, 5]).on("zoom", e => { this.transform = e.transform; this.render(); });
         this.canvas.call(this.zoom);
-
+        
         this.initializeEventListeners();
         this.resetGraph(true);
     }
-
+    
     render() {
         this.context.save();
         this.context.clearRect(0, 0, this.width * this.devicePixelRatio, this.height * this.devicePixelRatio);
@@ -289,7 +338,7 @@ class GraphVisualizer {
             this.context.arc(node.x, node.y, 10, 0, 2 * Math.PI);
             this.context.fillStyle = (node.expandable && !node.is_expanded) ? STYLES.nodes.expandable : STYLES.nodes.default;
             this.context.fill();
-            if (node.id === this.highlightedNodeId) {
+            if (node.id === this.highlightedNodeId || this.highlightedCycleIds.has(node.id)) {
                 this.context.strokeStyle = STYLES.nodes.highlight;
                 this.context.lineWidth = 3 / this.transform.k;
                 this.context.stroke();
@@ -308,7 +357,7 @@ class GraphVisualizer {
         this.buildLegend();
         this.drawCounter();
     }
-
+    
     updateGraph(newNodesData, newLinksData, onUpdateComplete = null) {
         const newIds = new Set((newNodesData || []).map(n => n.id));
         (newNodesData || []).forEach(newNode => {
@@ -346,7 +395,7 @@ class GraphVisualizer {
         this.simulation.force("link").links(this.links);
         this.simulation.alpha(1).restart();
     }
-
+    
     linkUpExistingNodes() {
         fetchJSON('/api/edges', {
             method: 'POST',
@@ -358,7 +407,7 @@ class GraphVisualizer {
             }
         });
     }
-
+    
     expandNode(nodeId) {
         fetchJSON(`/api/nodes?id=${nodeId}&neighbors=children&displayed=${this.getDisplayedIds()}`).then(data => {
             this.updateGraph(data.nodes, data.edges);
@@ -366,7 +415,7 @@ class GraphVisualizer {
             if (parentNode) this.detailsPanel.show(parentNode);
         });
     }
-
+    
     expandAllParents(nodeId, parentIdsString) {
         const parentIds = parentIdsString.split(',').filter(id => !this.displayedRuleIDs.has(id));
         if (parentIds.length === 0) {
@@ -379,7 +428,7 @@ class GraphVisualizer {
             if (sourceNode) this.detailsPanel.show(sourceNode);
         });
     }
-
+    
     drawArrowhead(source, target) {
         const headLength = 6, nodeRadius = 10;
         const angle = Math.atan2(target.y - source.y, target.x - source.x);
@@ -392,7 +441,7 @@ class GraphVisualizer {
         this.context.closePath();
         this.context.fill();
     }
-
+    
     buildLegend() {
         const nodeLegendData = [{ label: "Expandable Node", color: STYLES.nodes.expandable }, { label: "Default Node", color: STYLES.nodes.default }];
         const edgeLegendData = [{ label: "if_sid", color: STYLES.edges.if_sid }, { label: "if_matched_sid", color: STYLES.edges.if_matched_sid }, { label: "if_group", color: STYLES.edges.if_group }, { label: "if_matched_group", color: STYLES.edges.if_matched_group }, { label: "No parent", color: STYLES.edges.no_parent }, { label: "Unknown", color: STYLES.edges.unknown }];
@@ -420,7 +469,7 @@ class GraphVisualizer {
             legendY += 25;
         });
     }
-
+    
     drawCounter() {
         const counterText = `Nodes: ${this.nodes.length} | Edges: ${this.links.length}`;
         this.context.font = "14px sans-serif";
@@ -428,7 +477,7 @@ class GraphVisualizer {
         this.context.textAlign = "left";
         this.context.fillText(counterText, 20, this.height - 20);
     }
-
+    
     findNodeAt(x, y) {
         const [ix, iy] = this.transform.invert([x, y]);
         const radiusSq = 100 / (this.transform.k * this.transform.k);
@@ -440,7 +489,7 @@ class GraphVisualizer {
         }
         return null;
     }
-
+    
     handleSearch() {
         const searchInput = document.getElementById("searchBox").value.trim();
         if (!searchInput) return;
@@ -453,13 +502,13 @@ class GraphVisualizer {
             });
         }
     }
-
+    
     handleSearchById(ruleId) {
         if (this.statsPanel.isOpen) this.statsPanel.hide();
         document.getElementById("searchBox").value = ruleId;
         this.handleSearch();
     }
-
+    
     highlightAndCenterNode(nodeId) {
         const node = this.nodeMap.get(nodeId);
         if (!node) return;
@@ -473,7 +522,7 @@ class GraphVisualizer {
             this.canvas.transition().duration(750).call(this.zoom.transform, newTransform);
         }
     }
-
+    
     clearHighlight() {
         if (this.highlightedNodeId && this.nodeMap.has(this.highlightedNodeId)) {
             const node = this.nodeMap.get(this.highlightedNodeId);
@@ -481,11 +530,12 @@ class GraphVisualizer {
             node.fy = null;
         }
         this.highlightedNodeId = null;
+        this.highlightedCycleIds.clear();
         this.detailsPanel.hide();
         this.render();
         if (!this.simulationPausedByKey) this.simulation.alpha(0.3).restart();
     }
-
+    
     resetGraph(fullReset) {
         if (fullReset) {
             this.nodes = [];
@@ -498,11 +548,36 @@ class GraphVisualizer {
             this.canvas.transition().duration(750).call(this.zoom.transform, d3.zoomIdentity);
         });
     }
-
+    
     getDisplayedIds() {
         return Array.from(this.displayedRuleIDs).join(",");
     }
-
+    
+    highlightCycle(nodeIdsString) {
+        const nodeIds = nodeIdsString.split(',');
+        if (!nodeIds.length) return;
+        
+        this.clearHighlight(); // Clear previous state
+        
+        this.highlightedCycleIds = new Set(nodeIds);
+        
+        // Re-render to show the highlights
+        this.render();
+        
+        // Center the view on the first node of the cycle
+        const firstNode = this.nodeMap.get(nodeIds[0]);
+        if (firstNode && firstNode.x !== undefined) {
+            const newTransform = d3.zoomIdentity
+            .translate(this.width / 2, this.height / 2)
+            .scale(Math.max(this.transform.k, 1.0)) // Zoom to at least 1.0
+            .translate(-firstNode.x, -firstNode.y);
+            this.canvas.transition().duration(750).call(this.zoom.transform, newTransform);
+        }
+        
+        this.statsPanel.hide(); // Hide panel to see the graph
+    }
+    
+    
     initializeEventListeners() {
         document.getElementById("resetZoom").addEventListener("click", () => this.handleSearchById('0'));
         document.getElementById("resetGraph").addEventListener("click", () => this.resetGraph(true));

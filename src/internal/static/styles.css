@@ -340,3 +340,84 @@ button:hover {
         transform: rotate(360deg);
     }
 }
+
+/* In styles.css, add these new rules, for example at the end of section 4 */
+
+.stats-divider {
+    border: none;
+    border-top: 1px solid #444;
+    margin: 25px 0;
+}
+
+.cycle-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.cycle-card {
+    background-color: #333;
+    border: 1px solid #555;
+    border-left: 3px solid #e33;
+    border-radius: 4px;
+    padding: 10px;
+}
+
+.cycle-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-weight: bold;
+    color: #ccc;
+}
+
+.cycle-jump-btn {
+    font-size: 12px;
+    padding: 3px 8px;
+    background-color: #4e9af1;
+    border: none;
+    border-radius: 3px;
+    color: white;
+    cursor: pointer;
+}
+
+.cycle-jump-btn:hover {
+    background-color: #6aabf3;
+}
+
+.cycle-path {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+}
+
+.cycle-node {
+    background-color: #444;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.cycle-node:hover {
+    background-color: #555;
+    color: #fff;
+}
+
+.cycle-arrow {
+    color: #888;
+}
+
+/* Also, update the generic list item style for consistency */
+.stats-item {
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.stats-item:hover {
+    background-color: #3a4a5f;
+}

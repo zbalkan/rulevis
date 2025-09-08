@@ -24,7 +24,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
             STATS_DATA = json.load(f)
             # Simple validation to ensure keys exist
             required_keys = [
-                "top_direct_descendants", "top_indirect_descendants",
+                "cycles", "top_direct_descendants", "top_indirect_descendants",
                 "top_direct_ancestors", "top_indirect_ancestors", "isolated_rules"
             ]
             if not all(key in STATS_DATA for key in required_keys):
