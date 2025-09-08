@@ -38,16 +38,14 @@ class Analyzer:
         real_nodes = [n for n in self.G.nodes() if n != '0']
 
         # --- Calculate Top 5 Lists ---
-        # (This part is correct and remains unchanged)
-        out_degrees = {n: self.G.out_degree(n) for n in real_nodes}
-        top_5_direct_descendants = sorted(out_degrees, key=out_degrees.get, reverse=True)[:5]
+        real_nodes = [n for n in self.G.nodes() if n != '0']
+        out_degrees = dict(self.G.out_degree(real_nodes))
+        in_degrees = dict(self.G.in_degree(real_nodes))
 
+        top_5_direct_descendants = sorted(out_degrees, key=out_degrees.get, reverse=True)[:5]
         indirect_descendants_counts = {n: len(descendants(self.G, n)) for n in real_nodes}
         top_5_indirect_descendants = sorted(indirect_descendants_counts, key=indirect_descendants_counts.get, reverse=True)[:5]
-
-        in_degrees = {n: self.G.in_degree(n) for n in real_nodes}
         top_5_direct_ancestors = sorted(in_degrees, key=in_degrees.get, reverse=True)[:5]
-
         indirect_ancestors_counts = {n: len(ancestors(self.G, n)) for n in real_nodes}
         top_5_indirect_ancestors = sorted(indirect_ancestors_counts, key=indirect_ancestors_counts.get, reverse=True)[:5]
 
@@ -64,19 +62,18 @@ class Analyzer:
         # 2. Find all other simple cycles.
         logging.info("Detecting multi-node cycles...")
         all_simple_cycles = list(simple_cycles(self.G))
-        
+
         # 3. Filter out any multi-node cycles that contain a node we've already
         #    identified as having a self-loop. This prevents double-reporting.
         multi_node_cycles = [
-            cycle for cycle in all_simple_cycles 
+            cycle for cycle in all_simple_cycles
             if not self_loop_nodes.intersection(cycle)
         ]
-        
-        
+
         logging.info(f"Found {len(multi_node_cycles)} distinct multi-node cycles.")
         if multi_node_cycles:
             logging.info(f"Example multi-node cycle: {multi_node_cycles[0]}")
-        
+
         # 4. Format the multi-node cycles for display
         for cycle in multi_node_cycles:
             if cycle:

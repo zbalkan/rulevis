@@ -7,6 +7,49 @@ from flask import Flask, jsonify, render_template_string, request
 from flask.wrappers import Response
 from networkx import MultiDiGraph
 
+PRECOMPUTED_BLOCK_SIZES = [1, 10, 50, 100, 250, 500]
+PRECOMPUTED_HEATMAPS = {}
+
+
+def parse_start(idstr: str) -> int:
+    if not idstr:
+        return 0
+    s = str(idstr).strip()
+    for sep in ("-", "–"):
+        if sep in s:
+            s = s.split(sep, 1)[0]
+            break
+    try:
+        return int(s)
+    except Exception:
+        return 0
+
+
+def precompute_heatmaps(base_blocks):
+    # Use both start and count!
+    starts_and_counts = [(parse_start(b.get("id")), int(
+        b.get("count", 0))) for b in base_blocks]
+    max_start = max((start for start, _ in starts_and_counts), default=0)
+    for bs in PRECOMPUTED_BLOCK_SIZES:
+        if bs == 1:
+            ids = sorted(str(start) for start, _ in starts_and_counts)
+            PRECOMPUTED_HEATMAPS[bs] = {
+                "block_size": 1,
+                "ids": ids
+            }
+        else:
+            acc = {}
+            for start, count in starts_and_counts:
+                bucket = (start // bs) * bs
+                key = f"{bucket}-{bucket + bs - 1}"
+                acc[key] = acc.get(key, 0) + count  # Use the original count!
+            blocks = [{"id": k, "count": v} for k, v in acc.items()]
+            blocks.sort(key=lambda block: int(block["id"].split("-")[0]))
+            PRECOMPUTED_HEATMAPS[bs] = {
+                "metadata": {"block_size": bs, "max_id": max_start, "total_blocks": len(blocks)},
+                "blocks": blocks
+            }
+
 
 def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
     if not os.path.isfile(graph_path):
@@ -40,6 +83,11 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
             HEATMAP_DATA = json.load(f)
         except json.JSONDecodeError:
             raise RuntimeError(f"Heatmap file '{heatmap_path}' is corrupted.")
+
+    # Precompute heatmaps for all sizes on app startup
+    base_blocks = HEATMAP_DATA.get("blocks", [])
+    precompute_heatmaps(base_blocks)
+
     app = Flask(__name__)
 
     # ---------- shared helpers ----------
@@ -115,6 +163,8 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                 "id": node_id,
                 "description": node_data.get("description"),
                 "groups": node_data.get("groups", []),
+                "level": node_data.get("level"),
+                "file": node_data.get("file"),
                 "parents": parents,
                 "children": children
             })
@@ -249,71 +299,31 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
 
     @app.route("/api/heatmap", methods=["GET"])
     def heatmap() -> Union[Response, tuple[Response, int]]:
-        """
-        Serves precomputed heatmap; optionally re-bins by ?block_size=N.
-
-        Response:
-        {
-            "metadata": {"block_size": <int>},
-            "blocks": [{"id": "start-end" | "id", "count": <int>}, ...]
-        }
-        """
-        # 1) Read & sanitize block_size
         bs = request.args.get("block_size", type=int)
         if not bs or bs < 1:
             bs = 1
 
-        # Helper: parse the numeric *start* of a block id.
-        # Accepts "1234", "1200-1299", or "1200–1299" (en dash).
-        def parse_start(idstr: str) -> int:
-            if not idstr:
-                return 0
-            s = str(idstr).strip()
-            # split on hyphen or en dash
-            for sep in ("-", "–"):
-                if sep in s:
-                    s = s.split(sep, 1)[0]
-                    break
-            try:
-                return int(s)
-            except Exception:
-                return 0
+        if bs in PRECOMPUTED_HEATMAPS:
+            return jsonify(PRECOMPUTED_HEATMAPS[bs])
 
-        # 2) Base data presence check
-        base = HEATMAP_DATA or {}
-        base_blocks = base.get("blocks", [])
-        if not isinstance(base_blocks, list):
-            return jsonify({"error": "heatmap data unavailable"}), 503
-
-        # 3) block_size == 1  ⇒ normalize to single-ID blocks
+        # Fallback for non-precomputed block sizes
+        starts_and_counts = [(parse_start(b.get("id")), int(
+            b.get("count", 0))) for b in base_blocks]
         if bs == 1:
-            out = []
-            for b in base_blocks:
-                start = parse_start(b.get("id"))
-                out.append({"id": str(start), "count": int(b.get("count", 0))})
-            # Sort by numeric id for stable ordering
-            out.sort(key=lambda x: int(x["id"]))
-            return jsonify({"metadata": {"block_size": 1}, "blocks": out})
-
-        # 4) Re-bin for bs > 1
-        acc: dict[str, int] = {}
-        for b in base_blocks:
-            start = parse_start(b.get("id"))
-            base_bucket = (start // bs) * bs
-            key = f"{base_bucket}-{base_bucket + bs - 1}"
-            acc[key] = acc.get(key, 0) + int(b.get("count", 0))
-
-        out = [{"id": k, "count": v} for k, v in acc.items()]
-
-        # Sort by numeric start
-        def sort_key(block):
-            s = str(block["id"]).split("-")[0]
-            try:
-                return int(s)
-            except Exception:
-                return 0
-
-        out.sort(key=sort_key)
-        return jsonify({"metadata": {"block_size": bs}, "blocks": out})
+            ids = sorted(str(start) for start, _ in starts_and_counts)
+            return jsonify({"block_size": 1, "ids": ids})
+        acc = {}
+        for start, count in starts_and_counts:
+            bucket = (start // bs) * bs
+            key = f"{bucket}-{bucket + bs - 1}"
+            acc[key] = acc.get(key, 0) + count  # Use the original count!
+        blocks = [{"id": k, "count": v} for k, v in acc.items()]
+        blocks.sort(key=lambda block: int(block["id"].split("-")[0]))
+        meta = {
+            "block_size": bs,
+            "max_id": max((start for start, _ in starts_and_counts), default=0),
+            "total_blocks": len(blocks)
+        }
+        return jsonify({"metadata": meta, "blocks": blocks})
 
     return app

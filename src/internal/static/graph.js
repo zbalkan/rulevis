@@ -58,7 +58,58 @@ class DetailsPanel {
         const parentExpandBtn = details.parents && details.parents.some(p => !this.visualizer.displayedRuleIDs.has(p.id)) ? `<button class="expand-all-btn" onclick="window.visualizer.expandAllParents('${details.id}', '${(details.parents || []).map(p => p.id).join(',')}')">Expand All</button>` : '';
         const childExpandBtn = details.children && details.children.some(c => !this.visualizer.displayedRuleIDs.has(c.id)) ? `<button class="expand-all-btn" onclick="window.visualizer.expandNode('${details.id}')">Expand All</button>` : '';
         const renderList = (items) => !items || items.length === 0 ? `<p>No related rules.</p>` : `<ul>${items.map(item => `<li class="${this.visualizer.displayedRuleIDs.has(item.id) ? 'displayed' : 'not-displayed'}" onclick="window.visualizer.handleSearchById('${item.id}')"><strong>${item.relation_type}:</strong> ${item.id}</li>`).join('')}</ul>`;
-        this.content.innerHTML = `<h3>Details for Rule: ${details.id}</h3><p><strong>Description:</strong> ${details.description || 'N/A'}</p><div class="details-header"><h4>Parent Rules</h4>${parentExpandBtn}</div>${renderList(details.parents)}<div class="details-header"><h4>Child Rules</h4>${childExpandBtn}</div>${renderList(details.children)}<h4>Groups</h4>${(details.groups && details.groups.length > 0) ? `<ul>${details.groups.map(g => `<li>${g}</li>`).join('')}</ul>` : '<p>No groups assigned.</p>'}`;
+
+        // --- Logic to derive and format the new fields ---
+        const ruleLevel = parseInt(details.level, 10);
+        const generatesAlert = ruleLevel >= 3;
+        const alertClass = generatesAlert ? 'alert-true' : 'alert-false';
+
+        const levelInfo = details.level ? `
+            <div class="details-meta">
+                <strong>Level:</strong>
+                <span>${details.level}</span>
+            </div>
+        ` : '';
+
+        const alertInfo = details.level ? `
+            <div class="details-meta">
+                <strong>Alert:</strong>
+                <span class="${alertClass}">${generatesAlert}</span>
+            </div>
+        ` : '';
+        
+        const fileInfo = details.file ? `
+            <div class="details-meta-full">
+                <strong>File:</strong>
+                <span>${details.file}</span>
+            </div>
+        ` : '';
+
+        // --- Final HTML structure with the typo corrected ---
+        this.content.innerHTML = `
+            <h3>Details for Rule: ${details.id}</h3>
+            
+            <div class="info-box">
+                <div class="info-box-row">
+                    ${levelInfo}
+                    ${alertInfo}
+                </div>
+                <div class="info-box-row">
+                    ${fileInfo}
+                </div>
+            </div>
+
+            <p><strong>Description:</strong> ${details.description || 'N/A'}</p>
+            <h4>Groups</h4>
+            ${(details.groups && details.groups.length > 0) ? `<ul>${details.groups.map(g => `<li>${g}</li>`).join('')}</ul>` : '<p>No groups assigned.</p>'}
+
+            <div class="details-header"><h4>Parent Rules</h4>${parentExpandBtn}</div>
+            ${renderList(details.parents)}
+
+            <div class="details-header"><h4>Child Rules</h4>${childExpandBtn}</div>
+            
+            ${renderList(details.children)}
+        `;
     }
 }
 

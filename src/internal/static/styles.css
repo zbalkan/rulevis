@@ -412,7 +412,6 @@ button:hover {
     color: #888;
 }
 
-/* Also, update the generic list item style for consistency */
 .stats-item {
     cursor: pointer;
     transition: background-color 0.2s;
@@ -420,4 +419,60 @@ button:hover {
 
 .stats-item:hover {
     background-color: #3a4a5f;
+}
+
+.info-box {
+    display: flex;
+    flex-direction: column; /* Stack the rows vertically */
+    gap: 10px;
+    margin-bottom: 15px;
+    background-color: #222;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+.info-box-row {
+    display: flex;
+    justify-content: space-around; /* Distribute items in the row */
+    gap: 10px;
+}
+
+.details-meta {
+    flex: 1; /* Each item in the first row takes up equal space */
+    text-align: left;
+    font-size: 0.9em;
+    color: #ccc;
+}
+
+.details-meta-full {
+    flex: 1; /* The file info takes up the full width of its row */
+    text-align: left; /* Align filename to the left for readability */
+    font-size: 0.9em;
+    color: #ccc;
+}
+
+.details-meta strong,
+.details-meta-full strong {
+    color: #4e9af1;
+    margin-right: 8px;
+    font-size: 0.9em;
+    text-transform: uppercase;
+}
+
+/* The alert styles remain the same and are still correct */
+.alert-true, .alert-false {
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-family: monospace;
+}
+
+.alert-true {
+    background-color: #8B0000;
+    color: #fff;
+}
+
+.alert-false {
+    background-color: #444;
+    color: #bbb;
 }

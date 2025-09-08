@@ -56,9 +56,10 @@ class GraphGenerator:
                     self.add_edge_with_type(
                         parent_rule, rule_id, 'if_matched_group')
 
-    def parse_groups_and_rules(self, element: ET.Element, inherited_groups: list[str]) -> None:
+    def parse_groups_and_rules(self, element: ET.Element, inherited_groups: list[str], xml_file: str) -> None:
         if element.tag == 'rule':
             rule_id = element.get('id', '0')
+            rule_level = element.get('level')
             if_sid = element.findtext('if_sid', None)
             if_matched_sid = element.findtext('if_matched_sid', None)
             if_group = element.findtext('if_group', None)
@@ -73,8 +74,11 @@ class GraphGenerator:
                     f"Duplicate rule ID found: {rule_id}. Skipping this rule.")
 
             else:
-                self.G.add_node(rule_id, groups=all_groups,
-                                description=rule_description)
+                self.G.add_node(rule_id,
+                                groups=all_groups,
+                                description=rule_description,
+                                level=rule_level,
+                                file=os.path.basename(xml_file))
                 for group in all_groups:
                     self.group_membership[group].append(rule_id)
 
@@ -88,13 +92,13 @@ class GraphGenerator:
             new_inherited_groups = inherited_groups + internal_groups
 
             for child in element:
-                self.parse_groups_and_rules(child, new_inherited_groups)
+                self.parse_groups_and_rules(child, new_inherited_groups, xml_file)
 
     def extract_rule_groups(self, inherited_groups: list[str], children: list[tuple[str, Optional[str]]]) -> list[str]:
         all_groups = list(inherited_groups)
         for child in children:
             if child[0] == 'group' and child[1]:
-                all_groups.extend(child[1].split(','))
+                all_groups.extend([g for g in child[1].split(',') if g])
         return all_groups
 
     def extract_rule_description(self, attributes: list[tuple[str, Optional[str]]]) -> Optional[str]:
@@ -130,7 +134,7 @@ class GraphGenerator:
                 parsed_xml = ET.fromstring(wrapped_content)
                 root = parsed_xml
                 for child in root:
-                    self.parse_groups_and_rules(child, [])
+                    self.parse_groups_and_rules(child, [], xml_file)
             except Exception as e:
                 logging.error(f"Error parsing {xml_file}: {e}", exc_info=True)
 
