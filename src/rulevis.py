@@ -22,13 +22,13 @@ ENCODING: Final[str] = "utf-8"
 class Rulevis():
 
     def __init__(self) -> None:
-        self.graph_path: str = tempfile.TemporaryFile(delete=False).name
+        self.graph_path: str = tempfile.NamedTemporaryFile(delete=False).name
         logging.info(f"Temporary graph file created at {self.graph_path}")
 
-        self.stats_path: str = tempfile.TemporaryFile(delete=False).name
+        self.stats_path: str = tempfile.NamedTemporaryFile(delete=False).name
         logging.info(f"Temporary stats file created at {self.stats_path}")
 
-        self.heatmap_path: str = tempfile.TemporaryFile(delete=False).name
+        self.heatmap_path: str = tempfile.NamedTemporaryFile(delete=False).name
         logging.info(f"Temporary heatmap file created at {self.heatmap_path}")
 
     def __del__(self) -> None:
