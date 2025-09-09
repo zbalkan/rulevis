@@ -98,3 +98,9 @@ The project is composed of three main Python modules and a JavaScript frontend:
 2. **`analyzer.py`:** Loads the graph file and uses `networkx` to perform complex calculations (descendants, ancestors, etc.). It pre-calculates the data needed for the Statistics Panel and the Rule ID Heatmap and saves them to temporary JSON files.
 3. **`visualizer.py`:** A Flask web application that serves the frontend and provides a clean API for the visualization to fetch graph, stats, and heatmap data.
 4. **`graph.js`:** The core frontend logic. It uses **D3.js** for the force simulation and user interactions, and renders the main graph to an **HTML Canvas** for high performance. The interactive heatmap is rendered using **SVG** for its superior event handling and styling capabilities.
+
+## Notes
+
+While the documentation defines <if_level> as another condition creating a parent-child relationship, it has not been used in any built-in rules. And as a personal choicem I decided to omit that deliberately.
+
+There is another `if`, called `<if_fts>`, that is used for *first time seen* events, not creating a parent-child relationship. Theefore it is not mentioned.
