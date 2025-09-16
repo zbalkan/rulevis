@@ -60,7 +60,7 @@ RuleVis makes these invisible structures visible, turning abstract XML files int
 The tool is run from the command line. You must provide the path to the directory (or directories) containing your Wazuh rule XML files.
 
 ```shell
-python main.py --path /var/ossec/ruleset/rules,/var/ossec/etc/rules
+python src/rulevis.py --path /var/ossec/ruleset/rules,/var/ossec/etc/rules
 ```
 
 **Arguments:**
