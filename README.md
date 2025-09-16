@@ -38,7 +38,7 @@ RuleVis makes these invisible structures visible, turning abstract XML files int
 1. **Clone the repository:**
 
     ```shell
-    git clone https://github.com/your-username/rulevis.git
+    git clone https://github.com/zbalkan/rulevis.git
     cd rulevis
     ```
 
