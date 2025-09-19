@@ -513,7 +513,7 @@ class GraphVisualizer {
             const parentNode = this.nodeMap.get(nodeId);
             if (parentNode) {
                 this.detailsPanel.show(parentNode);
-                if (this.highlightedNodeId === nodeId) {
+                if (this.highlightedNodeId === nodeId && this.focusModeEnabled) {
                     this.updateFocusContext(nodeId);  // refresh focus after expansion
                     this.render();
                 }
@@ -532,7 +532,7 @@ class GraphVisualizer {
             const parentNode = this.nodeMap.get(nodeId);
             if (parentNode) {
                 this.detailsPanel.show(parentNode);
-                if (this.highlightedNodeId === nodeId) {
+                if (this.highlightedNodeId === nodeId && this.focusModeEnabled) {
                     this.updateFocusContext(nodeId);  // refresh focus after expansion
                     this.render();
                 }
