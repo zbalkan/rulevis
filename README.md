@@ -21,6 +21,7 @@ This tool is designed for security engineers, SOC analysts, and Wazuh administra
   * Cycles in the rules
 * **Rule ID Heatmap:** Visualize the entire rule ID space from 0 to 100,000+ to see which ID ranges are heavily used and which are available for custom rules.
 * **Keyboard Shortcuts:** Pause the simulation (`Space`), close panels (`Esc`), and more for an efficient workflow.
+* **Focus:** By default, when a node is highlighted, any node except for the selected node and its neighbords are dimmed. That allows better focus minimizing visual complexity.
 
 ## The Problem It Solves
 
