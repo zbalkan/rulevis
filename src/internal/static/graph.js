@@ -370,6 +370,7 @@ class GraphVisualizer {
             .theta(0.9)
             .distanceMax(1000)  // ignore charge beyond this distance
         )
+        .force("collision", d3.forceCollide().radius(d => d.__radius + 2))
         .force("center", d3.forceCenter(this.width / 2, this.height / 2));
         let lastRender = 0;
         this.simulation.on("tick", () => {
