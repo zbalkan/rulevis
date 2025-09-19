@@ -366,14 +366,21 @@ class GraphVisualizer {
         this.simulation = d3.forceSimulation()
         .force("link", d3.forceLink().id(d => d.id).distance(150))
         .force("charge", d3.forceManyBody().strength(-150))
-        .force("center", d3.forceCenter(this.width / 2, this.height / 2))
-        .on("tick", () => this.render())
+        .force("center", d3.forceCenter(this.width / 2, this.height / 2));
+        let lastRender = 0;
+        this.simulation.on("tick", () => {
+            const now = performance.now();
+            if (now - lastRender > 30) {  // about 33 fps max
+                this.render();
+                lastRender = now;
+            }
+        });
         // Slower decay means more time to stabilize before stopping.
         // The default is ~0.0228. We're making it cool down much slower.
-        .alphaDecay(0.025) 
+        this.simulation.alphaDecay(0.025);
         // Stop the simulation when energy is low, but not practically zero.
         // This prevents excessive "jitter" at the end.
-        .alphaMin(0.0001);
+        this.simulation.alphaMin(0.0001);
         this.zoom = d3.zoom().scaleExtent([0.02, 5]).on("zoom", e => { this.transform = e.transform; this.render(); });
         this.canvas.call(this.zoom);
         
