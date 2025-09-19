@@ -816,6 +816,10 @@ class GraphVisualizer {
                 this.clearHighlight();
             }
         });
+        this.canvas.on("contextmenu", e => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
         this.canvas.call(d3.drag().container(this.canvas.node()).subject(e => this.findNodeAt(e.x, e.y)).on("start", e => { if (!e.active) this.simulation.alphaTarget(0.3).restart(); e.subject.fx = e.subject.x; e.subject.fy = e.subject.y; }).on("drag", e => { e.subject.fx = e.x; e.subject.fy = e.y; }).on("end", e => { if (!e.active) this.simulation.alphaTarget(0); if (!this.simulationPausedByKey) { e.subject.fx = null; e.subject.fy = null; } }));
     }
 }
