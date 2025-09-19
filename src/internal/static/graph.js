@@ -433,8 +433,12 @@ class GraphVisualizer {
                 this.context.stroke();
             }
 
-            // Labels: skip collapsed nodes
-            if (this.focusedContextIds.size === 0 || this.focusedContextIds.has(node.id)) {
+            // Labels
+            if (
+                !this.focusModeEnabled ||                // Always show labels if focus mode is off
+                this.focusedContextIds.size === 0 ||     // Or no node is highlighted
+                this.focusedContextIds.has(node.id)      // Or this node is in the focused context
+            ) {
                 const k = this.transform.k;
                 if (k >= 1.0) {
                     this.context.fillStyle = STYLES.nodes.text;
