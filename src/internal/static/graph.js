@@ -365,15 +365,15 @@ class GraphVisualizer {
         
         this.simulation = d3.forceSimulation()
         .force("link", d3.forceLink().id(d => d.id).distance(150))
-        .force("charge", d3.forceManyBody().strength(-150)) // Increased repulsion slightly
+        .force("charge", d3.forceManyBody().strength(-150))
         .force("center", d3.forceCenter(this.width / 2, this.height / 2))
         .on("tick", () => this.render())
         // Slower decay means more time to stabilize before stopping.
         // The default is ~0.0228. We're making it cool down much slower.
-        .alphaDecay(0.05) 
+        .alphaDecay(0.025) 
         // Stop the simulation when energy is low, but not practically zero.
         // This prevents excessive "jitter" at the end.
-        .alphaMin(0.005);
+        .alphaMin(0.0001);
         this.zoom = d3.zoom().scaleExtent([0.02, 5]).on("zoom", e => { this.transform = e.transform; this.render(); });
         this.canvas.call(this.zoom);
         
@@ -677,7 +677,6 @@ class GraphVisualizer {
         this.focusedContextIds.clear(); 
         this.detailsPanel.hide();
         this.render();
-        if (!this.simulationPausedByKey) this.simulation.alpha(0.3).restart();
     }
     
     resetGraph(fullReset) {
@@ -762,7 +761,14 @@ class GraphVisualizer {
                     this.render();
                 }
             });
-        this.canvas.on("click", e => { const node = this.findNodeAt(e.offsetX, e.offsetY); if (node) this.highlightAndCenterNode(node.id); else this.clearHighlight(); });
+        this.canvas.on("click", e => { 
+            const node = this.findNodeAt(e.offsetX, e.offsetY); 
+            if (node) {
+                this.highlightAndCenterNode(node.id); 
+            } else if (this.highlightedNodeId || this.highlightedCycleIds.size > 0) {
+                this.clearHighlight();
+            }
+        });
         this.canvas.call(d3.drag().container(this.canvas.node()).subject(e => this.findNodeAt(e.x, e.y)).on("start", e => { if (!e.active) this.simulation.alphaTarget(0.3).restart(); e.subject.fx = e.subject.x; e.subject.fy = e.subject.y; }).on("drag", e => { e.subject.fx = e.x; e.subject.fy = e.y; }).on("end", e => { if (!e.active) this.simulation.alphaTarget(0); if (!this.simulationPausedByKey) { e.subject.fx = null; e.subject.fy = null; } }));
     }
 }
