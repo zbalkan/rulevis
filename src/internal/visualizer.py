@@ -204,6 +204,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                 <button id="showStatsBtn">Show Stats</button>
                 <button id="resetZoom">Reset Zoom</button>
                 <button id="resetGraph">Reset Graph</button>
+                <button id="toggleFocusBtn">Toggle focus off</button>
                 <input type="text" id="searchBox" placeholder="Search Rule ID">
                 <button id="searchBtn">Search</button>
             </div>

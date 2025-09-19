@@ -3,8 +3,21 @@
 // =================================================================================
 
 const STYLES = {
-    nodes: { default: 'grey', expandable: 'steelblue', highlight: 'yellow', text: '#fff' },
-    edges: { if_sid: 'blue', if_matched_sid: 'green', if_group: 'red', if_matched_group: 'purple', no_parent: '#6b6b6b', unknown: '#999' },
+    nodes: { 
+        default: 'grey', 
+        expandable: 'steelblue', 
+        highlight: 'yellow', 
+        text: '#fff',
+        collapsed: '#333'
+    },
+    edges: { 
+        if_sid: 'blue', 
+        if_matched_sid: 'green', 
+        if_group: 'red', 
+        if_matched_group: 'purple', 
+        no_parent: '#6b6b6b', 
+        unknown: '#999' 
+    },
     legend: { text: '#eee' }
 };
 
@@ -343,7 +356,8 @@ class GraphVisualizer {
         this.devicePixelRatio = window.devicePixelRatio || 1;
         this.canvas.attr('width', this.width * this.devicePixelRatio).attr('height', this.height * this.devicePixelRatio);
         this.context.scale(this.devicePixelRatio, this.devicePixelRatio);
-        
+        this.focusModeEnabled = true;
+        this.focusedContextIds = new Set();
         this.notificationManager = new NotificationManager();
         this.detailsPanel = new DetailsPanel(this);
         this.statsPanel = new StatsPanel(this);
@@ -386,24 +400,54 @@ class GraphVisualizer {
         const k = this.transform.k;
         this.nodes.forEach(node => {
             this.context.beginPath();
-            this.context.arc(node.x, node.y, 10, 0, 2 * Math.PI);
-            this.context.fillStyle = (node.expandable && !node.is_expanded) ? STYLES.nodes.expandable : STYLES.nodes.default;
+
+            let radius = 10;
+            let fillStyle;
+
+            if (this.focusModeEnabled && this.focusedContextIds.size > 0) {
+                if (this.focusedContextIds.has(node.id)) {
+                    // Focused node or neighbor
+                    fillStyle = (node.expandable && !node.is_expanded)
+                        ? STYLES.nodes.expandable
+                        : STYLES.nodes.default;
+                } else {
+                    // Collapsed node
+                    radius = 5;
+                    fillStyle = STYLES.nodes.collapsed;
+                }
+            } else {
+                // Normal rendering
+                fillStyle = (node.expandable && !node.is_expanded)
+                    ? STYLES.nodes.expandable
+                    : STYLES.nodes.default;
+            }
+
+            this.context.arc(node.x, node.y, radius, 0, 2 * Math.PI);
+            this.context.fillStyle = fillStyle;
             this.context.fill();
-            if (node.id === this.highlightedNodeId || this.highlightedCycleIds.has(node.id)) {
+
+            // Highlighted stroke
+            if (node.id === this.highlightedNodeId) {
                 this.context.strokeStyle = STYLES.nodes.highlight;
                 this.context.lineWidth = 3 / this.transform.k;
                 this.context.stroke();
             }
-            if (k >= 1.0) {
-                this.context.fillStyle = STYLES.nodes.text;
-                this.context.font = `${12 / k}px sans-serif`;
-                this.context.fillText(node.id, node.x + 15, node.y + 4);
-            } else if (k >= 0.4) {
-                this.context.fillStyle = STYLES.nodes.text;
-                this.context.font = `10px sans-serif`;
-                this.context.fillText(node.id, node.x + 15, node.y + 4);
+
+            // Labels: skip collapsed nodes
+            if (this.focusedContextIds.size === 0 || this.focusedContextIds.has(node.id)) {
+                const k = this.transform.k;
+                if (k >= 1.0) {
+                    this.context.fillStyle = STYLES.nodes.text;
+                    this.context.font = `${12 / k}px sans-serif`;
+                    this.context.fillText(node.id, node.x + 15, node.y + 4);
+                } else if (k >= 0.4) {
+                    this.context.fillStyle = STYLES.nodes.text;
+                    this.context.font = `10px sans-serif`;
+                    this.context.fillText(node.id, node.x + 15, node.y + 4);
+                }
             }
         });
+
         this.context.restore();
         this.buildLegend();
         this.drawCounter();
@@ -463,7 +507,13 @@ class GraphVisualizer {
         fetchJSON(`/api/nodes?id=${nodeId}&neighbors=children&displayed=${this.getDisplayedIds()}`).then(data => {
             this.updateGraph(data.nodes, data.edges);
             const parentNode = this.nodeMap.get(nodeId);
-            if (parentNode) this.detailsPanel.show(parentNode);
+            if (parentNode) {
+                this.detailsPanel.show(parentNode);
+                if (this.highlightedNodeId === nodeId) {
+                    this.updateFocusContext(nodeId);  // refresh focus after expansion
+                    this.render();
+                }
+            }
         });
     }
     
@@ -475,8 +525,14 @@ class GraphVisualizer {
         }
         fetchJSON(`/api/nodes?ids=${parentIds.join(',')}&displayed=${this.getDisplayedIds()}`).then(data => {
             this.updateGraph(data.nodes, data.edges);
-            const sourceNode = this.nodeMap.get(nodeId);
-            if (sourceNode) this.detailsPanel.show(sourceNode);
+            const parentNode = this.nodeMap.get(nodeId);
+            if (parentNode) {
+                this.detailsPanel.show(parentNode);
+                if (this.highlightedNodeId === nodeId) {
+                    this.updateFocusContext(nodeId);  // refresh focus after expansion
+                    this.render();
+                }
+            }
         });
     }
     
@@ -532,11 +588,19 @@ class GraphVisualizer {
     findNodeAt(x, y) {
         const [ix, iy] = this.transform.invert([x, y]);
         const radiusSq = 100 / (this.transform.k * this.transform.k);
+
         for (let i = this.nodes.length - 1; i >= 0; i--) {
             const node = this.nodes[i];
             const dx = ix - node.x;
             const dy = iy - node.y;
-            if (dx * dx + dy * dy < radiusSq) return node;
+
+            if (dx * dx + dy * dy < radiusSq) {
+                // Skip collapsed nodes
+                if (this.focusedContextIds.size > 0 && !this.focusedContextIds.has(node.id)) {
+                    continue;
+                }
+                return node;
+            }
         }
         return null;
     }
@@ -565,6 +629,7 @@ class GraphVisualizer {
         if (!node) return;
         this.highlightedNodeId = nodeId;
         this.detailsPanel.show(node);
+        this.updateFocusContext(nodeId);
         this.render();
         if (node.x !== undefined && node.y !== undefined) {
             node.fx = node.x;
@@ -573,6 +638,33 @@ class GraphVisualizer {
             this.canvas.transition().duration(750).call(this.zoom.transform, newTransform);
         }
     }
+
+    updateFocusContext(nodeId) {
+        const node = this.nodeMap.get(nodeId);
+        if (!node) {
+            this.focusedContextIds.clear();
+            return;
+        }
+
+        const neighbors = new Set([nodeId]);
+
+        // Children in graph
+        for (let childId of (node.children_ids || [])) {
+            if (this.displayedRuleIDs.has(childId)) {
+                neighbors.add(childId);
+            }
+        }
+
+        // Parents in graph
+        for (let link of this.links) {
+            if (link.target.id === nodeId) {
+                neighbors.add(link.source.id);
+            }
+        }
+
+        this.focusedContextIds = neighbors;
+    }
+
     
     clearHighlight() {
         if (this.highlightedNodeId && this.nodeMap.has(this.highlightedNodeId)) {
@@ -582,6 +674,7 @@ class GraphVisualizer {
         }
         this.highlightedNodeId = null;
         this.highlightedCycleIds.clear();
+        this.focusedContextIds.clear(); 
         this.detailsPanel.hide();
         this.render();
         if (!this.simulationPausedByKey) this.simulation.alpha(0.3).restart();
@@ -653,6 +746,22 @@ class GraphVisualizer {
                 }
             }
         });
+        document.getElementById("toggleFocusBtn")
+            .addEventListener("click", () => {
+                this.focusModeEnabled = !this.focusModeEnabled;
+                const btn = document.getElementById("toggleFocusBtn");
+                btn.textContent = this.focusModeEnabled ? "Toggle focus off" : "Toggle focus on";
+
+                if (!this.focusModeEnabled) {
+                    // Disable focus mode immediately
+                    this.focusedContextIds.clear();
+                    this.render();
+                } else if (this.highlightedNodeId) {
+                    // Reapply focus if a node is currently highlighted
+                    this.updateFocusContext(this.highlightedNodeId);
+                    this.render();
+                }
+            });
         this.canvas.on("click", e => { const node = this.findNodeAt(e.offsetX, e.offsetY); if (node) this.highlightAndCenterNode(node.id); else this.clearHighlight(); });
         this.canvas.call(d3.drag().container(this.canvas.node()).subject(e => this.findNodeAt(e.x, e.y)).on("start", e => { if (!e.active) this.simulation.alphaTarget(0.3).restart(); e.subject.fx = e.subject.x; e.subject.fy = e.subject.y; }).on("drag", e => { e.subject.fx = e.x; e.subject.fy = e.y; }).on("end", e => { if (!e.active) this.simulation.alphaTarget(0); if (!this.simulationPausedByKey) { e.subject.fx = null; e.subject.fy = null; } }));
     }
