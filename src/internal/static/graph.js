@@ -378,7 +378,7 @@ class GraphVisualizer {
         this.canvas.call(this.zoom);
         
         this.initializeEventListeners();
-        this.resetGraph(true);
+        this.resetGraph();
     }
     
     render() {
@@ -387,70 +387,84 @@ class GraphVisualizer {
         this.context.translate(this.transform.x, this.transform.y);
         this.context.scale(this.transform.k, this.transform.k);
         this.context.lineWidth = 1.5 / this.transform.k;
-        this.links.forEach(link => {
-            const edgeColor = STYLES.edges[link.relation_type] || STYLES.edges.unknown;
-            this.context.beginPath();
-            this.context.moveTo(link.source.x, link.source.y);
-            this.context.lineTo(link.target.x, link.target.y);
-            this.context.strokeStyle = edgeColor;
-            this.context.stroke();
-            this.context.fillStyle = edgeColor;
-            this.drawArrowhead(link.source, link.target);
-        });
-        const k = this.transform.k;
-        this.nodes.forEach(node => {
-            this.context.beginPath();
 
+        if (this.linkGroups) {
+            for (const [color, links] of Object.entries(this.linkGroups)) {
+                this.context.beginPath();
+                for (let link of links) {
+                    this.context.moveTo(link.source.x, link.source.y);
+                    this.context.lineTo(link.target.x, link.target.y);
+                }
+                this.context.strokeStyle = color;
+                this.context.stroke();
+            }
+        }
+        if (this.transform.k > 0.6) {
+            for (let link of this.links) {
+                const edgeColor = STYLES.edges[link.relation_type] || STYLES.edges.unknown;
+                this.context.fillStyle = edgeColor;
+                this.drawArrowhead(link.source, link.target);
+            }
+        }
+
+        const k = this.transform.k;
+        const nodeGroups = { default: [], expandable: [], collapsed: [] };
+
+        for (let node of this.nodes) {
+            let styleKey = "default";
             let radius = 10;
-            let fillStyle;
 
             if (this.focusModeEnabled && this.focusedContextIds.size > 0) {
                 if (this.focusedContextIds.has(node.id)) {
-                    // Focused node or neighbor
-                    fillStyle = (node.expandable && !node.is_expanded)
-                        ? STYLES.nodes.expandable
-                        : STYLES.nodes.default;
+                    styleKey = node.expandable && !node.is_expanded ? "expandable" : "default";
                 } else {
-                    // Collapsed node
+                    styleKey = "collapsed";
                     radius = 5;
-                    fillStyle = STYLES.nodes.collapsed;
                 }
             } else {
-                // Normal rendering
-                fillStyle = (node.expandable && !node.is_expanded)
-                    ? STYLES.nodes.expandable
-                    : STYLES.nodes.default;
+                styleKey = node.expandable && !node.is_expanded ? "expandable" : "default";
             }
 
-            this.context.arc(node.x, node.y, radius, 0, 2 * Math.PI);
-            this.context.fillStyle = fillStyle;
-            this.context.fill();
+            node.__drawStyle = styleKey;
+            node.__radius = radius;
+            nodeGroups[styleKey].push(node);
+        }
 
-            // Highlighted stroke
-            if (node.id === this.highlightedNodeId) {
+        for (const [styleKey, nodes] of Object.entries(nodeGroups)) {
+            if (nodes.length === 0) continue;
+            this.context.beginPath();
+            for (let node of nodes) {
+                this.context.moveTo(node.x + node.__radius, node.y);
+                this.context.arc(node.x, node.y, node.__radius, 0, 2 * Math.PI);
+            }
+            this.context.fillStyle = STYLES.nodes[styleKey];
+            this.context.fill();
+        }
+
+        if (this.highlightedNodeId) {
+            const node = this.nodeMap.get(this.highlightedNodeId);
+            if (node) {
+                this.context.beginPath();
+                this.context.arc(node.x, node.y, node.__radius || 10, 0, 2 * Math.PI);
                 this.context.strokeStyle = STYLES.nodes.highlight;
                 this.context.lineWidth = 3 / this.transform.k;
                 this.context.stroke();
             }
+        }
 
-            // Labels
-            if (
-                !this.focusModeEnabled ||                // Always show labels if focus mode is off
-                this.focusedContextIds.size === 0 ||     // Or no node is highlighted
-                this.focusedContextIds.has(node.id)      // Or this node is in the focused context
-            ) {
-                const k = this.transform.k;
-                if (k >= 1.0) {
+        if (k >= 0.4) {
+            for (let node of this.nodes) {
+                if (
+                    !this.focusModeEnabled ||
+                    this.focusedContextIds.size === 0 ||
+                    this.focusedContextIds.has(node.id)
+                ) {
                     this.context.fillStyle = STYLES.nodes.text;
-                    this.context.font = `${12 / k}px sans-serif`;
-                    this.context.fillText(node.id, node.x + 15, node.y + 4);
-                } else if (k >= 0.4) {
-                    this.context.fillStyle = STYLES.nodes.text;
-                    this.context.font = `10px sans-serif`;
+                    this.context.font = `${(k >= 1.0 ? 12 / k : 10)}px sans-serif`;
                     this.context.fillText(node.id, node.x + 15, node.y + 4);
                 }
             }
-        });
+        }
 
         this.context.restore();
         this.buildLegend();
@@ -469,11 +483,22 @@ class GraphVisualizer {
         });
         this.nodes = Array.from(this.nodeMap.values());
         const linkSet = new Set(this.links.map(l => `${l.source.id}-${l.target.id}`));
+        if (!this.linkGroups) this.linkGroups = {};
         (newLinksData || []).forEach(newLink => {
             const linkId = `${newLink.source}-${newLink.target}`;
             if (!linkSet.has(linkId) && this.nodeMap.has(newLink.source) && this.nodeMap.has(newLink.target)) {
-                this.links.push({ ...newLink, source: this.nodeMap.get(newLink.source), target: this.nodeMap.get(newLink.target) });
+                const linkObj = { 
+                    ...newLink, 
+                    source: this.nodeMap.get(newLink.source), 
+                    target: this.nodeMap.get(newLink.target) 
+                };
+                this.links.push(linkObj);
                 linkSet.add(linkId);
+
+                // Group link by color for batched rendering
+                const color = STYLES.edges[newLink.relation_type] || STYLES.edges.unknown;
+                if (!this.linkGroups[color]) this.linkGroups[color] = [];
+                this.linkGroups[color].push(linkObj);
             }
         });
         if (newIds.size > 0) {
@@ -494,7 +519,7 @@ class GraphVisualizer {
         this.simulation.force("link").links(this.links);
         this.simulation.alpha(1).restart();
     }
-    
+
     linkUpExistingNodes() {
         fetchJSON('/api/edges', {
             method: 'POST',
@@ -683,19 +708,30 @@ class GraphVisualizer {
         this.render();
     }
     
-    resetGraph(fullReset) {
-        if (fullReset) {
-            this.nodes = [];
-            this.links = [];
-            this.nodeMap.clear();
-            this.displayedRuleIDs.clear();
-        }
+    resetGraph() {
+        this.nodes = [];
+        this.links = [];
+        this.nodeMap.clear();
+        this.displayedRuleIDs.clear();
+        this.linkGroups = {};
+        this.context.save();
+        this.context.clearRect(
+            0,
+            0,
+            this.width * this.devicePixelRatio,
+            this.height * this.devicePixelRatio
+        );
+        this.context.restore();
+
         fetchJSON("/api/nodes?mode=root").then(data => {
             this.updateGraph(data.nodes, data.edges);
-            this.canvas.transition().duration(750).call(this.zoom.transform, d3.zoomIdentity);
+            this.canvas
+                .transition()
+                .duration(750)
+                .call(this.zoom.transform, d3.zoomIdentity);
         });
     }
-    
+
     getDisplayedIds() {
         return Array.from(this.displayedRuleIDs).join(",");
     }
@@ -727,7 +763,7 @@ class GraphVisualizer {
     
     initializeEventListeners() {
         document.getElementById("resetZoom").addEventListener("click", () => this.handleSearchById('0'));
-        document.getElementById("resetGraph").addEventListener("click", () => this.resetGraph(true));
+        document.getElementById("resetGraph").addEventListener("click", () => this.resetGraph());
         document.getElementById("searchBtn").addEventListener("click", () => this.handleSearch());
         document.getElementById("searchBox").addEventListener("keyup", e => { if (e.key === "Enter") this.handleSearch(); });
         document.getElementById("showStatsBtn").addEventListener("click", () => this.statsPanel.show());
