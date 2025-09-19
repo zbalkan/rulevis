@@ -368,25 +368,29 @@ class GraphVisualizer {
         .force("charge", d3.forceManyBody()
             .strength(-150)
             .theta(0.9)
-            .distanceMax(1000)  // ignore charge beyond this distance
+            .distanceMax(1500)  // ignore charge beyond this distance
         )
-        .force("collision", d3.forceCollide().radius(d => d.__radius + 2))
+        .force("collision", d3.forceCollide().radius(d => d.__radius + 5))
         .force("center", d3.forceCenter(this.width / 2, this.height / 2));
-        let lastRender = 0;
         this.simulation.on("tick", () => {
-            const now = performance.now();
-            if (now - lastRender > 30) {  // about 33 fps max
-                this.render();
-                lastRender = now;
-            }
+            this.needsRender = true;
         });
+
+        const renderLoop = () => {
+            if (this.needsRender) {
+                this.render();
+                this.needsRender = false;
+            }
+            requestAnimationFrame(renderLoop);
+        };
+        requestAnimationFrame(renderLoop);
         // Slower decay means more time to stabilize before stopping.
         // The default is ~0.0228. We're making it cool down much slower.
         this.simulation.alphaDecay(0.025);
         // Stop the simulation when energy is low, but not practically zero.
         // This prevents excessive "jitter" at the end.
         this.simulation.alphaMin(0.0001);
-        this.simulation.velocityDecay(0.6);
+        this.simulation.velocityDecay(0.8);
         this.zoom = d3.zoom().scaleExtent([0.02, 5]).on("zoom", e => { this.transform = e.transform; this.render(); });
         this.canvas.call(this.zoom);
         
