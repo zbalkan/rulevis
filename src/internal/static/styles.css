@@ -111,6 +111,8 @@ button {
     cursor: pointer;
     font-family: inherit;
     font-size: 14px;
+    min-width: 130px;
+    text-align: center;
 }
 
 button:hover {
@@ -185,6 +187,8 @@ button:hover {
     cursor: pointer;
     padding: 0;
     line-height: 1;
+    min-width: auto;   /* override the global min-width */
+    width: auto;       /* ensure it only fits its content */
 }
 
 .panel-close-btn:hover {
