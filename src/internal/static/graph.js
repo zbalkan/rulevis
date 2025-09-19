@@ -788,8 +788,8 @@ async function fetchJSON(url, options = {}) {
         }
         return await response.json();
     } catch (error) {
-        // Only show the generic "Server not reachable" message for network errors, not for HTTP errors we already handled.
-        if (window.visualizer && !error.message.startsWith('Error:')) {
+        // Only show generic message for true network errors (e.g., server down, DNS fail)
+        if (window.visualizer && error instanceof TypeError) {
             window.visualizer.notificationManager.show("Server not reachable. Please check connection.");
         }
         throw error;
