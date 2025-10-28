@@ -4,7 +4,7 @@ RuleVis is a powerful analysis tool that transforms your Wazuh ruleset into a dy
 
 This tool is designed for security engineers, SOC analysts, and Wazuh administrators who need to understand, maintain, and develop complex custom rulesets.
 
-![General View of RuleVis](./assets/general-view.gif?raw=true)
+![General View of RuleVis](https://github.com/zbalkan/rulevis/raw/master/assets/general-view.gif)
 
 ## Features
 
@@ -36,6 +36,16 @@ RuleVis makes these invisible structures visible, turning abstract XML files int
 
 ## Installation
 
+### Using pipx (recommended)
+
+`pipx install rulevis`
+
+### Using pipx (for testing)
+
+`pipx install rulevis`
+
+### Using source
+
 1. **Clone the repository:**
 
     ```shell
@@ -47,7 +57,14 @@ RuleVis makes these invisible structures visible, turning abstract XML files int
 
     ```shell
     python -m venv .venv
-    source .venv/bin/activate  # On Windows, use `.venv\Scripts\activate`
+    source .venv/bin/activate
+    ```
+
+    Or for Windows
+
+    ```shell
+    python -m venv .venv
+    source .venv\Scripts\activate.ps1
     ```
 
 3. **Install dependencies:**
@@ -83,13 +100,13 @@ Once executed, the script will:
 
 Quickly identify the most important and complex rules in your entire ruleset. Click on any rule in the list to instantly navigate to it in the main graph.
 
-![Statistics Panel](./assets/stats-panel.gif?raw=true)
+![Statistics Panel](https://github.com/zbalkan/rulevis/raw/master/assets/stats-panel.gif)
 
 ### Rule ID Heatmap
 
 Get a bird's-eye view of your rule ID landscape. Dark gray blocks are unused and available for your custom rules, while brighter red blocks indicate heavily populated ranges. This is invaluable for planning and organizing a large custom ruleset.
 
-![Heatmap View](./assets/heatmap-view.gif?raw=true)
+![Heatmap View](https://github.com/zbalkan/rulevis/raw/master/assets/heatmap-view.gif)
 
 ## Technical Overview
 
