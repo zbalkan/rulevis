@@ -10,7 +10,7 @@ class Analyzer:
     """
     Analyzes a graph from a pickle file and calculates key statistics.
     """
-    def __init__(self, graph_path: str):
+    def __init__(self, graph_path: str) -> None:
         """
         Initializes the Analyzer with the path to the graph file.
 

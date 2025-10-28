@@ -44,8 +44,7 @@ class CustomFileHandler(logging.FileHandler):
         record.msg = ANSI_ESCAPE_RE.sub('', str(record.msg))
 
         # Rename source
-        if record.name == 'root':
-            record.name = APP_NAME
+        record.name = APP_NAME
 
         super().emit(record)
 
@@ -170,7 +169,7 @@ def _get_log_path() -> str:
             log_dir = os.path.expanduser(f"~/.local/share/{APP_NAME}/logs")
 
     os.makedirs(log_dir, exist_ok=True)
-    return os.path.join(log_dir, f"{APP_NAME}.log")
+    return os.path.abspath(os.path.join(log_dir, f"{APP_NAME}.log"))
 
 
 if __name__ == "__main__":

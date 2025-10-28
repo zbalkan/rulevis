@@ -23,7 +23,8 @@ class GraphGenerator:
             for root, _, files in os.walk(path):
                 for file in files:
                     if file.lower().endswith('.xml'):
-                        xml_files.append(os.path.join(root, file))
+                        abs = os.path.abspath(os.path.join(root, file))
+                        xml_files.append(abs)
 
         print(f'Found {len(xml_files)} XML files in the given paths')
         logging.info(f'Found {len(xml_files)} XML files in the given paths')
