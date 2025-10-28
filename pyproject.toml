@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rulevis"
-version = "1.0.3"
+version = "1.0.0"
 description = "Interactive Wazuh Rule Graph Explorer"
 readme = "README.md"
 requires-python = ">=3.9"
