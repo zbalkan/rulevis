@@ -116,9 +116,34 @@ def main() -> None:
     rulevis.run()
 
 
+def _get_log_path() -> str:
+    """
+    Return a per-user log file path appropriate for Windows, Linux, and macOS.
+    Uses only os and sys modules.
+    """
+    # Determine base OS type
+    if os.name == "nt":  # Windows
+        base_dir = os.getenv(
+            "LOCALAPPDATA", os.path.expanduser("~\\AppData\\Local"))
+        log_dir = os.path.join(base_dir, APP_NAME, "Logs")
+
+    elif sys.platform == "darwin":  # macOS
+        log_dir = os.path.expanduser(f"~/Library/Logs/{APP_NAME}")
+
+    else:  # Linux / other Unix-like
+        xdg_state_home = os.getenv(
+            "XDG_STATE_HOME", os.path.expanduser("~/.local/state"))
+        log_dir = os.path.join(xdg_state_home, APP_NAME)
+        if not os.access(os.path.dirname(log_dir), os.W_OK):
+            log_dir = os.path.expanduser(f"~/.local/share/{APP_NAME}/logs")
+
+    os.makedirs(log_dir, exist_ok=True)
+    return os.path.join(log_dir, f"{APP_NAME}.log")
+
+
 if __name__ == "__main__":
     try:
-        logging.basicConfig(filename=os.path.join(f'./{APP_NAME}.log'),
+        logging.basicConfig(filename=_get_log_path(),
                             encoding=ENCODING,
                             format='%(asctime)s:%(name)s:%(levelname)s:%(message)s',
                             datefmt="%Y-%m-%dT%H:%M:%S%z",

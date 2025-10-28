@@ -100,6 +100,24 @@ The project is composed of three main Python modules and a JavaScript frontend:
 3. **`visualizer.py`:** A Flask web application that serves the frontend and provides a clean API for the visualization to fetch graph, stats, and heatmap data.
 4. **`graph.js`:** The core frontend logic. It uses **D3.js** for the force simulation and user interactions, and renders the main graph to an **HTML Canvas** for high performance. The interactive heatmap is rendered using **SVG** for its superior event handling and styling capabilities.
 
+Here’s a **ready-to-paste README subsection** that explains `rulevis` logging clearly and professionally for your users. It assumes the per-user setup you’ve implemented.
+
+---
+
+## Logging
+
+`rulevis` automatically writes diagnostic and operational logs to a user-specific location. Logs are plain text encoded in UTF-8 and include timestamps, module names, and severity levels. The application creates its log directory if it does not exist.
+
+| Platform        | Log file location                                                                           | Example path                                             |
+| --------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Windows     | `%LocalAppData%\rulevis\Logs\rulevis.log`                                                   | `C:\Users\<user>\AppData\Local\rulevis\Logs\rulevis.log` |
+| macOS       | `~/Library/Logs/rulevis/rulevis.log`                                                        | `/Users/<user>/Library/Logs/rulevis/rulevis.log`         |
+| Linux / BSD | `$XDG_STATE_HOME/rulevis/rulevis.log` or fallback `~/.local/share/rulevis/logs/rulevis.log` | `/home/<user>/.local/state/rulevis/rulevis.log`          |
+
+`rulevis` follows the [XDG Base Directory specification](https://specifications.freedesktop.org/basedir-spec/latest/) on Unix-like systems and Windows conventions under `%LocalAppData%`.
+
+The log file records informational messages, warnings, and errors emitted during execution. You can safely delete it; a new one will be created automatically on the next run.
+
 ## Notes
 
 While the documentation defines <if_level> as another condition creating a parent-child relationship, it has not been used in any built-in rules. And as a personal choicem I decided to omit that deliberately.
