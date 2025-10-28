@@ -30,7 +30,6 @@ class GraphGenerator:
                         abs = os.path.abspath(os.path.join(root, file))
                         xml_files.append(abs)
 
-        print(f'Found {len(xml_files)} XML files in the given paths')
         logging.info(f'Found {len(xml_files)} XML files in the given paths')
         logging.info('Processing all files...')
         return xml_files
@@ -159,17 +158,17 @@ class GraphGenerator:
 
         # Pre-calculate and store all children for every node.
         # This is crucial for the frontend to know if a node is fully expanded.
-        print("Pre-calculating child relationships...")
+        logging.info("Pre-calculating child relationships...")
         for node_id in list(self.G.nodes):
             # G.successors(node_id) returns an iterator of all direct children
             children_ids = list(self.G.successors(node_id))
             # Store this list as a new attribute on the node itself.
             self.G.nodes[node_id]['children_ids'] = children_ids
-        print("Child relationship calculation complete.")
+        logging.info("Child relationship calculation complete.")
 
-        print("Total nodes:", self.G.number_of_nodes())
-        print("First-level children (connected to root):",
-              len(list(self.G.successors("0"))))
+        logging.info(f"Total nodes: {self.G.number_of_nodes()}")
+        logging.info(
+            f"First-level children (connected to root): {len(list(self.G.successors("0")))}")
 
     def save_graph(self) -> None:
         try:

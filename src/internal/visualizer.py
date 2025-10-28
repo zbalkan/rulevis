@@ -1,6 +1,7 @@
 import json
 import os
 import pickle
+import sys
 from typing import Any, Union
 
 from flask import Flask, jsonify, render_template_string, request
@@ -88,6 +89,8 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
     base_blocks = HEATMAP_DATA.get("blocks", [])
     precompute_heatmaps(base_blocks)
 
+    cli = sys.modules['flask.cli']
+    cli.show_server_banner = lambda *x: None  # type: ignore
     app = Flask(__name__)
 
     # ---------- shared helpers ----------

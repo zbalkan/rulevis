@@ -40,12 +40,8 @@ class CustomFileHandler(logging.FileHandler):
     """FileHandler that strips all escape sequences and representations."""
 
     def emit(self, record) -> None:
-        # Escape ANSI Color Sequences
-        record.msg = ANSI_ESCAPE_RE.sub('', str(record.msg))
-
-        # Rename source
-        record.name = APP_NAME
-
+        record.msg = ANSI_ESCAPE_RE.sub('', str(record.msg))  # Escape ANSI Color Sequences
+        record.name = APP_NAME  # Rename source
         super().emit(record)
 
 
@@ -98,7 +94,6 @@ class Rulevis():
         for path in paths:
             if not os.path:
                 logging.error(f"Invalid directory path: {path}", exc_info=True)
-                print(f"Error: Invalid directory path: {path}")
                 sys.exit(1)
 
     def __generate_graph(self) -> None:
@@ -118,7 +113,7 @@ class Rulevis():
         app = create_app(self.graph_path, self.stats_path, self.heatmap_path)
         logging.info("Starting Flask app...")
         Timer(1, self.__open_browser).start()
-        app.run(debug=True, use_reloader=False)
+        app.run(debug=False, use_reloader=False)
 
     def __open_browser(self, ) -> None:
         new_url = 'http://localhost:5000/'
@@ -179,7 +174,9 @@ if __name__ == "__main__":
                             format='%(asctime)s:%(name)s:%(levelname)s:%(message)s',
                             datefmt="%Y-%m-%dT%H:%M:%S%z",
                             level=logging.INFO)
-
+        # Get the loggers used by Flask and prevent them from propagating to the root logger
+        wl = logging.getLogger('werkzeug')
+        wl.disabled = True
         excepthook = logging.error
         logging.info('Starting')
         main()
