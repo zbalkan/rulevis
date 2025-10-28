@@ -44,10 +44,13 @@ class Analyzer:
 
         top_5_direct_descendants = sorted(out_degrees, key=out_degrees.get, reverse=True)[:5]
         indirect_descendants_counts = {n: len(descendants(self.G, n)) for n in real_nodes}
-        top_5_indirect_descendants = sorted(indirect_descendants_counts, key=indirect_descendants_counts.get, reverse=True)[:5]
-        top_5_direct_ancestors = sorted(in_degrees, key=in_degrees.get, reverse=True)[:5]
+        top_5_indirect_descendants = sorted(indirect_descendants_counts,
+                                            key=indirect_descendants_counts.get, reverse=True)[:5]
+        top_5_direct_ancestors = sorted(in_degrees,
+                                        key=in_degrees.get, reverse=True)[:5]
         indirect_ancestors_counts = {n: len(ancestors(self.G, n)) for n in real_nodes}
-        top_5_indirect_ancestors = sorted(indirect_ancestors_counts, key=indirect_ancestors_counts.get, reverse=True)[:5]
+        top_5_indirect_ancestors = sorted(indirect_ancestors_counts,
+                                          key=indirect_ancestors_counts.get, reverse=True)[:5]
 
         isolated_rules = [
             n for n in real_nodes
@@ -56,7 +59,7 @@ class Analyzer:
 
         # 1. Find all nodes with self-loops first. This is our definitive list.
         logging.info("Detecting self-loops (e.g., A -> A)...")
-        self_loop_nodes = set(nodes_with_selfloops(self.G)) # Use a set for efficient lookup
+        self_loop_nodes = set(nodes_with_selfloops(self.G))  # Use a set for efficient lookup
         logging.info(f"Found {len(self_loop_nodes)} nodes with self-loops: {self_loop_nodes}")
 
         # 2. Find all other simple cycles.
@@ -80,12 +83,17 @@ class Analyzer:
                 cycle.append(cycle[0])
 
         stats = {
-            "top_direct_descendants": [{"id": n, "count": out_degrees[n]} for n in top_5_direct_descendants],
-            "top_indirect_descendants": [{"id": n, "count": indirect_descendants_counts[n]} for n in top_5_indirect_descendants],
+            "top_direct_descendants": [{"id": n, "count": out_degrees[n]}
+                                       for n in top_5_direct_descendants],
+            "top_indirect_descendants": [{"id": n, "count": indirect_descendants_counts[n]}
+                                         for n in top_5_indirect_descendants],
             "top_direct_ancestors": [{"id": n, "count": in_degrees[n]} for n in top_5_direct_ancestors],
-            "top_indirect_ancestors": [{"id": n, "count": indirect_ancestors_counts[n]} for n in top_5_indirect_ancestors],
-            "isolated_rules": [{"id": n} for n in isolated_rules],
-            "self_loops": [{"id": n} for n in self_loop_nodes],
+            "top_indirect_ancestors": [{"id": n, "count": indirect_ancestors_counts[n]}
+                                       for n in top_5_indirect_ancestors],
+            "isolated_rules": [{"id": n}
+                               for n in isolated_rules],
+            "self_loops": [{"id": n}
+                           for n in self_loop_nodes],
             "cycles": multi_node_cycles
         }
 

@@ -7,8 +7,8 @@ from flask import Flask, jsonify, render_template_string, request
 from flask.wrappers import Response
 from networkx import MultiDiGraph
 
-PRECOMPUTED_BLOCK_SIZES = [1, 10, 50, 100, 250, 500]
-PRECOMPUTED_HEATMAPS = {}
+PRECOMPUTED_BLOCK_SIZES: list[int] = [1, 10, 50, 100, 250, 500]
+PRECOMPUTED_HEATMAPS: dict[int, Any] = {}
 
 
 def parse_start(idstr: str) -> int:
@@ -25,9 +25,9 @@ def parse_start(idstr: str) -> int:
         return 0
 
 
-def precompute_heatmaps(base_blocks):
+def precompute_heatmaps(base_blocks: list[dict[str, Any]]) -> None:
     # Use both start and count!
-    starts_and_counts = [(parse_start(b.get("id")), int(
+    starts_and_counts = [(parse_start(b.get("id")), int(  # type: ignore
         b.get("count", 0))) for b in base_blocks]
     max_start = max((start for start, _ in starts_and_counts), default=0)
     for bs in PRECOMPUTED_BLOCK_SIZES:
@@ -38,7 +38,7 @@ def precompute_heatmaps(base_blocks):
                 "ids": ids
             }
         else:
-            acc = {}
+            acc: dict[str, Any] = {}
             for start, count in starts_and_counts:
                 bucket = (start // bs) * bs
                 key = f"{bucket}-{bucket + bs - 1}"
@@ -58,10 +58,10 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
     if not os.path.isfile(stats_path):
         raise FileNotFoundError(f"Stats file not found: {stats_path}")
 
-    with open(graph_path, "rb") as f:
-        G: MultiDiGraph = pickle.load(f)
+    with open(graph_path, "rb") as bf:
+        G: MultiDiGraph = pickle.load(bf)
 
-    with open(stats_path, "r") as f:
+    with open(stats_path, "r", encoding='utf-8') as f:
         try:
             # Validate that the stats file is valid JSON
             STATS_DATA = json.load(f)
@@ -107,7 +107,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         data = G.get_edge_data(u, v)
         if not data:
             return "unknown"
-        return next(iter(data.values()), {}).get("relation_type", "unknown")
+        return next(iter(data.values()), {}).get("relation_type", "unknown")  # type: ignore
 
     def make_edge(u: str, v: str) -> dict[str, Any]:
         return {"source": u, "target": v, "relation_type": relation_type(u, v)}
@@ -151,14 +151,20 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                 edges.append(make_edge(node_id, c))
         return jsonify({"nodes": [node_obj], "edges": edges})
 
-    def _handle_single_node(node_id: str, neighbor_mode: str, include_details: bool, displayed: set[str]) -> Union[Response, tuple[Response, int]]:
+    def _handle_single_node(node_id: str, neighbor_mode: str,
+                            include_details: bool, displayed: set[str]) -> Union[Response, tuple[Response, int]]:
+
         if node_id not in G:
             return error(f"Node '{node_id}' not found", 404)
 
         if include_details:
             node_data = G.nodes[node_id]
-            parents = [{"id": p, "relation_type": make_edge(p, node_id)["relation_type"]} for p in G.predecessors(node_id)]
-            children = [{"id": c, "relation_type": make_edge(node_id, c)["relation_type"]} for c in G.successors(node_id)]
+            parents = [
+                {"id": p, "relation_type": make_edge(p, node_id)["relation_type"]} for p in G.predecessors(node_id)
+                ]
+            children = [
+                {"id": c, "relation_type": make_edge(node_id, c)["relation_type"]} for c in G.successors(node_id)
+                ]
             return jsonify({
                 "id": node_id,
                 "description": node_data.get("description"),
@@ -313,7 +319,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         if bs == 1:
             ids = sorted(str(start) for start, _ in starts_and_counts)
             return jsonify({"block_size": 1, "ids": ids})
-        acc = {}
+        acc: dict[str, Any] = {}
         for start, count in starts_and_counts:
             bucket = (start // bs) * bs
             key = f"{bucket}-{bucket + bs - 1}"
