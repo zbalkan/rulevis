@@ -40,9 +40,9 @@ RuleVis makes these invisible structures visible, turning abstract XML files int
 
 `pipx install rulevis`
 
-### Using pipx (for testing)
+### Using pip (for testing)
 
-`pipx install rulevis`
+`pip install rulevis`
 
 ### Using source
 
