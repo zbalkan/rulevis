@@ -1,6 +1,7 @@
 import logging
 import os
 import pickle
+import re
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from typing import Any, Final, Optional
@@ -8,6 +9,9 @@ from typing import Any, Final, Optional
 import networkx as nx
 
 ENCODING: Final[str] = "utf-8"
+
+REGEX_FINDER: re.Pattern[str] = re.compile(r'<regex\s+.*?>(.*?)</regex>',
+                                           flags=re.DOTALL | re.IGNORECASE)
 
 
 class GraphGenerator:
@@ -134,7 +138,8 @@ class GraphGenerator:
             wrapped_content: str = self.wrap_with_root(xml_content)
 
             try:
-                parsed_xml = ET.fromstring(wrapped_content)
+                sanitized = self.__remove_regex_field(wrapped_content)
+                parsed_xml = ET.fromstring(sanitized)
                 root = parsed_xml
                 for child in root:
                     self.parse_groups_and_rules(child, [], xml_file)
@@ -174,3 +179,20 @@ class GraphGenerator:
             logging.info(f"Graph saved to {output_path}")
         except Exception as e:
             logging.error(f"Error saving graph: {e}", exc_info=True)
+
+    def __remove_regex_field(self, xml_string: str) -> str:
+        """
+        Sanitizes the XML string by removing the entire <regex>...</regex> block.
+
+        The user indicated the <regex> tag is not needed for future logic, making
+        removal the most straightforward and robust sanitization method.
+        """
+        # Regex to find the <regex> tag, its content (including newlines), and the closing </regex> tag.
+        # The 're.DOTALL' flag allows '.' to match newlines.
+        # The '?' makes the matching non-greedy (to match the inner-most tag).
+        # We are using a simple non-greedy match for content: (.*?)
+        # Since the content is the problem, removing the whole block is the fix.
+        sanitized_string = REGEX_FINDER.sub(
+            '',
+            xml_string)
+        return sanitized_string
