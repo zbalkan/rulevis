@@ -3,6 +3,7 @@
 import argparse
 import logging
 import os
+import re
 import sys
 import tempfile
 import webbrowser
@@ -16,6 +17,37 @@ APP_NAME: Final[str] = 'rulevis'
 APP_VERSION: Final[str] = '0.2'
 DESCRIPTION: Final[str] = f"{APP_NAME} ({APP_VERSION}) is a Wazuh rule visualization tool."
 ENCODING: Final[str] = "utf-8"
+
+# Precompiled regex to remove ANSI color/control sequences
+ANSI_ESCAPE_RE: re.Pattern[str] = re.compile(
+    r"""
+    (?:                           # Non-capturing group for all patterns
+      \x1B\[                      # ESC [ (CSI)
+      [0-?]*[ -/]*[@-~]           # Parameter bytes + intermediate + final byte
+     |                            # OR
+      \x1B[@-Z\\-_]               # 2-byte sequences
+     |                            # OR
+      \x1B\][^\x07]*(?:\x07|\x1B\\) # OSC sequences
+     |                            # OR literal representations (\x1b, <0x1b>)
+      (?:\\x1[bB]|\<0x1[bB]\>)(?:\[[0-?]*[ -/]*[@-~])?
+    )
+    """,
+    re.VERBOSE,
+)
+
+
+class CustomFileHandler(logging.FileHandler):
+    """FileHandler that strips all escape sequences and representations."""
+
+    def emit(self, record) -> None:
+        # Escape ANSI Color Sequences
+        record.msg = ANSI_ESCAPE_RE.sub('', str(record.msg))
+
+        # Rename source
+        if record.name == 'root':
+            record.name = APP_NAME
+
+        super().emit(record)
 
 
 class Rulevis():
@@ -143,8 +175,9 @@ def _get_log_path() -> str:
 
 if __name__ == "__main__":
     try:
-        logging.basicConfig(filename=_get_log_path(),
-                            encoding=ENCODING,
+        handler = CustomFileHandler(_get_log_path(), encoding=ENCODING)
+
+        logging.basicConfig(handlers=[handler],
                             format='%(asctime)s:%(name)s:%(levelname)s:%(message)s',
                             datefmt="%Y-%m-%dT%H:%M:%S%z",
                             level=logging.INFO)
