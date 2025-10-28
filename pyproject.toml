@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rulevis"
-version = "1.0.1"
+version = "1.0.2"
 description = "Interactive Wazuh Rule Graph Explorer"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -15,6 +15,8 @@ license-files = ["LICEN[CS]E*"]
 authors = [{ name = "Zafer Balkan", email = "zafer@zaferbalkan.com" }]
 keywords = ["wazuh", "detection", "security", "monitoring", "logging", "siem"]
 classifiers = [
+    "Topic :: Security",
+    "Topic :: System :: Logging",
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Information Technology",
     "Programming Language :: Python :: 3",
@@ -41,6 +43,7 @@ rulevis = "rulevis:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
+py-modules = ["rulevis"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
