@@ -12,10 +12,10 @@ from typing import Final
 
 from internal.analyzer import Analyzer
 from internal.generator import GraphGenerator
+from internal.visualizer import create_app
 
 APP_NAME: Final[str] = 'rulevis'
-APP_VERSION: Final[str] = '0.2'
-DESCRIPTION: Final[str] = f"{APP_NAME} ({APP_VERSION}) is a Wazuh rule visualization tool."
+DESCRIPTION: Final[str] = f"{APP_NAME} is a Wazuh rule visualization tool."
 ENCODING: Final[str] = "utf-8"
 
 # Precompiled regex to remove ANSI color/control sequences
@@ -115,7 +115,6 @@ class Rulevis():
         logging.info("Stats generation complete.")
 
     def __run_flask_app(self) -> None:
-        from internal.visualizer import create_app
         app = create_app(self.graph_path, self.stats_path, self.heatmap_path)
         logging.info("Starting Flask app...")
         Timer(1, self.__open_browser).start()
