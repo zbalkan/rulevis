@@ -3,7 +3,7 @@ import os
 import pickle
 import xml.etree.ElementTree as ET
 from collections import defaultdict
-from typing import Final, Optional
+from typing import Any, Final, Optional
 
 import networkx as nx
 
@@ -14,7 +14,7 @@ class GraphGenerator:
     def __init__(self, paths: list[str], graph_file: str) -> None:
         self.paths = paths
         self.group_membership: dict[str, list[str]] = defaultdict(list)
-        self.G = nx.MultiDiGraph()
+        self.G: nx.MultiDiGraph[Any] = nx.MultiDiGraph()
         self.graph_file: str = graph_file
 
     def get_all_xml_files(self) -> list[str]:
@@ -23,7 +23,8 @@ class GraphGenerator:
             for root, _, files in os.walk(path):
                 for file in files:
                     if file.lower().endswith('.xml'):
-                        xml_files.append(os.path.join(root, file))
+                        abs = os.path.abspath(os.path.join(root, file))
+                        xml_files.append(abs)
 
         print(f'Found {len(xml_files)} XML files in the given paths')
         logging.info(f'Found {len(xml_files)} XML files in the given paths')
@@ -36,7 +37,9 @@ class GraphGenerator:
                 f"Adding edge from {source} to {target} with type {relation_type}")
         self.G.add_edge(source, target, relation_type=relation_type)
 
-    def add_relationship_edges(self, rule_id: str, if_sid: Optional[str], if_matched_sid: Optional[str], if_group: Optional[str], if_matched_group: Optional[str]) -> None:
+    def add_relationship_edges(self, rule_id: str,
+                               if_sid: Optional[str], if_matched_sid: Optional[str],
+                               if_group: Optional[str], if_matched_group: Optional[str]) -> None:
         if if_sid:
             for sid in if_sid.split(','):
                 self.add_edge_with_type(sid.strip(), rule_id, 'if_sid')

@@ -4,7 +4,7 @@ RuleVis is a powerful analysis tool that transforms your Wazuh ruleset into a dy
 
 This tool is designed for security engineers, SOC analysts, and Wazuh administrators who need to understand, maintain, and develop complex custom rulesets.
 
-![General View of RuleVis](./assets/general-view.gif?raw=true)
+![General View of RuleVis](https://github.com/zbalkan/rulevis/raw/master/assets/general-view.gif)
 
 ## Features
 
@@ -36,6 +36,16 @@ RuleVis makes these invisible structures visible, turning abstract XML files int
 
 ## Installation
 
+### Using pipx (recommended)
+
+`pipx install rulevis`
+
+### Using pip (for testing)
+
+`pip install rulevis`
+
+### Using source
+
 1. **Clone the repository:**
 
     ```shell
@@ -47,7 +57,14 @@ RuleVis makes these invisible structures visible, turning abstract XML files int
 
     ```shell
     python -m venv .venv
-    source .venv/bin/activate  # On Windows, use `.venv\Scripts\activate`
+    source .venv/bin/activate
+    ```
+
+    Or for Windows
+
+    ```shell
+    python -m venv .venv
+    source .venv\Scripts\activate.ps1
     ```
 
 3. **Install dependencies:**
@@ -83,13 +100,13 @@ Once executed, the script will:
 
 Quickly identify the most important and complex rules in your entire ruleset. Click on any rule in the list to instantly navigate to it in the main graph.
 
-![Statistics Panel](./assets/stats-panel.gif?raw=true)
+![Statistics Panel](https://github.com/zbalkan/rulevis/raw/master/assets/stats-panel.gif)
 
 ### Rule ID Heatmap
 
 Get a bird's-eye view of your rule ID landscape. Dark gray blocks are unused and available for your custom rules, while brighter red blocks indicate heavily populated ranges. This is invaluable for planning and organizing a large custom ruleset.
 
-![Heatmap View](./assets/heatmap-view.gif?raw=true)
+![Heatmap View](https://github.com/zbalkan/rulevis/raw/master/assets/heatmap-view.gif)
 
 ## Technical Overview
 
@@ -99,6 +116,24 @@ The project is composed of three main Python modules and a JavaScript frontend:
 2. **`analyzer.py`:** Loads the graph file and uses `networkx` to perform complex calculations (descendants, ancestors, etc.). It pre-calculates the data needed for the Statistics Panel and the Rule ID Heatmap and saves them to temporary JSON files.
 3. **`visualizer.py`:** A Flask web application that serves the frontend and provides a clean API for the visualization to fetch graph, stats, and heatmap data.
 4. **`graph.js`:** The core frontend logic. It uses **D3.js** for the force simulation and user interactions, and renders the main graph to an **HTML Canvas** for high performance. The interactive heatmap is rendered using **SVG** for its superior event handling and styling capabilities.
+
+Here’s a **ready-to-paste README subsection** that explains `rulevis` logging clearly and professionally for your users. It assumes the per-user setup you’ve implemented.
+
+---
+
+## Logging
+
+`rulevis` automatically writes diagnostic and operational logs to a user-specific location. Logs are plain text encoded in UTF-8 and include timestamps, module names, and severity levels. The application creates its log directory if it does not exist.
+
+| Platform        | Log file location                                                                           | Example path                                             |
+| --------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Windows     | `%LocalAppData%\rulevis\Logs\rulevis.log`                                                   | `C:\Users\<user>\AppData\Local\rulevis\Logs\rulevis.log` |
+| macOS       | `~/Library/Logs/rulevis/rulevis.log`                                                        | `/Users/<user>/Library/Logs/rulevis/rulevis.log`         |
+| Linux / BSD | `$XDG_STATE_HOME/rulevis/rulevis.log` or fallback `~/.local/share/rulevis/logs/rulevis.log` | `/home/<user>/.local/state/rulevis/rulevis.log`          |
+
+`rulevis` follows the [XDG Base Directory specification](https://specifications.freedesktop.org/basedir-spec/latest/) on Unix-like systems and Windows conventions under `%LocalAppData%`.
+
+The log file records informational messages, warnings, and errors emitted during execution. You can safely delete it; a new one will be created automatically on the next run.
 
 ## Notes
 

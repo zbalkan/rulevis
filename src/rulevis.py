@@ -1,8 +1,9 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 import argparse
 import logging
 import os
+import re
 import sys
 import tempfile
 import webbrowser
@@ -11,11 +12,41 @@ from typing import Final
 
 from internal.analyzer import Analyzer
 from internal.generator import GraphGenerator
+from internal.visualizer import create_app
 
 APP_NAME: Final[str] = 'rulevis'
-APP_VERSION: Final[str] = '0.2'
-DESCRIPTION: Final[str] = f"{APP_NAME} ({APP_VERSION}) is a Wazuh rule visualization tool."
+DESCRIPTION: Final[str] = f"{APP_NAME} is a Wazuh rule visualization tool."
 ENCODING: Final[str] = "utf-8"
+
+# Precompiled regex to remove ANSI color/control sequences
+ANSI_ESCAPE_RE: re.Pattern[str] = re.compile(
+    r"""
+    (?:                           # Non-capturing group for all patterns
+      \x1B\[                      # ESC [ (CSI)
+      [0-?]*[ -/]*[@-~]           # Parameter bytes + intermediate + final byte
+     |                            # OR
+      \x1B[@-Z\\-_]               # 2-byte sequences
+     |                            # OR
+      \x1B\][^\x07]*(?:\x07|\x1B\\) # OSC sequences
+     |                            # OR literal representations (\x1b, <0x1b>)
+      (?:\\x1[bB]|\<0x1[bB]\>)(?:\[[0-?]*[ -/]*[@-~])?
+    )
+    """,
+    re.VERBOSE,
+)
+
+
+class CustomFileHandler(logging.FileHandler):
+    """FileHandler that strips all escape sequences and representations."""
+
+    def emit(self, record) -> None:
+        # Escape ANSI Color Sequences
+        record.msg = ANSI_ESCAPE_RE.sub('', str(record.msg))
+
+        # Rename source
+        record.name = APP_NAME
+
+        super().emit(record)
 
 
 class Rulevis():
@@ -84,7 +115,6 @@ class Rulevis():
         logging.info("Stats generation complete.")
 
     def __run_flask_app(self) -> None:
-        from internal.visualizer import create_app
         app = create_app(self.graph_path, self.stats_path, self.heatmap_path)
         logging.info("Starting Flask app...")
         Timer(1, self.__open_browser).start()
@@ -116,10 +146,36 @@ def main() -> None:
     rulevis.run()
 
 
+def _get_log_path() -> str:
+    """
+    Return a per-user log file path appropriate for Windows, Linux, and macOS.
+    Uses only os and sys modules.
+    """
+    # Determine base OS type
+    if os.name == "nt":  # Windows
+        base_dir = os.getenv(
+            "LOCALAPPDATA", os.path.expanduser("~\\AppData\\Local"))
+        log_dir = os.path.join(base_dir, APP_NAME, "Logs")
+
+    elif sys.platform == "darwin":  # macOS
+        log_dir = os.path.expanduser(f"~/Library/Logs/{APP_NAME}")
+
+    else:  # Linux / other Unix-like
+        xdg_state_home = os.getenv(
+            "XDG_STATE_HOME", os.path.expanduser("~/.local/state"))
+        log_dir = os.path.join(xdg_state_home, APP_NAME)
+        if not os.access(os.path.dirname(log_dir), os.W_OK):
+            log_dir = os.path.expanduser(f"~/.local/share/{APP_NAME}/logs")
+
+    os.makedirs(log_dir, exist_ok=True)
+    return os.path.abspath(os.path.join(log_dir, f"{APP_NAME}.log"))
+
+
 if __name__ == "__main__":
     try:
-        logging.basicConfig(filename=os.path.join(f'./{APP_NAME}.log'),
-                            encoding=ENCODING,
+        handler = CustomFileHandler(_get_log_path(), encoding=ENCODING)
+
+        logging.basicConfig(handlers=[handler],
                             format='%(asctime)s:%(name)s:%(levelname)s:%(message)s',
                             datefmt="%Y-%m-%dT%H:%M:%S%z",
                             level=logging.INFO)

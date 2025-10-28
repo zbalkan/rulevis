@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=77.0.3", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rulevis"
+version = "1.0.0"
+description = "Interactive Wazuh Rule Graph Explorer"
+readme = "README.md"
+requires-python = ">=3.9"
+
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+
+authors = [{ name = "Zafer Balkan", email = "zafer@zaferbalkan.com" }]
+keywords = ["wazuh", "detection", "security", "monitoring", "logging", "siem"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Information Technology",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14"
+]
+
+dependencies = [
+    "Flask>=3.1.2",
+    "networkx>=3.5",
+]
+
+[project.urls]
+Homepage = "https://github.com/zbalkan/rulevis"
+Repository = "https://github.com/zbalkan/rulevis"
+Issues = "https://github.com/zbalkan/rulevis/issues"
+
+[project.scripts]
+rulevis = "rulevis:main"
