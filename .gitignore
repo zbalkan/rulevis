@@ -143,3 +143,8 @@ dmypy.json
 
 # Logs file
 rulevis-logs/
+
+# Swap file
+*.swp
+*.swo
+*.swx
