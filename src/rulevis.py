@@ -9,14 +9,25 @@ import tempfile
 import webbrowser
 from threading import Timer
 from typing import Final
+from dotenv import load_dotenv
+from pathlib import Path
 
 from internal.analyzer import Analyzer
 from internal.generator import GraphGenerator
 from internal.visualizer import create_app
 
+# Load the env
+root_dir = Path(__file__).resolve().parent.parent
+load_dotenv(dotenv_path=root_dir / ".env")
+
 APP_NAME: Final[str] = 'rulevis'
 DESCRIPTION: Final[str] = f"{APP_NAME} is a Wazuh rule visualization tool."
 ENCODING: Final[str] = "utf-8"
+
+FLASK_HOST: str = os.getenv("FLASK_HOST", "0.0.0.0")
+FLASK_PORT: int = int(os.getenv("FLASK_PORT", 5000))
+
+IS_HEADLESS = os.getenv("RULEVIS_HEADLESS", "false").lower == "true" or not os.environ.get("DISPLAY")
 
 # Precompiled regex to remove ANSI color/control sequences
 ANSI_ESCAPE_RE: re.Pattern[str] = re.compile(
@@ -111,17 +122,21 @@ class Rulevis():
 
     def __run_flask_app(self) -> None:
         app = create_app(self.graph_path, self.stats_path, self.heatmap_path)
-        logging.info("Starting Flask app...")
-        Timer(1, self.__open_browser).start()
-        app.run(debug=False, use_reloader=False)
+        logging.info(f"Starting Flask app on {FLASK_HOST}:{FLASK_PORT}...")
+        if not IS_HEADLESS:
+            Timer(1, self.__open_browser).start()
+        else:
+            logging.info("Running in headless mode (Docker/server), browser will not open.")
+        app.run(host=FLASK_HOST, port=FLASK_PORT, debug=False, use_reloader=False)
 
     def __open_browser(self, ) -> None:
-        new_url = 'http://localhost:5000/'
-
-        if (webbrowser.get().name != 'gio'):
-            webbrowser.open_new(new_url)
-
-        print(f"Access the app over {new_url}")
+        url = f"http://{FLASK_HOST}:{FLASK_PORT}/"
+        try:
+            if (webbrowser.get().name != 'gio'):
+                webbrowser.open_new(url)
+                logging.info(f"Access the app over {url}")
+        except Exception as e:
+            logging.warning(f"Cannot open browser automatically: {e}")
 
 
 def main() -> None:

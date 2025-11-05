@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  rulevis:
+    build: .
+    container_name: rulevis
+    ports:
+      - "${FLASK_PORT}:${FLASK_PORT}"
+    volumes:
+      - ${RULE_PATH_BUILTIN_HOST}:${RULE_PATH_BUILTIN_CONTAINER}
+      - ${RULE_PATH_CUSTOM_HOST}:${RULE_PATH_CUSTOM_CONTAINER}
+      - ./rulevis-logs:/root/.local/state/rulevis
+    environment:
+      - RULE_PATH=${RULE_PATH}
+      - FLASK_HOST=${FLASK_HOST}
+      - FLASK_PORT=${FLASK_PORT}
+      - RULEVIS_HEADLESS=${RULEVIS_HEADLESS}
+    stdin_open: true
+    tty: true

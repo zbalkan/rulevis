@@ -140,3 +140,6 @@ dmypy.json
 *.db
 *graph.html
 *.pickle
+
+# Logs file
+rulevis-logs/

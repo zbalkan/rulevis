@@ -73,6 +73,52 @@ RuleVis makes these invisible structures visible, turning abstract XML files int
     pip install -r requirements.txt
     ```
 
+### Using docker
+
+1. **Make sure Docker and Docker Compose are installed**
+
+2. **Copy .env.example to .env and edit paths if needed:**
+
+   ```shell
+   cp .env.example .env
+   ```
+
+3. **Start the container:**
+
+   ```shell
+   docker compose up -d --build
+   ```
+
+4. **Access the web interface at `http://localhost:5000` (or as configured in `.env`).**
+
+### Environment Variable
+
+RuleVis supports configuration via a `.env` file located at the root of the project. It works for both Docker and direct pip/python usage. If variables are not defined, defaults are applied.
+
+```
+# Host paths (for mount volume)
+RULE_PATH_BUILTIN_HOST=/home/test/resource/wazuh-ruleset/rules
+RULE_PATH_CUSTOM_HOST=/home/test/resource/wazuh-custom-rules-and-decoders/rules/default
+
+# Container paths (path inside the container)
+RULE_PATH_BUILTIN_CONTAINER=/rules/builtin
+RULE_PATH_CUSTOM_CONTAINER=/rules/custom
+
+# Final path (for rulevis inside the container)
+RULE_PATH=${RULE_PATH_BUILTIN_CONTAINER},${RULE_PATH_CUSTOM_CONTAINER}
+
+# Flask host and port
+FLASK_HOST=0.0.0.0
+FLASK_PORT=5000
+
+# Headless config
+RULEVIS_HEADLESS=false
+```
+
+- `RULE_PATH`: Comma-separated list of builtin + custom rule directories.
+- `FLASK_HOST` / `FLASK_PORT`: Flask server host and port. Defaults to `0.0.0.0:5000` if not set.
+- `RULEVIS_HEADLESS`: If true, RuleVis will not attempt to open a browser automatically.
+
 ## Usage
 
 The tool is run from the command line. You must provide the path to the directory (or directories) containing your Wazuh rule XML files.
@@ -92,7 +138,7 @@ Once executed, the script will:
 2. Build a graph model of the rule relationships.
 3. Pre-calculate statistics and heatmap data.
 4. Start a local web server.
-5. Automatically open the tool in your default web browser.
+5. Optionally open the tool in your default web browser if `RULEVIS_HEADLESS=false` and `webbrowser` is available.
 
 ## Key Features in Action
 
