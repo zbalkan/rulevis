@@ -21,6 +21,7 @@ class GraphGenerator:
         self.group_membership: dict[str, list[str]] = defaultdict(list)
         self.G: nx.MultiDiGraph[Any] = nx.MultiDiGraph()
         self.graph_file: str = graph_file
+        self.overwrite_rules: list[tuple[ET.Element, str]] = []
 
     def get_all_xml_files(self) -> list[str]:
         xml_files: list[str] = []
@@ -65,6 +66,11 @@ class GraphGenerator:
 
     def parse_groups_and_rules(self, element: ET.Element, inherited_groups: list[str], xml_file: str) -> None:
         if element.tag == 'rule':
+            if element.get("overwrite", "").lower() == "yes":
+                # defer to second pass
+                self.overwrite_rules.append((element, xml_file))
+                return
+
             rule_id = element.get('id', '0')
             rule_level = element.get('level')
             if_sid = element.findtext('if_sid', None)
@@ -78,7 +84,7 @@ class GraphGenerator:
 
             if self.G.nodes.get(rule_id) is not None:
                 logging.debug(
-                    f"Duplicate rule ID found: {rule_id}. Skipping this rule.")
+                    f"Duplicate rule ID found with no 'overwrite' tag: {rule_id}. User must fix the rule manually.")
 
             else:
                 self.G.add_node(rule_id,
@@ -146,6 +152,24 @@ class GraphGenerator:
                     self.parse_groups_and_rules(child, [], xml_file)
             except Exception as e:
                 logging.error(f"Error parsing {xml_file}: {e}", exc_info=True)
+
+        # second pass: apply overwrites now that all base rules exist
+        for element, ow_file in self.overwrite_rules:
+            rule_id = element.get("id")
+            if rule_id in self.G.nodes:
+                existing = self.G.nodes[rule_id]
+                logging.info(f"Applying overwrite for rule {rule_id}")
+                attrs = [(i.tag, i.text) for i in element]
+                desc = self.extract_rule_description(attrs)
+                if desc:
+                    existing["description"] = desc
+                for attr in ("level", "maxsize"):
+                    if element.get(attr):
+                        existing[attr] = element.get(attr)
+                existing["file"] = os.path.basename(ow_file)
+            else:
+                logging.warning(
+                    f"Overwrite rule {rule_id} found with no base rule; skipping.")
 
         first_level_rules = [
             node for node in self.G.nodes if self.G.in_degree(node) == 0]
