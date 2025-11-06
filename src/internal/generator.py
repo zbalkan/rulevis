@@ -44,20 +44,20 @@ class GraphGenerator:
                                if_sid: Optional[str], if_matched_sid: Optional[str],
                                if_group: Optional[str], if_matched_group: Optional[str]) -> None:
         if if_sid:
-            for sid in if_sid.split(','):
+            for sid in re.split(r'[,\s]+', if_sid.strip()):
                 self.add_edge_with_type(sid.strip(), rule_id, 'if_sid')
 
         if if_matched_sid:
-            for sid in if_matched_sid.split(','):
+            for sid in re.split(r'[,\s]+', if_matched_sid.strip()):
                 self.add_edge_with_type(sid.strip(), rule_id, 'if_matched_sid')
 
         if if_group:
-            for group in if_group.split(','):
+            for group in re.split(r'[,\s]+', if_group.strip()):
                 for parent_rule in self.group_membership.get(group.strip(), []):
                     self.add_edge_with_type(parent_rule, rule_id, 'if_group')
 
         if if_matched_group:
-            for group in if_matched_group.split(','):
+            for group in re.split(r'[,\s]+', if_matched_group.strip()):
                 for parent_rule in self.group_membership.get(group.strip(), []):
                     self.add_edge_with_type(
                         parent_rule, rule_id, 'if_matched_group')
