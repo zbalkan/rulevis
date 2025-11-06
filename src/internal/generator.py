@@ -154,7 +154,15 @@ class GraphGenerator:
                 logging.error(f"Error parsing {xml_file}: {e}", exc_info=True)
 
         # second pass: apply overwrites now that all base rules exist
+        # Per Wazuh documentation, the overwrite tag is "used to replace a rule
+        # with local changes. To maintain consistency between loaded rules,
+        # if_sid, if_group, if_level, if_matched_sid, and if_matched_group
+        # labels are not taken into account when overwriting a rule. If any of
+        # these are encountered, the original value prevails."
+        # Therefore, we intentionally do NOT update groups or dependency
+        # relationships (if_sid, if_group, etc.) when applying overwrites.
         for element, ow_file in self.overwrite_rules:
+            # Only description, level, maxsize, and file are updated
             rule_id = element.get("id")
             if rule_id in self.G.nodes:
                 existing = self.G.nodes[rule_id]
