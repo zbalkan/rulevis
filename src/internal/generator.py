@@ -12,14 +12,14 @@ ENCODING: Final[str] = "utf-8"
 
 REGEX_FINDER: re.Pattern[str] = re.compile(r'<regex\s+.*?>(.*?)</regex>',
                                            flags=re.DOTALL | re.IGNORECASE)
-REGEX_AMP = re.compile(r"&(?!amp;|lt;|gt;)")
+REGEX_AMP: re.Pattern[str] = re.compile(r"&(?!amp;|lt;|gt;)")
 
 
 class GraphGenerator:
     def __init__(self, paths: list[str], graph_file: str) -> None:
         self.paths = paths
         self.group_membership: dict[str, list[str]] = defaultdict(list)
-        self.G: nx.MultiDiGraph[Any] = nx.MultiDiGraph()
+        self.G: nx.MultiDiGraph = nx.MultiDiGraph()
         self.graph_file: str = graph_file
         self.overwrite_rules: list[tuple[ET.Element, str]] = []
 
