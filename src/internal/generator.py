@@ -12,6 +12,7 @@ ENCODING: Final[str] = "utf-8"
 
 REGEX_FINDER: re.Pattern[str] = re.compile(r'<regex\s+.*?>(.*?)</regex>',
                                            flags=re.DOTALL | re.IGNORECASE)
+REGEX_AMP = re.compile(r"&(?!amp;|lt;|gt;)")
 
 
 class GraphGenerator:
@@ -138,6 +139,7 @@ class GraphGenerator:
 
             try:
                 sanitized = self.__remove_regex_field(wrapped_content)
+                sanitized = self.__escape_amp(sanitized)
                 parsed_xml = ET.fromstring(sanitized)
                 root = parsed_xml
                 for child in root:
@@ -194,4 +196,8 @@ class GraphGenerator:
         sanitized_string = REGEX_FINDER.sub(
             '',
             xml_string)
+        return sanitized_string
+
+    def __escape_amp(self, xml_string: str) -> str:
+        sanitized_string = REGEX_AMP.sub("&amp;", xml_string)
         return sanitized_string
