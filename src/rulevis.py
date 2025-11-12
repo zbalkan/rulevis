@@ -66,24 +66,24 @@ class Rulevis():
                 os.remove(self.graph_path)
                 logging.info(
                     f"Temporary graph file {self.graph_path} deleted.")
-        except Exception as e:
-            logging.error(f"Error deleting temporary graph file: {e}")
+        except Exception:
+            ...
 
         try:
             if hasattr(self, 'stats_path') and os.path.exists(self.stats_path):
                 os.remove(self.stats_path)
                 logging.info(
                     f"Temporary stats file {self.stats_path} deleted.")
-        except Exception as e:
-            logging.error(f"Error deleting temporary stats file: {e}")
+        except Exception:
+            ...
 
         try:
             if hasattr(self, 'heatmap_path') and os.path.exists(self.heatmap_path):
                 os.remove(self.heatmap_path)
                 logging.info(
                     f"Temporary heatmap file {self.heatmap_path} deleted.")
-        except Exception as e:
-            logging.error(f"Error deleting temporary heatmap file: {e}")
+        except Exception:
+            ...
 
     def run(self) -> None:
         self.__generate_graph()

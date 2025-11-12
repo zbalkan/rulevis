@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=77.0.3", "wheel"]
+requires = ["setuptools>=77.0.1", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "rulevis"
-version = "1.0.3"
+version = "1.0.4"
 description = "Interactive Wazuh Rule Graph Explorer"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -29,8 +29,8 @@ classifiers = [
 ]
 
 dependencies = [
-    "Flask>=3.1.2",
-    "networkx>=3.5",
+    "Flask>=3.0.0",
+    "networkx",
 ]
 
 [project.urls]
