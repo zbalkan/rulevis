@@ -514,7 +514,6 @@ button:hover {
 }
 
 .condition-rule {
-    margin-left: calc(var(--condition-depth) * 12px);
     padding: 9px 10px;
     border: 1px solid #4a4a4a;
     border-left-width: 3px;
@@ -602,4 +601,9 @@ button:hover {
 
 .condition-cycle {
     border-left-color: #e33;
+}
+
+
+.side-panel.conditions-visible {
+    width: min(520px, 95vw);
 }

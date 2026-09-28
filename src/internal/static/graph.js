@@ -58,6 +58,7 @@ class DetailsPanel {
         document.getElementById("detailsCloseBtn").addEventListener("click", () => this.visualizer.clearHighlight());
     }
     show(node) {
+        this.panel.classList.remove("conditions-visible");
         this.content.innerHTML = `<h3>Details for Rule: ${escapeHTML(node.id)}</h3><p><i>Loading full details...</i></p>`;
         this.panel.classList.add("visible");
         fetchJSON(`/api/nodes?id=${encodeURIComponent(node.id)}&neighbors=both&include=details`)
@@ -68,14 +69,17 @@ class DetailsPanel {
     }
     hide() {
         this.panel.classList.remove("visible");
+        this.panel.classList.remove("conditions-visible");
     }
     renderCondition(condition) {
         const attributes = Object.entries(condition.attributes || {})
             .map(([key, value]) => `${escapeHTML(key)}="${escapeHTML(value)}"`)
             .join(" ");
-        const tag = attributes
-            ? `&lt;${escapeHTML(condition.tag)} ${attributes}&gt;`
-            : `&lt;${escapeHTML(condition.tag)}&gt;`;
+        const tag = condition.kind === "rule_attribute"
+            ? `rule@${escapeHTML(condition.tag)}`
+            : attributes
+                ? `&lt;${escapeHTML(condition.tag)} ${attributes}&gt;`
+                : `&lt;${escapeHTML(condition.tag)}&gt;`;
         const value = condition.value === undefined || condition.value === null
             ? ""
             : String(condition.value);
@@ -90,7 +94,7 @@ class DetailsPanel {
     renderConditionTree(node, selectedId, depth = 0) {
         if (node.cycle) {
             return `
-                <div class="condition-rule condition-cycle" style="--condition-depth: ${depth}">
+                <div class="condition-rule condition-cycle" style="margin-left: ${depth * 12}px">
                     <div class="condition-rule-header">
                         <strong>Rule ${escapeHTML(node.id)}</strong>
                         <span class="condition-badge">Cycle</span>
@@ -100,12 +104,17 @@ class DetailsPanel {
         }
 
         const inherited = node.id !== selectedId;
+        const displayName = node.id === "0"
+            ? "Virtual root"
+            : `Rule ${escapeHTML(node.id)}`;
         const relation = node.relation_type
             ? `<span class="condition-relation">via ${escapeHTML(node.relation_type)}</span>`
             : "";
-        const badge = inherited
-            ? `<span class="condition-badge inherited">Inherited · Rule ${escapeHTML(node.id)}</span>`
-            : `<span class="condition-badge current">Current rule</span>`;
+        const badge = node.id === "0"
+            ? `<span class="condition-badge inherited">Virtual root</span>`
+            : inherited
+                ? `<span class="condition-badge inherited">Inherited · Rule ${escapeHTML(node.id)}</span>`
+                : `<span class="condition-badge current">Current rule</span>`;
         const conditions = (node.conditions || []).length > 0
             ? `<ul class="condition-list">${node.conditions.map(condition => this.renderCondition(condition)).join("")}</ul>`
             : `<p class="condition-empty">No local atomic predicates.</p>`;
@@ -117,9 +126,9 @@ class DetailsPanel {
             .join("");
 
         return `
-            <div class="condition-rule ${inherited ? "condition-inherited" : "condition-current"}" style="--condition-depth: ${depth}">
+            <div class="condition-rule ${inherited ? "condition-inherited" : "condition-current"}" style="margin-left: ${depth * 12}px">
                 <div class="condition-rule-header">
-                    <strong>Rule ${escapeHTML(node.id)}</strong>
+                    <strong>${displayName}</strong>
                     ${badge}
                 </div>
                 ${relation}
@@ -135,6 +144,7 @@ class DetailsPanel {
         if (!container || !button) return;
 
         button.disabled = true;
+        this.panel.classList.add("conditions-visible");
         container.innerHTML = '<p><i>Loading effective conditions...</i></p>';
 
         fetchJSON(`/api/conditions?id=${encodeURIComponent(ruleId)}`)
@@ -680,7 +690,7 @@ class GraphVisualizer {
     
     drawClockNode(node, color) {
         const radius = node.__radius || NODE_RADIUS;
-        const lineWidth = Math.max(1.5, 2.5 / this.transform.k);
+        const lineWidth = 2.5 / Math.max(this.transform.k, 0.02);
 
         this.context.save();
         this.context.strokeStyle = color;

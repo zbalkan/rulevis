@@ -167,7 +167,7 @@ class GraphGenerator:
             conditions.append({
                 "tag": "maxsize",
                 "value": maxsize,
-                "attributes": {"source": "rule"},
+                "kind": "rule_attribute",
             })
 
         for child in element:
