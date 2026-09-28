@@ -122,10 +122,12 @@ class Analyzer:
         #    We use math.ceil to round up to the next full block.
         #    For example, if max ID is 101234 and block size is 1000, this becomes:
         #    ceil(101234 / 1000) * 1000  =>  ceil(101.234) * 1000  =>  102 * 1000  =>  102000
-        dynamic_max_range = math.ceil(actual_max_id / block_size) * block_size
-
-        # Ensure we have at least one block even if max_id is small
-        dynamic_max_range = max(dynamic_max_range, block_size)
+        # The upper bound is exclusive. Always advance one full block past
+        # the highest ID so exact boundary values (for example ID 100 with a
+        # block size of 10) are included in the final block.
+        dynamic_max_range = (
+            actual_max_id // block_size + 1
+        ) * block_size
 
         blocks = []
         # Use the dynamically calculated range for the loop

@@ -108,4 +108,4 @@ def test_write_to_json_writes_statistics_and_heatmap(tmp_path):
 
     assert "top_direct_descendants" in stats
     assert heatmap["metadata"]["block_size"] == 10
-    assert heatmap["blocks"][-1] == {"id": "90-99", "count": 0} or heatmap["blocks"][-1] == {"id": "100-109", "count": 1}
+    assert heatmap["blocks"][-1] == {"id": "100-109", "count": 1}
