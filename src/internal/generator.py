@@ -202,7 +202,7 @@ class GraphGenerator:
 
         logging.info(f"Total nodes: {self.G.number_of_nodes()}")
         logging.info(
-            f"First-level children (connected to root): {len(list(self.G.successors("0")))}")
+            f"First-level children (connected to root): {len(first_level_rules)}")
 
     def save_graph(self) -> None:
         try:
@@ -211,7 +211,7 @@ class GraphGenerator:
             pickle.dump(self.G, open(output_path, 'wb'))
             logging.info(f"Graph saved to {output_path}")
         except Exception as e:
-            logging.error(f"Error saving graph: {e}", exc_info=True)
+            logging.exception("Error saving graph", e)
 
     def __remove_regex_field(self, xml_string: str) -> str:
         """
