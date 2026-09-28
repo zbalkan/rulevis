@@ -91,9 +91,13 @@ class Rulevis():
         self.__run_flask_app()
 
     def __validate_paths(self, paths: list[str]) -> None:
+        if not paths:
+            logging.error("At least one rules directory is required.")
+            sys.exit(1)
+
         for path in paths:
-            if not os.path:
-                logging.error(f"Invalid directory path: {path}", exc_info=True)
+            if not os.path.isdir(path):
+                logging.error(f"Invalid directory path: {path}")
                 sys.exit(1)
 
     def __generate_graph(self) -> None:

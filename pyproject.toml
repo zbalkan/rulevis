@@ -36,6 +36,11 @@ dependencies = [
     "networkx",
 ]
 
+[project.optional-dependencies]
+test = [
+    "pytest>=8.4,<9",
+]
+
 [project.urls]
 Homepage = "https://github.com/zbalkan/rulevis"
 Repository = "https://github.com/zbalkan/rulevis"
@@ -53,3 +58,6 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "internal.static" = ["*.*"]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
