@@ -127,9 +127,9 @@ Here’s a **ready-to-paste README subsection** that explains `rulevis` logging 
 
 | Platform        | Log file location                                                                           | Example path                                             |
 | --------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| Windows     | `%LocalAppData%\rulevis\Logs\rulevis.log`                                                   | `C:\Users\<user>\AppData\Local\rulevis\Logs\rulevis.log` |
-| macOS       | `~/Library/Logs/rulevis/rulevis.log`                                                        | `/Users/<user>/Library/Logs/rulevis/rulevis.log`         |
-| Linux / BSD | `$XDG_STATE_HOME/rulevis/rulevis.log` or fallback `~/.local/share/rulevis/logs/rulevis.log` | `/home/<user>/.local/state/rulevis/rulevis.log`          |
+| Windows         | `%LocalAppData%\rulevis\Logs\rulevis.log`                                                   | `C:\Users\<user>\AppData\Local\rulevis\Logs\rulevis.log` |
+| macOS           | `~/Library/Logs/rulevis/rulevis.log`                                                        | `/Users/<user>/Library/Logs/rulevis/rulevis.log`         |
+| Linux / BSD     | `$XDG_STATE_HOME/rulevis/rulevis.log` or fallback `~/.local/share/rulevis/logs/rulevis.log` | `/home/<user>/.local/state/rulevis/rulevis.log`          |
 
 `rulevis` follows the [XDG Base Directory specification](https://specifications.freedesktop.org/basedir-spec/latest/) on Unix-like systems and Windows conventions under `%LocalAppData%`.
 
