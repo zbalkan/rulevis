@@ -16,20 +16,9 @@ REGEX_BLOCK: re.Pattern[str] = re.compile(
 )
 REGEX_AMP: re.Pattern[str] = re.compile(r"&(?!amp;|lt;|gt;|quot;|apos;)")
 
-# These tags establish retained state. Frequency/timeframe and same/different
-# fields constrain temporal evaluation, but do not make a rule temporal by
-# themselves.
-TEMPORAL_PARENT_TAGS: Final[frozenset[str]] = frozenset({
-    "if_matched_sid",
-    "if_matched_group",
-})
-TEMPORAL_LOCAL_TAGS: Final[frozenset[str]] = frozenset({
-    "if_matched_regex",
-    "check_diff",
-    "if_fts",
-})
-TEMPORAL_STATE_TAGS: Final[frozenset[str]] = (
-    TEMPORAL_PARENT_TAGS | TEMPORAL_LOCAL_TAGS
+TEMPORAL_RULE_ATTRIBUTES: Final[tuple[str, ...]] = (
+    "frequency",
+    "timeframe",
 )
 
 # RuleVis deliberately omits if_level relationships. Keep the condition model
@@ -143,16 +132,8 @@ class GraphGenerator:
 
     def is_temporal_rule(self, element: ET.Element) -> bool:
         return any(
-            isinstance(child.tag, str)
-            and child.tag.lower() in TEMPORAL_STATE_TAGS
-            for child in element
-        )
-
-    def has_local_temporal_state(self, element: ET.Element) -> bool:
-        return any(
-            isinstance(child.tag, str)
-            and child.tag.lower() in TEMPORAL_LOCAL_TAGS
-            for child in element
+            element.get(attribute) is not None
+            for attribute in TEMPORAL_RULE_ATTRIBUTES
         )
 
     def extract_atomic_conditions(
@@ -222,11 +203,6 @@ class GraphGenerator:
                     f"{rule_id}. User must fix the rule manually."
                 )
             else:
-                temporal_parent = any(
-                    isinstance(child.tag, str)
-                    and child.tag.lower() in TEMPORAL_PARENT_TAGS
-                    for child in element
-                )
                 self.G.add_node(
                     rule_id,
                     groups=all_groups,
@@ -237,7 +213,6 @@ class GraphGenerator:
                     conditions=self.extract_atomic_conditions(
                         element, regex_values
                     ),
-                    _temporal_parent=temporal_parent,
                 )
                 for group in all_groups:
                     self.group_membership[group].append(rule_id)
@@ -367,11 +342,7 @@ class GraphGenerator:
                     preserved_parent_conditions + overwrite_conditions
                 )
 
-                # if_matched_sid/group cannot be overwritten. The remaining
-                # temporal-state constructs are replaced with the overwrite.
-                existing["temporal"] = bool(
-                    existing.get("_temporal_parent", False)
-                ) or self.has_local_temporal_state(element)
+                existing["temporal"] = self.is_temporal_rule(element)
             else:
                 logging.warning(
                     f"Overwrite rule {rule_id} found with no base rule; "
@@ -389,7 +360,6 @@ class GraphGenerator:
             groups=["__meta__"],
             temporal=False,
             conditions=[],
-            _temporal_parent=False,
         )
 
         for node in first_level_rules:

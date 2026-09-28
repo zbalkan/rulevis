@@ -19,17 +19,35 @@ def make_generator(tmp_path):
         ("if_fts", ""),
     ],
 )
-def test_temporal_state_tags_mark_rule_temporal(tmp_path, tag, value):
+def test_temporal_tags_without_attributes_are_not_temporal(
+    tmp_path, tag, value
+):
     element = ET.fromstring(
         f'<rule id="100100" level="5"><{tag}>{value}</{tag}></rule>'
+    )
+
+    assert make_generator(tmp_path).is_temporal_rule(element) is False
+
+
+@pytest.mark.parametrize(
+    "attribute",
+    ["frequency", "timeframe"],
+)
+def test_temporal_rule_attributes_mark_rule_temporal(
+    tmp_path, attribute
+):
+    element = ET.fromstring(
+        f'<rule id="100100" level="5" {attribute}="60">'
+        '<same_field>srcip</same_field>'
+        '</rule>'
     )
 
     assert make_generator(tmp_path).is_temporal_rule(element) is True
 
 
-def test_temporal_modifiers_do_not_create_temporal_state(tmp_path):
+def test_temporal_modifiers_without_state_are_not_temporal(tmp_path):
     element = ET.fromstring(
-        '<rule id="100100" level="5" frequency="4" timeframe="60">'
+        '<rule id="100100" level="5">'
         '<same_field>srcip</same_field>'
         '<different_field>dstip</different_field>'
         '<global_frequency />'
