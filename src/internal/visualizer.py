@@ -98,11 +98,11 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         attrs = G.nodes[nid]
         if displayed is None:
             # caller doesn't care about expandable computation
-            return {"id": nid, **{k: v for k, v in attrs.items() if k != "expandable"}}
+            return {"id": nid, **{k: v for k, v in attrs.items() if k != "expandable" and not k.startswith("_")}}
         expandable = any(child not in displayed for child in G.successors(nid))
         return {
             "id": nid,
-            **{k: v for k, v in attrs.items() if k != "expandable"},
+            **{k: v for k, v in attrs.items() if k != "expandable" and not k.startswith("_")},
             "expandable": expandable,
         }
 
@@ -114,6 +114,65 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
 
     def make_edge(u: str, v: str) -> dict[str, Any]:
         return {"source": u, "target": v, "relation_type": relation_type(u, v)}
+
+    atomic_relation_types = {"if_sid", "if_group", "root"}
+
+    def atomic_relation_type(u: str, v: str) -> str | None:
+        data = G.get_edge_data(u, v) or {}
+        for edge_data in data.values():
+            relation = edge_data.get("relation_type")
+            if relation in atomic_relation_types:
+                return relation
+        return None
+
+    def condition_tree(
+        node_id: str,
+        selected_id: str,
+        path: set[str],
+    ) -> dict[str, Any]:
+        node_data = G.nodes[node_id]
+        entry: dict[str, Any] = {
+            "id": node_id,
+            "description": node_data.get("description"),
+            "inherited": node_id != selected_id,
+            "temporal": bool(node_data.get("temporal", False)),
+            "conditions": node_data.get("conditions", []),
+            "parents": [],
+        }
+
+        if node_id == "0":
+            return entry
+
+        if node_id != selected_id and node_data.get("temporal", False):
+            entry["temporal_boundary"] = True
+            return entry
+
+        next_path = path | {node_id}
+        parents: list[dict[str, Any]] = []
+        for parent_id in G.predecessors(node_id):
+            relation = atomic_relation_type(parent_id, node_id)
+            if relation is None:
+                continue
+
+            if parent_id in next_path:
+                parents.append({
+                    "id": parent_id,
+                    "relation_type": relation,
+                    "cycle": True,
+                    "inherited": True,
+                    "conditions": [],
+                    "parents": [],
+                })
+                continue
+
+            parent_entry = condition_tree(
+                parent_id, selected_id, next_path
+            )
+            parent_entry["relation_type"] = relation
+            parents.append(parent_entry)
+
+        entry["parents"] = parents
+        return entry
 
     def error(message: str, code: int = 400) -> tuple[Response, int]:
         return jsonify({"error": message}), code
@@ -174,6 +233,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                 "groups": node_data.get("groups", []),
                 "level": node_data.get("level"),
                 "file": node_data.get("file"),
+                "temporal": bool(node_data.get("temporal", False)),
                 "parents": parents,
                 "children": children
             })
@@ -301,6 +361,26 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
             return jsonify({"nodes": [], "edges": []})
         edges_list = [make_edge(u, v) for u, v in G.subgraph(node_ids).edges()]
         return jsonify({"nodes": [], "edges": edges_list})
+
+    @app.route("/api/conditions", methods=["GET"])
+    def conditions() -> Union[Response, tuple[Response, int]]:
+        node_id = request.args.get("id", "").strip()
+        if not node_id:
+            return error("An 'id' parameter is required", 400)
+        if node_id not in G:
+            return error(f"Node '{node_id}' not found", 404)
+        if node_id == "0":
+            return error("The synthetic root has no rule conditions", 400)
+        if G.nodes[node_id].get("temporal", False):
+            return error(
+                "Condition expansion is available only for atomic rules",
+                400,
+            )
+
+        return jsonify({
+            "id": node_id,
+            "tree": condition_tree(node_id, node_id, set()),
+        })
 
     @app.route("/api/stats", methods=["GET"])
     def stats() -> Response:

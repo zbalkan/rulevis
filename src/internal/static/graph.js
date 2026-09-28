@@ -21,6 +21,8 @@ const STYLES = {
     legend: { text: '#eee' }
 };
 
+const NODE_RADIUS = 12;
+
 // =================================================================================
 // 2. COMPONENT CLASSES (Self-Contained UI Managers)
 // =================================================================================
@@ -56,23 +58,106 @@ class DetailsPanel {
         document.getElementById("detailsCloseBtn").addEventListener("click", () => this.visualizer.clearHighlight());
     }
     show(node) {
-        this.content.innerHTML = `<h3>Details for Rule: ${node.id}</h3><p><i>Loading full details...</i></p>`;
+        this.content.innerHTML = `<h3>Details for Rule: ${escapeHTML(node.id)}</h3><p><i>Loading full details...</i></p>`;
         this.panel.classList.add("visible");
-        fetchJSON(`/api/nodes?id=${node.id}&neighbors=both&include=details`)
+        fetchJSON(`/api/nodes?id=${encodeURIComponent(node.id)}&neighbors=both&include=details`)
         .then(details => this.render(details))
-        .catch(error => {
-            this.content.innerHTML = `<h3>Details for Rule: ${node.id}</h3><p style="color: #ff8a8a;">Could not load details.</p>`;
+        .catch(() => {
+            this.content.innerHTML = `<h3>Details for Rule: ${escapeHTML(node.id)}</h3><p style="color: #ff8a8a;">Could not load details.</p>`;
         });
     }
     hide() {
         this.panel.classList.remove("visible");
+    }
+    renderCondition(condition) {
+        const attributes = Object.entries(condition.attributes || {})
+            .map(([key, value]) => `${escapeHTML(key)}="${escapeHTML(value)}"`)
+            .join(" ");
+        const tag = attributes
+            ? `&lt;${escapeHTML(condition.tag)} ${attributes}&gt;`
+            : `&lt;${escapeHTML(condition.tag)}&gt;`;
+        const value = condition.value === undefined || condition.value === null
+            ? ""
+            : String(condition.value);
+
+        return `
+            <li class="condition-item">
+                <code class="condition-tag">${tag}</code>
+                <code class="condition-value">${escapeHTML(value) || "(empty)"}</code>
+            </li>
+        `;
+    }
+    renderConditionTree(node, selectedId, depth = 0) {
+        if (node.cycle) {
+            return `
+                <div class="condition-rule condition-cycle" style="--condition-depth: ${depth}">
+                    <div class="condition-rule-header">
+                        <strong>Rule ${escapeHTML(node.id)}</strong>
+                        <span class="condition-badge">Cycle</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        const inherited = node.id !== selectedId;
+        const relation = node.relation_type
+            ? `<span class="condition-relation">via ${escapeHTML(node.relation_type)}</span>`
+            : "";
+        const badge = inherited
+            ? `<span class="condition-badge inherited">Inherited · Rule ${escapeHTML(node.id)}</span>`
+            : `<span class="condition-badge current">Current rule</span>`;
+        const conditions = (node.conditions || []).length > 0
+            ? `<ul class="condition-list">${node.conditions.map(condition => this.renderCondition(condition)).join("")}</ul>`
+            : `<p class="condition-empty">No local atomic predicates.</p>`;
+        const boundary = node.temporal_boundary
+            ? `<p class="condition-boundary">Temporal ancestor: retained-history conditions are not expanded.</p>`
+            : "";
+        const parents = (node.parents || [])
+            .map(parent => this.renderConditionTree(parent, selectedId, depth + 1))
+            .join("");
+
+        return `
+            <div class="condition-rule ${inherited ? "condition-inherited" : "condition-current"}" style="--condition-depth: ${depth}">
+                <div class="condition-rule-header">
+                    <strong>Rule ${escapeHTML(node.id)}</strong>
+                    ${badge}
+                </div>
+                ${relation}
+                ${conditions}
+                ${boundary}
+            </div>
+            ${parents}
+        `;
+    }
+    showConditions(ruleId) {
+        const container = document.getElementById("conditionsTrace");
+        const button = document.getElementById("showConditionsBtn");
+        if (!container || !button) return;
+
+        button.disabled = true;
+        container.innerHTML = '<p><i>Loading effective conditions...</i></p>';
+
+        fetchJSON(`/api/conditions?id=${encodeURIComponent(ruleId)}`)
+            .then(data => {
+                container.innerHTML = `
+                    <h4>Effective Atomic Conditions</h4>
+                    <p class="condition-help">Conditions are shown with their originating rule while walking atomic parents toward the virtual root.</p>
+                    <div class="condition-tree">
+                        ${this.renderConditionTree(data.tree, ruleId)}
+                    </div>
+                `;
+                button.textContent = "Conditions Loaded";
+            })
+            .catch(() => {
+                container.innerHTML = '<p style="color: #ff8a8a;">Could not load conditions.</p>';
+                button.disabled = false;
+            });
     }
     render(details) {
         const parentExpandBtn = details.parents && details.parents.some(p => !this.visualizer.displayedRuleIDs.has(p.id)) ? `<button class="expand-all-btn" onclick="window.visualizer.expandAllParents('${details.id}', '${(details.parents || []).map(p => p.id).join(',')}')">Expand All</button>` : '';
         const childExpandBtn = details.children && details.children.some(c => !this.visualizer.displayedRuleIDs.has(c.id)) ? `<button class="expand-all-btn" onclick="window.visualizer.expandNode('${details.id}')">Expand All</button>` : '';
         const renderList = (items) => !items || items.length === 0 ? `<p>No related rules.</p>` : `<ul>${items.map(item => `<li class="${this.visualizer.displayedRuleIDs.has(item.id) ? 'displayed' : 'not-displayed'}" onclick="window.visualizer.handleSearchById('${item.id}')"><strong>${item.relation_type}:</strong> ${item.id}</li>`).join('')}</ul>`;
 
-        // --- Logic to derive and format the new fields ---
         const ruleLevel = parseInt(details.level, 10);
         const generatesAlert = ruleLevel >= 3;
         const alertClass = generatesAlert ? 'alert-true' : 'alert-false';
@@ -98,7 +183,10 @@ class DetailsPanel {
             </div>
         ` : '';
 
-        // --- Final HTML structure with the typo corrected ---
+        const conditionsButton = details.id !== "0" && !details.temporal
+            ? `<button id="showConditionsBtn" class="conditions-btn" onclick="window.visualizer.detailsPanel.showConditions('${details.id}')">Show Conditions</button>`
+            : '';
+
         this.content.innerHTML = `
             <h3>Details for Rule: ${details.id}</h3>
             
@@ -113,6 +201,7 @@ class DetailsPanel {
             </div>
 
             <p><strong>Description:</strong> ${details.description || 'N/A'}</p>
+            ${conditionsButton ? `<div class="details-actions">${conditionsButton}</div><div id="conditionsTrace"></div>` : ''}
             <h4>Groups</h4>
             ${(details.groups && details.groups.length > 0) ? `<ul>${details.groups.map(g => `<li>${g}</li>`).join('')}</ul>` : '<p>No groups assigned.</p>'}
 
@@ -120,7 +209,6 @@ class DetailsPanel {
             ${renderList(details.parents)}
 
             <div class="details-header"><h4>Child Rules</h4>${childExpandBtn}</div>
-            
             ${renderList(details.children)}
         `;
     }
@@ -370,7 +458,7 @@ class GraphVisualizer {
             .theta(0.9)
             .distanceMax(1500)  // ignore charge beyond this distance
         )
-        .force("collision", d3.forceCollide().radius(d => d.__radius + 5))
+        .force("collision", d3.forceCollide().radius(NODE_RADIUS + 5))
         .force("center", d3.forceCenter(this.width / 2, this.height / 2));
         this.simulation.on("tick", () => {
             this.needsRender = true;
@@ -426,25 +514,29 @@ class GraphVisualizer {
 
         const k = this.transform.k;
         const nodeGroups = { default: [], expandable: [], collapsed: [] };
+        const temporalNodes = [];
 
         for (let node of this.nodes) {
             let styleKey = "default";
-            let radius = 10;
 
             if (this.focusModeEnabled && this.focusedContextIds.size > 0) {
                 if (this.focusedContextIds.has(node.id)) {
                     styleKey = node.expandable && !node.is_expanded ? "expandable" : "default";
                 } else {
                     styleKey = "collapsed";
-                    radius = 5;
                 }
             } else {
                 styleKey = node.expandable && !node.is_expanded ? "expandable" : "default";
             }
 
             node.__drawStyle = styleKey;
-            node.__radius = radius;
-            nodeGroups[styleKey].push(node);
+            node.__radius = NODE_RADIUS;
+
+            if (node.temporal && node.id !== "0") {
+                temporalNodes.push(node);
+            } else {
+                nodeGroups[styleKey].push(node);
+            }
         }
 
         for (const [styleKey, nodes] of Object.entries(nodeGroups)) {
@@ -458,11 +550,15 @@ class GraphVisualizer {
             this.context.fill();
         }
 
+        for (const node of temporalNodes) {
+            this.drawClockNode(node, STYLES.nodes[node.__drawStyle]);
+        }
+
         if (this.highlightedNodeId) {
             const node = this.nodeMap.get(this.highlightedNodeId);
             if (node) {
                 this.context.beginPath();
-                this.context.arc(node.x, node.y, node.__radius || 10, 0, 2 * Math.PI);
+                this.context.arc(node.x, node.y, (node.__radius || NODE_RADIUS) + 4, 0, 2 * Math.PI);
                 this.context.strokeStyle = STYLES.nodes.highlight;
                 this.context.lineWidth = 3 / this.transform.k;
                 this.context.stroke();
@@ -478,7 +574,7 @@ class GraphVisualizer {
                 ) {
                     this.context.fillStyle = STYLES.nodes.text;
                     this.context.font = `${(k >= 1.0 ? 12 / k : 10)}px sans-serif`;
-                    this.context.fillText(node.id, node.x + 15, node.y + 4);
+                    this.context.fillText(node.id, node.x + NODE_RADIUS + 5, node.y + 4);
                 }
             }
         }
@@ -582,8 +678,35 @@ class GraphVisualizer {
         });
     }
     
+    drawClockNode(node, color) {
+        const radius = node.__radius || NODE_RADIUS;
+        const lineWidth = Math.max(1.5, 2.5 / this.transform.k);
+
+        this.context.save();
+        this.context.strokeStyle = color;
+        this.context.lineWidth = lineWidth;
+        this.context.lineCap = "round";
+
+        this.context.beginPath();
+        this.context.arc(node.x, node.y, radius, 0, 2 * Math.PI);
+        this.context.stroke();
+
+        this.context.beginPath();
+        this.context.moveTo(node.x, node.y);
+        this.context.lineTo(node.x, node.y - radius * 0.55);
+        this.context.moveTo(node.x, node.y);
+        this.context.lineTo(
+            node.x + radius * 0.48,
+            node.y + radius * 0.36
+        );
+        this.context.stroke();
+
+        this.context.restore();
+    }
+
     drawArrowhead(source, target) {
-        const headLength = 6, nodeRadius = 10;
+        const headLength = 6;
+        const nodeRadius = target.__radius || NODE_RADIUS;
         const angle = Math.atan2(target.y - source.y, target.x - source.x);
         const tipX = target.x - nodeRadius * Math.cos(angle);
         const tipY = target.y - nodeRadius * Math.sin(angle);
@@ -596,20 +719,50 @@ class GraphVisualizer {
     }
     
     buildLegend() {
-        const nodeLegendData = [{ label: "Expandable Node", color: STYLES.nodes.expandable }, { label: "Default Node", color: STYLES.nodes.default }];
-        const edgeLegendData = [{ label: "if_sid", color: STYLES.edges.if_sid }, { label: "if_matched_sid", color: STYLES.edges.if_matched_sid }, { label: "if_group", color: STYLES.edges.if_group }, { label: "if_matched_group", color: STYLES.edges.if_matched_group }, { label: "No parent", color: STYLES.edges.no_parent }, { label: "Unknown", color: STYLES.edges.unknown }];
+        const nodeLegendData = [
+            { label: "Expandable Node", color: STYLES.nodes.expandable, shape: "circle" },
+            { label: "Default Node", color: STYLES.nodes.default, shape: "circle" },
+            { label: "Temporal Rule", color: STYLES.nodes.default, shape: "clock" }
+        ];
+        const edgeLegendData = [
+            { label: "if_sid", color: STYLES.edges.if_sid },
+            { label: "if_matched_sid", color: STYLES.edges.if_matched_sid },
+            { label: "if_group", color: STYLES.edges.if_group },
+            { label: "if_matched_group", color: STYLES.edges.if_matched_group },
+            { label: "No parent", color: STYLES.edges.no_parent },
+            { label: "Unknown", color: STYLES.edges.unknown }
+        ];
         let legendY = 30;
         this.context.font = "14px sans-serif";
         this.context.fillStyle = STYLES.legend.text;
+
         nodeLegendData.forEach(item => {
-            this.context.beginPath();
-            this.context.arc(20, legendY, 8, 0, 2 * Math.PI);
-            this.context.fillStyle = item.color;
-            this.context.fill();
+            if (item.shape === "clock") {
+                this.context.save();
+                this.context.strokeStyle = item.color;
+                this.context.lineWidth = 2;
+                this.context.lineCap = "round";
+                this.context.beginPath();
+                this.context.arc(20, legendY, 8, 0, 2 * Math.PI);
+                this.context.stroke();
+                this.context.beginPath();
+                this.context.moveTo(20, legendY);
+                this.context.lineTo(20, legendY - 4);
+                this.context.moveTo(20, legendY);
+                this.context.lineTo(24, legendY + 3);
+                this.context.stroke();
+                this.context.restore();
+            } else {
+                this.context.beginPath();
+                this.context.arc(20, legendY, 8, 0, 2 * Math.PI);
+                this.context.fillStyle = item.color;
+                this.context.fill();
+            }
             this.context.fillStyle = STYLES.legend.text;
             this.context.fillText(item.label, 35, legendY + 5);
             legendY += 25;
         });
+
         legendY += 20;
         edgeLegendData.forEach(item => {
             this.context.beginPath();
@@ -618,6 +771,7 @@ class GraphVisualizer {
             this.context.strokeStyle = item.color;
             this.context.lineWidth = 4;
             this.context.stroke();
+            this.context.fillStyle = STYLES.legend.text;
             this.context.fillText(item.label, 55, legendY + 5);
             legendY += 25;
         });
@@ -633,7 +787,7 @@ class GraphVisualizer {
     
     findNodeAt(x, y) {
         const [ix, iy] = this.transform.invert([x, y]);
-        const radiusSq = 100 / (this.transform.k * this.transform.k);
+        const radiusSq = NODE_RADIUS * NODE_RADIUS;
 
         for (let i = this.nodes.length - 1; i >= 0; i--) {
             const node = this.nodes[i];
@@ -837,6 +991,15 @@ class GraphVisualizer {
 // =================================================================================
 // 4. GLOBAL HELPER & INITIALIZATION
 // =================================================================================
+
+function escapeHTML(value) {
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
 
 async function fetchJSON(url, options = {}) {
     try {

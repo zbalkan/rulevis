@@ -10,9 +10,65 @@ import networkx as nx
 
 ENCODING: Final[str] = "utf-8"
 
-REGEX_FINDER: re.Pattern[str] = re.compile(r'<regex\s+.*?>(.*?)</regex>',
-                                           flags=re.DOTALL | re.IGNORECASE)
-REGEX_AMP: re.Pattern[str] = re.compile(r"&(?!amp;|lt;|gt;)")
+REGEX_BLOCK: re.Pattern[str] = re.compile(
+    r"(<regex\b[^>]*>)(.*?)(</regex>)",
+    flags=re.DOTALL | re.IGNORECASE,
+)
+REGEX_AMP: re.Pattern[str] = re.compile(r"&(?!amp;|lt;|gt;|quot;|apos;)")
+
+# These tags establish retained state. Frequency/timeframe and same/different
+# fields constrain temporal evaluation, but do not make a rule temporal by
+# themselves.
+TEMPORAL_PARENT_TAGS: Final[frozenset[str]] = frozenset({
+    "if_matched_sid",
+    "if_matched_group",
+})
+TEMPORAL_LOCAL_TAGS: Final[frozenset[str]] = frozenset({
+    "if_matched_regex",
+    "check_diff",
+    "if_fts",
+})
+TEMPORAL_STATE_TAGS: Final[frozenset[str]] = (
+    TEMPORAL_PARENT_TAGS | TEMPORAL_LOCAL_TAGS
+)
+
+# RuleVis deliberately omits if_level relationships. Keep the condition model
+# aligned with the graph model so an "effective conditions" trace is complete.
+ATOMIC_CONDITION_TAGS: Final[frozenset[str]] = frozenset({
+    "location",
+    "decoded_as",
+    "category",
+    "match",
+    "regex",
+    "field",
+    "srcip",
+    "dstip",
+    "srcport",
+    "dstport",
+    "protocol",
+    "action",
+    "id",
+    "url",
+    "data",
+    "extra_data",
+    "status",
+    "system_name",
+    "srcgeoip",
+    "dstgeoip",
+    "user",
+    "hostname",
+    "program_name",
+    "compiled_rule",
+    "list",
+    "time",
+    "weekday",
+    "if_sid",
+    "if_group",
+})
+ATOMIC_PARENT_TAGS: Final[frozenset[str]] = frozenset({
+    "if_sid",
+    "if_group",
+})
 
 
 class GraphGenerator:
@@ -21,7 +77,13 @@ class GraphGenerator:
         self.group_membership: dict[str, list[str]] = defaultdict(list)
         self.G: nx.MultiDiGraph = nx.MultiDiGraph()
         self.graph_file: str = graph_file
-        self.overwrite_rules: list[tuple[ET.Element, str]] = []
+        self.overwrite_rules: list[
+            tuple[ET.Element, str, dict[str, str]]
+        ] = []
+        self.rule_relationships: dict[
+            str,
+            tuple[Optional[str], Optional[str], Optional[str], Optional[str]],
+        ] = {}
 
     def get_all_xml_files(self) -> list[str]:
         xml_files: list[str] = []
@@ -36,39 +98,109 @@ class GraphGenerator:
         logging.info('Processing all files...')
         return xml_files
 
-    def add_edge_with_type(self, source: str, target: str, relation_type: str) -> None:
+    def add_edge_with_type(
+        self, source: str, target: str, relation_type: str
+    ) -> None:
         if logging.getLogger().getEffectiveLevel() <= logging.DEBUG:
             logging.debug(
-                f"Adding edge from {source} to {target} with type {relation_type}")
+                f"Adding edge from {source} to {target} with type {relation_type}"
+            )
         self.G.add_edge(source, target, relation_type=relation_type)
 
-    def add_relationship_edges(self, rule_id: str,
-                               if_sid: Optional[str], if_matched_sid: Optional[str],
-                               if_group: Optional[str], if_matched_group: Optional[str]) -> None:
+    def add_relationship_edges(
+        self,
+        rule_id: str,
+        if_sid: Optional[str],
+        if_matched_sid: Optional[str],
+        if_group: Optional[str],
+        if_matched_group: Optional[str],
+    ) -> None:
         if if_sid:
             for sid in re.split(r'[,\s]+', if_sid.strip()):
-                self.add_edge_with_type(sid.strip(), rule_id, 'if_sid')
+                if sid:
+                    self.add_edge_with_type(sid, rule_id, 'if_sid')
 
         if if_matched_sid:
             for sid in re.split(r'[,\s]+', if_matched_sid.strip()):
-                self.add_edge_with_type(sid.strip(), rule_id, 'if_matched_sid')
+                if sid:
+                    self.add_edge_with_type(sid, rule_id, 'if_matched_sid')
 
         if if_group:
             for group in re.split(r'[,\s]+', if_group.strip()):
-                for parent_rule in self.group_membership.get(group.strip(), []):
+                if not group:
+                    continue
+                for parent_rule in self.group_membership.get(group, []):
                     self.add_edge_with_type(parent_rule, rule_id, 'if_group')
 
         if if_matched_group:
             for group in re.split(r'[,\s]+', if_matched_group.strip()):
-                for parent_rule in self.group_membership.get(group.strip(), []):
+                if not group:
+                    continue
+                for parent_rule in self.group_membership.get(group, []):
                     self.add_edge_with_type(
-                        parent_rule, rule_id, 'if_matched_group')
+                        parent_rule, rule_id, 'if_matched_group'
+                    )
 
-    def parse_groups_and_rules(self, element: ET.Element, inherited_groups: list[str], xml_file: str) -> None:
+    def is_temporal_rule(self, element: ET.Element) -> bool:
+        return any(
+            isinstance(child.tag, str)
+            and child.tag.lower() in TEMPORAL_STATE_TAGS
+            for child in element
+        )
+
+    def has_local_temporal_state(self, element: ET.Element) -> bool:
+        return any(
+            isinstance(child.tag, str)
+            and child.tag.lower() in TEMPORAL_LOCAL_TAGS
+            for child in element
+        )
+
+    def extract_atomic_conditions(
+        self,
+        element: ET.Element,
+        regex_values: dict[str, str],
+    ) -> list[dict[str, object]]:
+        conditions: list[dict[str, object]] = []
+
+        maxsize = element.get("maxsize")
+        if maxsize is not None:
+            conditions.append({
+                "tag": "maxsize",
+                "value": maxsize,
+                "attributes": {"source": "rule"},
+            })
+
+        for child in element:
+            if not isinstance(child.tag, str):
+                continue
+            tag = child.tag.lower()
+            if tag not in ATOMIC_CONDITION_TAGS:
+                continue
+
+            value = child.text or ""
+            if tag == "regex":
+                value = regex_values.get(value, value)
+
+            condition: dict[str, object] = {
+                "tag": tag,
+                "value": value,
+            }
+            if child.attrib:
+                condition["attributes"] = dict(child.attrib)
+            conditions.append(condition)
+
+        return conditions
+
+    def parse_groups_and_rules(
+        self,
+        element: ET.Element,
+        inherited_groups: list[str],
+        xml_file: str,
+        regex_values: dict[str, str],
+    ) -> None:
         if element.tag == 'rule':
             if element.get("overwrite", "").lower() == "yes":
-                # defer to second pass
-                self.overwrite_rules.append((element, xml_file))
+                self.overwrite_rules.append((element, xml_file, regex_values))
                 return
 
             rule_id = element.get('id', '0')
@@ -80,41 +212,76 @@ class GraphGenerator:
 
             attributes = [(i.tag, i.text) for i in element]
             rule_description = self.extract_rule_description(attributes)
-            all_groups = self.extract_rule_groups(inherited_groups, attributes)
+            all_groups = self.extract_rule_groups(
+                inherited_groups, attributes
+            )
 
             if self.G.nodes.get(rule_id) is not None:
                 logging.debug(
-                    f"Duplicate rule ID found with no 'overwrite' tag: {rule_id}. User must fix the rule manually.")
-
+                    "Duplicate rule ID found with no 'overwrite' tag: "
+                    f"{rule_id}. User must fix the rule manually."
+                )
             else:
-                self.G.add_node(rule_id,
-                                groups=all_groups,
-                                description=rule_description,
-                                level=rule_level,
-                                file=os.path.basename(xml_file))
+                temporal_parent = any(
+                    isinstance(child.tag, str)
+                    and child.tag.lower() in TEMPORAL_PARENT_TAGS
+                    for child in element
+                )
+                self.G.add_node(
+                    rule_id,
+                    groups=all_groups,
+                    description=rule_description,
+                    level=rule_level,
+                    file=os.path.basename(xml_file),
+                    temporal=self.is_temporal_rule(element),
+                    conditions=self.extract_atomic_conditions(
+                        element, regex_values
+                    ),
+                    _temporal_parent=temporal_parent,
+                )
                 for group in all_groups:
                     self.group_membership[group].append(rule_id)
 
-                self.add_relationship_edges(
-                    rule_id, if_sid, if_matched_sid, if_group, if_matched_group)
+                # Relationship resolution is deferred until every rule and
+                # group membership has been loaded. This prevents if_group
+                # edges from depending on XML/file traversal order.
+                self.rule_relationships[rule_id] = (
+                    if_sid,
+                    if_matched_sid,
+                    if_group,
+                    if_matched_group,
+                )
 
         elif element.tag == 'group':
             group_attribute = element.get('name', '')
             internal_groups = [
-                gr for gr in group_attribute.split(',') if gr != '']
+                gr for gr in group_attribute.split(',') if gr != ''
+            ]
             new_inherited_groups = inherited_groups + internal_groups
 
             for child in element:
-                self.parse_groups_and_rules(child, new_inherited_groups, xml_file)
+                self.parse_groups_and_rules(
+                    child,
+                    new_inherited_groups,
+                    xml_file,
+                    regex_values,
+                )
 
-    def extract_rule_groups(self, inherited_groups: list[str], children: list[tuple[str, Optional[str]]]) -> list[str]:
+    def extract_rule_groups(
+        self,
+        inherited_groups: list[str],
+        children: list[tuple[str, Optional[str]]],
+    ) -> list[str]:
         all_groups = list(inherited_groups)
         for child in children:
             if child[0] == 'group' and child[1]:
                 all_groups.extend([g for g in child[1].split(',') if g])
         return all_groups
 
-    def extract_rule_description(self, attributes: list[tuple[str, Optional[str]]]) -> Optional[str]:
+    def extract_rule_description(
+        self,
+        attributes: list[tuple[str, Optional[str]]],
+    ) -> Optional[str]:
         description: list[str] = []
         for attr in attributes:
             if attr[0] == 'description':
@@ -138,71 +305,107 @@ class GraphGenerator:
                     xml_content = f.read()
             except OSError as e:
                 logging.error(
-                    f"Error reading file {xml_file}: {e}", exc_info=True)
+                    f"Error reading file {xml_file}: {e}", exc_info=True
+                )
                 continue
 
-            wrapped_content: str = self.wrap_with_root(xml_content)
+            wrapped_content = self.wrap_with_root(xml_content)
 
             try:
-                sanitized = self.__remove_regex_field(wrapped_content)
-                sanitized = self.__escape_amp(sanitized)
-                parsed_xml = ET.fromstring(sanitized)
-                root = parsed_xml
+                protected, regex_values = self.__protect_regex_fields(
+                    wrapped_content
+                )
+                sanitized = self.__escape_amp(protected)
+                root = ET.fromstring(sanitized)
                 for child in root:
-                    self.parse_groups_and_rules(child, [], xml_file)
+                    self.parse_groups_and_rules(
+                        child, [], xml_file, regex_values
+                    )
             except Exception as e:
-                logging.error(f"Error parsing {xml_file}: {e}", exc_info=True)
+                logging.error(
+                    f"Error parsing {xml_file}: {e}", exc_info=True
+                )
 
-        # second pass: apply overwrites now that all base rules exist
-        # Per Wazuh documentation, the overwrite tag is "used to replace a rule
-        # with local changes. To maintain consistency between loaded rules,
-        # if_sid, if_group, if_level, if_matched_sid, and if_matched_group
-        # labels are not taken into account when overwriting a rule. If any of
-        # these are encountered, the original value prevails."
-        # Therefore, we intentionally do NOT update groups or dependency
-        # relationships (if_sid, if_group, etc.) when applying overwrites.
-        for element, ow_file in self.overwrite_rules:
-            # Only description, level, maxsize, and file are updated
+        logging.info("Resolving rule relationships...")
+        for rule_id, relationships in self.rule_relationships.items():
+            self.add_relationship_edges(rule_id, *relationships)
+
+        # Apply overwrites after all base rules exist. Wazuh preserves the
+        # dependency labels (if_sid/if_group and the matched SID/group
+        # relationships), but replaces ordinary predicates and other rule
+        # properties. Keep the effective condition model consistent with that.
+        for element, ow_file, regex_values in self.overwrite_rules:
             rule_id = element.get("id")
             if rule_id in self.G.nodes:
                 existing = self.G.nodes[rule_id]
                 logging.info(f"Applying overwrite for rule {rule_id}")
+
                 attrs = [(i.tag, i.text) for i in element]
                 desc = self.extract_rule_description(attrs)
                 if desc:
                     existing["description"] = desc
+
                 for attr in ("level", "maxsize"):
                     if element.get(attr):
                         existing[attr] = element.get(attr)
+
                 existing["file"] = os.path.basename(ow_file)
+
+                preserved_parent_conditions = [
+                    condition
+                    for condition in existing.get("conditions", [])
+                    if condition.get("tag") in ATOMIC_PARENT_TAGS
+                ]
+                overwrite_conditions = [
+                    condition
+                    for condition in self.extract_atomic_conditions(
+                        element, regex_values
+                    )
+                    if condition.get("tag") not in ATOMIC_PARENT_TAGS
+                ]
+                existing["conditions"] = (
+                    preserved_parent_conditions + overwrite_conditions
+                )
+
+                # if_matched_sid/group cannot be overwritten. The remaining
+                # temporal-state constructs are replaced with the overwrite.
+                existing["temporal"] = bool(
+                    existing.get("_temporal_parent", False)
+                ) or self.has_local_temporal_state(element)
             else:
                 logging.warning(
-                    f"Overwrite rule {rule_id} found with no base rule; skipping.")
+                    f"Overwrite rule {rule_id} found with no base rule; "
+                    "skipping."
+                )
 
         first_level_rules = [
-            node for node in self.G.nodes if self.G.in_degree(node) == 0]
+            node for node in self.G.nodes if self.G.in_degree(node) == 0
+        ]
 
-        # Add synthetic root and connect to top-level rules
-        synthetic_root = '0'  # Root has ID of 0
+        synthetic_root = '0'
         self.G.add_node(
-            synthetic_root, description="Synthetic root node", groups=["__meta__"])
+            synthetic_root,
+            description="Synthetic root node",
+            groups=["__meta__"],
+            temporal=False,
+            conditions=[],
+            _temporal_parent=False,
+        )
 
         for node in first_level_rules:
             self.add_edge_with_type(synthetic_root, node, "root")
 
-        # Pre-calculate and store all children for every node.
-        # This is crucial for the frontend to know if a node is fully expanded.
         logging.info("Pre-calculating child relationships...")
         for node_id in list(self.G.nodes):
-            # G.successors(node_id) returns an iterator of all direct children
             children_ids = list(self.G.successors(node_id))
-            # Store this list as a new attribute on the node itself.
             self.G.nodes[node_id]['children_ids'] = children_ids
         logging.info("Child relationship calculation complete.")
 
         logging.info(f"Total nodes: {self.G.number_of_nodes()}")
         logging.info(
-            f"First-level children (connected to root): {len(first_level_rules)}")
+            "First-level children (connected to root): "
+            f"{len(first_level_rules)}"
+        )
 
     def save_graph(self) -> None:
         try:
@@ -213,23 +416,26 @@ class GraphGenerator:
         except Exception as e:
             logging.exception("Error saving graph", e)
 
-    def __remove_regex_field(self, xml_string: str) -> str:
+    def __protect_regex_fields(
+        self,
+        xml_string: str,
+    ) -> tuple[str, dict[str, str]]:
         """
-        Sanitizes the XML string by removing the entire <regex>...</regex> block.
+        Replace regex bodies with XML-safe placeholders before parsing.
 
-        The user indicated the <regex> tag is not needed for future logic, making
-        removal the most straightforward and robust sanitization method.
+        Wazuh regex text can contain characters that generic XML parsers treat
+        as markup. RuleVis previously removed regex elements completely. A
+        placeholder preserves the exact expression for the condition view
+        without changing the source file.
         """
-        # Regex to find the <regex> tag, its content (including newlines), and the closing </regex> tag.
-        # The 're.DOTALL' flag allows '.' to match newlines.
-        # The '?' makes the matching non-greedy (to match the inner-most tag).
-        # We are using a simple non-greedy match for content: (.*?)
-        # Since the content is the problem, removing the whole block is the fix.
-        sanitized_string = REGEX_FINDER.sub(
-            '',
-            xml_string)
-        return sanitized_string
+        regex_values: dict[str, str] = {}
+
+        def replace(match: re.Match[str]) -> str:
+            token = f"__RULEVIS_REGEX_{len(regex_values)}__"
+            regex_values[token] = match.group(2)
+            return f"{match.group(1)}{token}{match.group(3)}"
+
+        return REGEX_BLOCK.sub(replace, xml_string), regex_values
 
     def __escape_amp(self, xml_string: str) -> str:
-        sanitized_string = REGEX_AMP.sub("&amp;", xml_string)
-        return sanitized_string
+        return REGEX_AMP.sub("&amp;", xml_string)
