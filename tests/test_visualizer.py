@@ -333,3 +333,22 @@ def test_atomic_conditions_endpoint_returns_all_paths(tmp_path):
         ["0", "100001", "100002"],
         ["0", "100005", "100002"],
     ]
+
+
+def test_atomic_condition_paths_include_flattened_rows(tmp_path):
+    paths = write_app_files(tmp_path)
+    client = create_app(*(str(path) for path in paths)).test_client()
+
+    response = client.get("/api/conditions?id=100002")
+
+    assert response.status_code == 200
+    path = response.get_json()["paths"][0]
+    assert path["condition_count"] == 3
+    assert [
+        (row["origin_rule_id"], row["tag"])
+        for row in path["conditions"]
+    ] == [
+        ("100001", "decoded_as"),
+        ("100002", "if_sid"),
+        ("100002", "field"),
+    ]

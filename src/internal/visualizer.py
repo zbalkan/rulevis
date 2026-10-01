@@ -10,7 +10,7 @@ from flask import Flask, jsonify, render_template_string, request
 from flask.wrappers import Response
 from networkx import MultiDiGraph
 
-from internal.conditions import enumerate_paths
+from internal.conditions import resolve_atomic_paths
 
 PRECOMPUTED_BLOCK_SIZES: list[int] = [1, 10, 50, 100, 250, 500]
 PRECOMPUTED_HEATMAPS: dict[int, Any] = {}
@@ -413,7 +413,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         return jsonify({
             "id": node_id,
             "tree": condition_tree(node_id, node_id, set()),
-            "paths": enumerate_paths(G, node_id),
+            "paths": resolve_atomic_paths(G, node_id),
         })
 
     @app.route("/api/stats", methods=["GET"])

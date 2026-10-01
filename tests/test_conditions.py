@@ -87,3 +87,85 @@ def test_disallowed_relationships_are_not_followed():
         "T",
         allowed_relations=ATOMIC_RELATION_TYPES,
     ) == []
+
+
+def test_flatten_atomic_conditions_preserves_order_and_origin():
+    from internal.conditions import flatten_atomic_conditions
+
+    graph = nx.MultiDiGraph()
+    graph.add_node("0", conditions=[])
+    graph.add_node(
+        "A",
+        conditions=[
+            {"tag": "decoded_as", "value": "json"},
+            {"tag": "match", "value": "parent"},
+        ],
+    )
+    graph.add_node(
+        "B",
+        conditions=[
+            {
+                "tag": "field",
+                "value": "^deny$",
+                "attributes": {"name": "event.action"},
+            }
+        ],
+    )
+
+    rows = flatten_atomic_conditions(
+        graph,
+        {"nodes": ["0", "A", "B"], "edges": []},
+    )
+
+    assert rows == [
+        {
+            "origin_rule_id": "A",
+            "inherited": True,
+            "tag": "decoded_as",
+            "value": "json",
+        },
+        {
+            "origin_rule_id": "A",
+            "inherited": True,
+            "tag": "match",
+            "value": "parent",
+        },
+        {
+            "origin_rule_id": "B",
+            "inherited": False,
+            "tag": "field",
+            "value": "^deny$",
+            "attributes": {"name": "event.action"},
+        },
+    ]
+
+
+def test_resolve_atomic_paths_flattens_each_branch():
+    from internal.conditions import resolve_atomic_paths
+
+    graph = nx.MultiDiGraph()
+    graph.add_node("0", conditions=[])
+    graph.add_node(
+        "A",
+        conditions=[{"tag": "match", "value": "a"}],
+    )
+    graph.add_node(
+        "B",
+        conditions=[{"tag": "match", "value": "b"}],
+    )
+    graph.add_node(
+        "C",
+        conditions=[{"tag": "field", "value": "c"}],
+    )
+    graph.add_edge("0", "A", relation_type="root")
+    graph.add_edge("0", "B", relation_type="root")
+    graph.add_edge("A", "C", relation_type="if_sid")
+    graph.add_edge("B", "C", relation_type="if_group")
+
+    paths = resolve_atomic_paths(graph, "C")
+
+    assert [path["condition_count"] for path in paths] == [2, 2]
+    assert [
+        [row["origin_rule_id"] for row in path["conditions"]]
+        for path in paths
+    ] == [["A", "C"], ["B", "C"]]

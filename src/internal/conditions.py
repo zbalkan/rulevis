@@ -87,3 +87,48 @@ def enumerate_paths(
 
     walk(target_id, [target_id], [], {target_id})
     return paths
+
+
+def flatten_atomic_conditions(
+    graph: MultiDiGraph,
+    path: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Flatten local atomic conditions in root-to-target order."""
+    nodes = path.get("nodes", [])
+    if not nodes:
+        return []
+
+    target_id = str(nodes[-1])
+    rows: list[dict[str, Any]] = []
+
+    for node_id in nodes:
+        if node_id == "0" or node_id not in graph:
+            continue
+
+        for condition in graph.nodes[node_id].get("conditions", []):
+            row = {
+                "origin_rule_id": str(node_id),
+                "inherited": str(node_id) != target_id,
+                "tag": condition.get("tag"),
+                "value": condition.get("value", ""),
+            }
+            if condition.get("kind") is not None:
+                row["kind"] = condition["kind"]
+            if condition.get("attributes"):
+                row["attributes"] = dict(condition["attributes"])
+            rows.append(row)
+
+    return rows
+
+
+def resolve_atomic_paths(
+    graph: MultiDiGraph,
+    target_id: str,
+) -> list[dict[str, Any]]:
+    """Enumerate atomic paths and attach their flattened conditions."""
+    paths = enumerate_paths(graph, target_id)
+    for path in paths:
+        conditions = flatten_atomic_conditions(graph, path)
+        path["conditions"] = conditions
+        path["condition_count"] = len(conditions)
+    return paths
