@@ -20,7 +20,6 @@ def write_app_files(tmp_path):
         groups=["__meta__"],
         temporal=False,
         conditions=[],
-        _temporal_parent=False,
     )
     graph.add_node(
         "100001",
@@ -30,7 +29,6 @@ def write_app_files(tmp_path):
         file="rules.xml",
         temporal=False,
         conditions=[{"tag": "decoded_as", "value": "json"}],
-        _temporal_parent=False,
     )
     graph.add_node(
         "100002",
@@ -47,7 +45,6 @@ def write_app_files(tmp_path):
                 "attributes": {"name": "event.action"},
             },
         ],
-        _temporal_parent=False,
     )
     graph.add_node(
         "100003",
@@ -57,7 +54,6 @@ def write_app_files(tmp_path):
         file="rules.xml",
         temporal=True,
         conditions=[],
-        _temporal_parent=True,
     )
     graph.add_node(
         "100004",
@@ -67,7 +63,6 @@ def write_app_files(tmp_path):
         file="rules.xml",
         temporal=False,
         conditions=[{"tag": "if_sid", "value": "100003"}],
-        _temporal_parent=False,
     )
 
     graph.add_edge("0", "100001", relation_type="root")
@@ -404,3 +399,36 @@ def test_atomic_condition_api_reports_analysis_and_clock_types(tmp_path):
     payload = response.get_json()
     assert payload["condition_type"] == "atomic"
     assert payload["clock_temporal"] is False
+
+
+def test_if_matched_rule_can_be_temporal_analysis_without_clock(tmp_path):
+    paths = write_app_files(tmp_path)
+    graph_path, stats_path, heatmap_path = paths
+
+    with graph_path.open("rb") as stream:
+        graph = pickle.load(stream)
+
+    graph.nodes["100003"]["temporal"] = False
+    graph.nodes["100003"]["temporal_conditions"] = [
+        {"tag": "if_matched_sid", "value": "100001"},
+    ]
+    with graph_path.open("wb") as stream:
+        pickle.dump(graph, stream)
+
+    client = create_app(
+        str(graph_path),
+        str(stats_path),
+        str(heatmap_path),
+    ).test_client()
+    response = client.get("/api/conditions?id=100003")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["clock_temporal"] is False
+    assert payload["condition_type"] == "temporal"
+    assert [path["nodes"] for path in payload["paths"]] == [
+        ["0", "100001", "100003"]
+    ]
+    assert payload["paths"][0]["conditions"][0]["scope"] == (
+        "historical_source"
+    )

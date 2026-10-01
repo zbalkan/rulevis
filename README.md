@@ -125,12 +125,13 @@ The clock shape is intentionally classified only by the presence of the `frequen
 
 ## Technical Overview
 
-The project is composed of three main Python modules and a JavaScript frontend:
+The project is composed of four main Python modules and a JavaScript frontend:
 
-1. **`generator.py`:** Parses the Wazuh XML rule files and uses the `networkx` library to build a `MultiDiGraph` object representing the rule relationships. It saves this graph to a temporary file.
-2. **`analyzer.py`:** Loads the graph file and uses `networkx` to perform complex calculations (descendants, ancestors, etc.). It pre-calculates the data needed for the Statistics Panel and the Rule ID Heatmap and saves them to temporary JSON files.
-3. **`visualizer.py`:** A Flask web application that serves the frontend and provides a clean API for the visualization to fetch graph, stats, and heatmap data.
-4. **`graph.js`:** The core frontend logic. It uses **D3.js** for the force simulation and user interactions, and renders the main graph to an **HTML Canvas** for high performance. The interactive heatmap is rendered using **SVG** for its superior event handling and styling capabilities.
+1. **`generator.py`:** Parses Wazuh XML rule files and builds the `networkx.MultiDiGraph`, including rule metadata, relationship provenance, and extracted atomic/temporal conditions.
+2. **`conditions.py`:** Enumerates root-to-rule relationship paths and flattens the effective condition rows for atomic and temporal analysis.
+3. **`analyzer.py`:** Loads the graph and calculates structural statistics and rule-ID heatmap data.
+4. **`visualizer.py`:** Serves the Flask UI and APIs for graph navigation, condition analysis, statistics, and heatmap data.
+5. **`graph.js`:** Implements the D3 force simulation, Canvas graph rendering, side panels, heatmap interaction, and condition-analysis modal.
 
 Here’s a **ready-to-paste README subsection** that explains `rulevis` logging clearly and professionally for your users. It assumes the per-user setup you’ve implemented.
 
