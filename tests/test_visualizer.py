@@ -173,7 +173,11 @@ def test_root_and_details_endpoints(tmp_path):
     details = detail_response.get_json()
     assert details["temporal"] is True
     assert details["parents"] == [
-        {"id": "100001", "relation_type": "if_matched_sid"}
+        {
+            "id": "100001",
+            "relation_type": "if_matched_sid",
+            "selector": None,
+        }
     ]
 
 
@@ -224,6 +228,15 @@ def test_temporal_rule_condition_paths_are_resolved(tmp_path):
     ]
 
 
+@pytest.mark.parametrize(
+    "url,status",
+    [
+        ("/api/conditions", 400),
+        ("/api/conditions?id=missing", 404),
+        ("/api/conditions?id=0", 400),
+        ("/api/nodes?mode=search", 400),
+    ],
+)
 def test_api_validation_errors(tmp_path, url, status):
     paths = write_app_files(tmp_path)
     client = create_app(*(str(path) for path in paths)).test_client()
