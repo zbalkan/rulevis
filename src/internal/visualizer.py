@@ -304,6 +304,17 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
             </div>
         </div>
 
+        <div id="conditionsModal" class="modal-overlay">
+            <div id="conditionsContent">
+                <div class="conditions-modal-header">
+                    <h2 id="conditionsTitle">Conditions</h2>
+                    <button id="conditionsCloseBtn" class="modal-close-btn"
+                            aria-label="Close conditions">×</button>
+                </div>
+                <div id="conditionsBody"></div>
+            </div>
+        </div>
+
         <div class="footer">
             <p>Visit official Wazuh documentation for
                <a href="https://documentation.wazuh.com/current/user-manual/ruleset/ruleset-xml-syntax/rules.html" target="_blank">

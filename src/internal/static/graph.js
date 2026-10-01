@@ -58,7 +58,6 @@ class DetailsPanel {
         document.getElementById("detailsCloseBtn").addEventListener("click", () => this.visualizer.clearHighlight());
     }
     show(node) {
-        this.panel.classList.remove("conditions-visible");
         this.content.innerHTML = `<h3>Details for Rule: ${escapeHTML(node.id)}</h3><p><i>Loading full details...</i></p>`;
         this.panel.classList.add("visible");
         fetchJSON(`/api/nodes?id=${encodeURIComponent(node.id)}&neighbors=both&include=details`)
@@ -69,99 +68,9 @@ class DetailsPanel {
     }
     hide() {
         this.panel.classList.remove("visible");
-        this.panel.classList.remove("conditions-visible");
-    }
-    renderCondition(condition) {
-        const attributes = Object.entries(condition.attributes || {})
-            .map(([key, value]) => `${escapeHTML(key)}="${escapeHTML(value)}"`)
-            .join(" ");
-        const tag = condition.kind === "rule_attribute"
-            ? `rule@${escapeHTML(condition.tag)}`
-            : attributes
-                ? `&lt;${escapeHTML(condition.tag)} ${attributes}&gt;`
-                : `&lt;${escapeHTML(condition.tag)}&gt;`;
-        const value = condition.value === undefined || condition.value === null
-            ? ""
-            : String(condition.value);
-
-        return `
-            <li class="condition-item">
-                <code class="condition-tag">${tag}</code>
-                <code class="condition-value">${escapeHTML(value) || "(empty)"}</code>
-            </li>
-        `;
-    }
-    renderConditionTree(node, selectedId, depth = 0) {
-        if (node.cycle) {
-            return `
-                <div class="condition-rule condition-cycle" style="margin-left: ${depth * 12}px">
-                    <div class="condition-rule-header">
-                        <strong>Rule ${escapeHTML(node.id)}</strong>
-                        <span class="condition-badge">Cycle</span>
-                    </div>
-                </div>
-            `;
-        }
-
-        const inherited = node.id !== selectedId;
-        const displayName = node.id === "0"
-            ? "Virtual root"
-            : `Rule ${escapeHTML(node.id)}`;
-        const relation = node.relation_type
-            ? `<span class="condition-relation">via ${escapeHTML(node.relation_type)}</span>`
-            : "";
-        const badge = node.id === "0"
-            ? `<span class="condition-badge inherited">Virtual root</span>`
-            : inherited
-                ? `<span class="condition-badge inherited">Inherited · Rule ${escapeHTML(node.id)}</span>`
-                : `<span class="condition-badge current">Current rule</span>`;
-        const conditions = (node.conditions || []).length > 0
-            ? `<ul class="condition-list">${node.conditions.map(condition => this.renderCondition(condition)).join("")}</ul>`
-            : `<p class="condition-empty">No local atomic predicates.</p>`;
-        const boundary = node.temporal_boundary
-            ? `<p class="condition-boundary">Temporal ancestor: retained-history conditions are not expanded.</p>`
-            : "";
-        const parents = (node.parents || [])
-            .map(parent => this.renderConditionTree(parent, selectedId, depth + 1))
-            .join("");
-
-        return `
-            <div class="condition-rule ${inherited ? "condition-inherited" : "condition-current"}" style="margin-left: ${depth * 12}px">
-                <div class="condition-rule-header">
-                    <strong>${displayName}</strong>
-                    ${badge}
-                </div>
-                ${relation}
-                ${conditions}
-                ${boundary}
-            </div>
-            ${parents}
-        `;
     }
     showConditions(ruleId) {
-        const container = document.getElementById("conditionsTrace");
-        const button = document.getElementById("showConditionsBtn");
-        if (!container || !button) return;
-
-        button.disabled = true;
-        this.panel.classList.add("conditions-visible");
-        container.innerHTML = '<p><i>Loading effective conditions...</i></p>';
-
-        fetchJSON(`/api/conditions?id=${encodeURIComponent(ruleId)}`)
-            .then(data => {
-                container.innerHTML = `
-                    <h4>Effective Atomic Conditions</h4>
-                    <p class="condition-help">Conditions are shown with their originating rule while walking atomic parents toward the virtual root.</p>
-                    <div class="condition-tree">
-                        ${this.renderConditionTree(data.tree, ruleId)}
-                    </div>
-                `;
-                button.textContent = "Conditions Loaded";
-            })
-            .catch(() => {
-                container.innerHTML = '<p style="color: #ff8a8a;">Could not load conditions.</p>';
-                button.disabled = false;
-            });
+        this.visualizer.conditionsModal.show(ruleId);
     }
     render(details) {
         const parentExpandBtn = details.parents && details.parents.some(p => !this.visualizer.displayedRuleIDs.has(p.id)) ? `<button class="expand-all-btn" onclick="window.visualizer.expandAllParents('${details.id}', '${(details.parents || []).map(p => p.id).join(',')}')">Expand All</button>` : '';
@@ -211,7 +120,7 @@ class DetailsPanel {
             </div>
 
             <p><strong>Description:</strong> ${details.description || 'N/A'}</p>
-            ${conditionsButton ? `<div class="details-actions">${conditionsButton}</div><div id="conditionsTrace"></div>` : ''}
+            ${conditionsButton ? `<div class="details-actions">${conditionsButton}</div>` : ''}
             <h4>Groups</h4>
             ${(details.groups && details.groups.length > 0) ? `<ul>${details.groups.map(g => `<li>${g}</li>`).join('')}</ul>` : '<p>No groups assigned.</p>'}
 
@@ -432,6 +341,37 @@ class HeatmapModal {
     }
 }
 
+class ConditionsModal {
+    constructor() {
+        this.modal = document.getElementById("conditionsModal");
+        this.title = document.getElementById("conditionsTitle");
+        this.body = document.getElementById("conditionsBody");
+        this.isOpen = false;
+
+        document.getElementById("conditionsCloseBtn")
+            .addEventListener("click", () => this.hide());
+        this.modal.addEventListener("click", event => {
+            if (event.target === this.modal) this.hide();
+        });
+    }
+
+    show(ruleId) {
+        this.title.textContent = `Conditions for Rule ${ruleId}`;
+        this.body.innerHTML = `
+            <div class="conditions-placeholder">
+                <p>Resolved condition paths will appear here.</p>
+            </div>
+        `;
+        this.modal.classList.add("visible");
+        this.isOpen = true;
+    }
+
+    hide() {
+        this.modal.classList.remove("visible");
+        this.isOpen = false;
+    }
+}
+
 // =================================================================================
 // 3. MAIN CONTROLLER CLASS (GraphVisualizer)
 // =================================================================================
@@ -460,6 +400,7 @@ class GraphVisualizer {
         this.detailsPanel = new DetailsPanel(this);
         this.statsPanel = new StatsPanel(this);
         this.heatmapModal = new HeatmapModal();
+        this.conditionsModal = new ConditionsModal();
         
         this.simulation = d3.forceSimulation()
         .force("link", d3.forceLink().id(d => d.id).distance(150))
@@ -951,7 +892,8 @@ class GraphVisualizer {
         document.getElementById("showHeatmapBtn").addEventListener("click", () => this.heatmapModal.show());
         document.addEventListener("keydown", e => {
             if (e.key === "Escape") {
-                if (this.heatmapModal.isOpen) this.heatmapModal.hide();
+                if (this.conditionsModal.isOpen) this.conditionsModal.hide();
+                else if (this.heatmapModal.isOpen) this.heatmapModal.hide();
                 else if (this.highlightedNodeId) this.clearHighlight();
                 else if (this.statsPanel.isOpen) this.statsPanel.hide();
             } else if (e.key === " " && document.activeElement.tagName !== 'INPUT') {

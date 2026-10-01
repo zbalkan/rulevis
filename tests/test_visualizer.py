@@ -238,3 +238,16 @@ def test_api_validation_errors(tmp_path, url, status):
     client = create_app(*(str(path) for path in paths)).test_client()
 
     assert client.get(url).status_code == status
+
+
+def test_index_contains_conditions_modal(tmp_path):
+    paths = write_app_files(tmp_path)
+    client = create_app(*(str(path) for path in paths)).test_client()
+
+    response = client.get("/")
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert 'id="conditionsModal"' in html
+    assert 'id="conditionsCloseBtn"' in html
+    assert 'id="conditionsBody"' in html

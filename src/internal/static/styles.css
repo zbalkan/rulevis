@@ -604,6 +604,56 @@ button:hover {
 }
 
 
-.side-panel.conditions-visible {
-    width: min(520px, 95vw);
+
+/* --- Conditions Modal --- */
+#conditionsContent {
+    position: relative;
+    width: 90vw;
+    height: 90vh;
+    display: flex;
+    flex-direction: column;
+    background-color: #1a1a1a;
+    border: 1px solid #555;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+.conditions-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: 0 0 auto;
+    padding: 16px 20px;
+    border-bottom: 1px solid #444;
+}
+
+.conditions-modal-header h2 {
+    margin: 0;
+    color: #4e9af1;
+    font-size: 20px;
+}
+
+.modal-close-btn {
+    min-width: auto;
+    padding: 0 6px;
+    border: 0;
+    background: transparent;
+    color: #aaa;
+    font-size: 28px;
+    line-height: 1;
+}
+
+.modal-close-btn:hover {
+    background: transparent;
+    color: #fff;
+}
+
+#conditionsBody {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 20px;
+    overflow: auto;
+}
+
+.conditions-placeholder {
+    color: #aaa;
 }
