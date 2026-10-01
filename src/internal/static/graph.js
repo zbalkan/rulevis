@@ -347,6 +347,7 @@ class ConditionsModal {
         this.title = document.getElementById("conditionsTitle");
         this.body = document.getElementById("conditionsBody");
         this.isOpen = false;
+        this.requestSeq = 0;
 
         document.getElementById("conditionsCloseBtn")
             .addEventListener("click", () => this.hide());
@@ -413,7 +414,7 @@ class ConditionsModal {
 
     renderPaths(paths, temporal) {
         if (!paths || paths.length === 0) {
-            return "<p>No root-to-rule atomic paths were resolved.</p>";
+            return "<p>No root-to-rule paths were resolved.</p>";
         }
 
         return paths.map((path, index) => {
@@ -446,6 +447,7 @@ class ConditionsModal {
     }
 
     show(ruleId) {
+        const seq = ++this.requestSeq;
         this.title.textContent = `Conditions for Rule ${ruleId}`;
         this.body.innerHTML = "<p><i>Loading condition analysis...</i></p>";
         this.modal.classList.add("visible");
@@ -457,11 +459,13 @@ class ConditionsModal {
             ),
             fetchJSON(`/api/conditions?id=${encodeURIComponent(ruleId)}`)
         ]).then(([details, conditions]) => {
-            if (!this.isOpen) return;
+            if (!this.isOpen || seq !== this.requestSeq) return;
+            const temporal =
+                conditions.condition_type === "temporal";
             this.body.innerHTML = `
                 <div class="conditions-rule-type">
-                    Rule type:
-                    <strong>${conditions.temporal ? "Temporal" : "Atomic"}</strong>
+                    Condition type:
+                    <strong>${temporal ? "Temporal" : "Atomic"}</strong>
                 </div>
                 <section class="conditions-section">
                     <h3>Direct Parents</h3>
@@ -471,18 +475,19 @@ class ConditionsModal {
                     <h3>Resolved Paths</h3>
                     ${this.renderPaths(
                         conditions.paths,
-                        conditions.temporal
+                        temporal
                     )}
                 </section>
             `;
         }).catch(() => {
-            if (!this.isOpen) return;
+            if (!this.isOpen || seq !== this.requestSeq) return;
             this.body.innerHTML =
                 '<p style="color: #ff8a8a;">Could not load condition analysis.</p>';
         });
     }
 
     hide() {
+        this.requestSeq++;
         this.modal.classList.remove("visible");
         this.isOpen = false;
     }

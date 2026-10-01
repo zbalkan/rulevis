@@ -392,3 +392,15 @@ def test_temporal_conditions_do_not_require_clock_classification(tmp_path):
         payload["paths"][0]["conditions"][-1]["scope"]
         == "temporal"
     )
+
+
+def test_atomic_condition_api_reports_analysis_and_clock_types(tmp_path):
+    paths = write_app_files(tmp_path)
+    client = create_app(*(str(path) for path in paths)).test_client()
+
+    response = client.get("/api/conditions?id=100002")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["condition_type"] == "atomic"
+    assert payload["clock_temporal"] is False
