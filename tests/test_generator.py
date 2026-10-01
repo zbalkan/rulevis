@@ -368,3 +368,109 @@ def test_if_matched_regex_is_preserved_verbatim(tmp_path):
             "value": "foo<bar&baz",
         },
     ]
+
+
+def test_overwrite_updates_group_membership_before_relationship_resolution(
+    tmp_path, monkeypatch
+):
+    base = tmp_path / "00-base.xml"
+    overwrite = tmp_path / "50-overwrite.xml"
+    children = tmp_path / "99-children.xml"
+
+    base.write_text(
+        """
+<group name="old_group,">
+  <rule id="100500" level="3">
+    <description>Base parent</description>
+  </rule>
+</group>
+""".strip(),
+        encoding="utf-8",
+    )
+    overwrite.write_text(
+        """
+<group name="new_group,">
+  <rule id="100500" level="4" overwrite="yes">
+    <description>Overwritten parent</description>
+  </rule>
+</group>
+""".strip(),
+        encoding="utf-8",
+    )
+    children.write_text(
+        """
+<group name="children,">
+  <rule id="100501" level="5">
+    <if_group>old_group</if_group>
+    <description>Old group child</description>
+  </rule>
+  <rule id="100502" level="5">
+    <if_group>new_group</if_group>
+    <description>New group child</description>
+  </rule>
+</group>
+""".strip(),
+        encoding="utf-8",
+    )
+
+    generator = make_generator(tmp_path)
+    monkeypatch.setattr(
+        generator,
+        "get_all_xml_files",
+        lambda: [str(base), str(overwrite), str(children)],
+    )
+    generator.build_graph_from_xml()
+
+    assert generator.G.nodes["100500"]["groups"] == ["new_group"]
+    assert generator.G.get_edge_data("100500", "100501") is None
+
+    edge_data = generator.G.get_edge_data("100500", "100502")
+    assert edge_data is not None
+    assert list(edge_data.values()) == [
+        {
+            "relation_type": "if_group",
+            "selector": "new_group",
+        }
+    ]
+
+
+def test_overwrite_keeps_original_parent_relationship(tmp_path, monkeypatch):
+    base = tmp_path / "00-base.xml"
+    overwrite = tmp_path / "50-overwrite.xml"
+
+    base.write_text(
+        """
+<group name="base,">
+  <rule id="100510" level="3">
+    <description>Parent</description>
+  </rule>
+  <rule id="100511" level="4">
+    <if_sid>100510</if_sid>
+    <description>Child</description>
+  </rule>
+</group>
+""".strip(),
+        encoding="utf-8",
+    )
+    overwrite.write_text(
+        """
+<group name="custom,">
+  <rule id="100511" level="7" overwrite="yes">
+    <if_sid>999999</if_sid>
+    <description>Overwritten child</description>
+  </rule>
+</group>
+""".strip(),
+        encoding="utf-8",
+    )
+
+    generator = make_generator(tmp_path)
+    monkeypatch.setattr(
+        generator,
+        "get_all_xml_files",
+        lambda: [str(base), str(overwrite)],
+    )
+    generator.build_graph_from_xml()
+
+    assert generator.G.get_edge_data("100510", "100511") is not None
+    assert generator.G.get_edge_data("999999", "100511") is None

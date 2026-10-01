@@ -73,7 +73,7 @@ class GraphGenerator:
         self.G: nx.MultiDiGraph = nx.MultiDiGraph()
         self.graph_file: str = graph_file
         self.overwrite_rules: list[
-            tuple[ET.Element, str, dict[str, str]]
+            tuple[ET.Element, str, dict[str, str], list[str]]
         ] = []
         self.rule_relationships: dict[
             str,
@@ -248,7 +248,14 @@ class GraphGenerator:
     ) -> None:
         if element.tag == 'rule':
             if element.get("overwrite", "").lower() == "yes":
-                self.overwrite_rules.append((element, xml_file, regex_values))
+                self.overwrite_rules.append(
+                    (
+                        element,
+                        xml_file,
+                        regex_values,
+                        list(inherited_groups),
+                    )
+                )
                 return
 
             rule_id = element.get('id', '0')
@@ -371,15 +378,16 @@ class GraphGenerator:
                     f"Error parsing {xml_file}: {e}", exc_info=True
                 )
 
-        logging.info("Resolving rule relationships...")
-        for rule_id, relationships in self.rule_relationships.items():
-            self.add_relationship_edges(rule_id, *relationships)
-
         # Apply overwrites after all base rules exist. Wazuh preserves the
         # dependency labels (if_sid/if_group and the matched SID/group
         # relationships), but replaces ordinary predicates and other rule
         # properties. Keep the effective condition model consistent with that.
-        for element, ow_file, regex_values in self.overwrite_rules:
+        for (
+            element,
+            ow_file,
+            regex_values,
+            inherited_groups,
+        ) in self.overwrite_rules:
             rule_id = element.get("id")
             if rule_id in self.G.nodes:
                 existing = self.G.nodes[rule_id]
@@ -389,6 +397,21 @@ class GraphGenerator:
                 desc = self.extract_rule_description(attrs)
                 if desc:
                     existing["description"] = desc
+
+                effective_groups = self.extract_rule_groups(
+                    inherited_groups, attrs
+                )
+                old_groups = list(existing.get("groups", []))
+                for group in old_groups:
+                    self.group_membership[group] = [
+                        member
+                        for member in self.group_membership.get(group, [])
+                        if member != rule_id
+                    ]
+                existing["groups"] = effective_groups
+                for group in effective_groups:
+                    if rule_id not in self.group_membership[group]:
+                        self.group_membership[group].append(rule_id)
 
                 for attr in ("level", "maxsize"):
                     if element.get(attr):
@@ -436,6 +459,10 @@ class GraphGenerator:
                     f"Overwrite rule {rule_id} found with no base rule; "
                     "skipping."
                 )
+
+        logging.info("Resolving rule relationships...")
+        for rule_id, relationships in self.rule_relationships.items():
+            self.add_relationship_edges(rule_id, *relationships)
 
         first_level_rules = [
             node for node in self.G.nodes if self.G.in_degree(node) == 0
