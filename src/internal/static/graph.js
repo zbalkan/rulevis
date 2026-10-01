@@ -412,17 +412,36 @@ class ConditionsModal {
         `).join("");
     }
 
+    renderPathLabel(path) {
+        const nodes = path.nodes || [];
+        const edges = path.edges || [];
+        if (nodes.length === 0) return "";
+
+        let label = escapeHTML(nodes[0]);
+        edges.forEach((edge, index) => {
+            const relation = escapeHTML(
+                edge.relation_type || "unknown"
+            );
+            const selector = edge.selector
+                ? `:${escapeHTML(edge.selector)}`
+                : "";
+            const target = escapeHTML(nodes[index + 1] || "");
+            label += ` → [${relation}${selector}] → ${target}`;
+        });
+        return label;
+    }
+
     renderPaths(paths, temporal) {
         if (!paths || paths.length === 0) {
             return "<p>No root-to-rule paths were resolved.</p>";
         }
 
         return paths.map((path, index) => {
-            const pathLabel = (path.nodes || []).join(" → ");
+            const pathLabel = this.renderPathLabel(path);
             return `
                 <details class="condition-path">
                     <summary>
-                        <span>Path ${index + 1}: ${escapeHTML(pathLabel)}</span>
+                        <span>Path ${index + 1}: ${pathLabel}</span>
                         <span class="condition-count">${path.condition_count} conditions</span>
                     </summary>
                     <div class="conditions-table-wrap">
