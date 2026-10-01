@@ -349,16 +349,24 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         if node_id == "0":
             return error("The synthetic root has no rule conditions", 400)
 
-        temporal = bool(G.nodes[node_id].get("temporal", False))
+        node_data = G.nodes[node_id]
+        clock_temporal = bool(node_data.get("temporal", False))
+        has_temporal_conditions = bool(
+            node_data.get("temporal_conditions", [])
+        )
+        condition_type = (
+            "temporal" if has_temporal_conditions else "atomic"
+        )
         paths = (
             resolve_temporal_paths(G, node_id)
-            if temporal
+            if has_temporal_conditions
             else resolve_atomic_paths(G, node_id)
         )
 
         return jsonify({
             "id": node_id,
-            "temporal": temporal,
+            "condition_type": condition_type,
+            "clock_temporal": clock_temporal,
             "paths": paths,
         })
 

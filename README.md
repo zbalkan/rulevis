@@ -121,7 +121,7 @@ For temporal rules, the same path view also follows historical `if_matched_sid` 
 * `current_event` identifies predicates applied on the current-event side of the path;
 * `temporal` identifies correlation conditions on the selected temporal rule, such as `frequency` and `timeframe`.
 
-The clock shape is intentionally classified only by the presence of the `frequency` or `timeframe` rule attributes. Other temporal-looking tags are retained for analysis but do not independently change the node shape.
+The clock shape is intentionally classified only by the presence of the `frequency` or `timeframe` rule attributes. Condition analysis is independent from that visual heuristic: temporal constructs such as `if_matched_*`, `check_diff`, or `if_fts` are still retained and analyzed even when they do not make the node a clock.
 
 ## Technical Overview
 

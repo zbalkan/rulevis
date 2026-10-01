@@ -213,7 +213,8 @@ def test_temporal_rule_condition_paths_are_resolved(tmp_path):
 
     assert response.status_code == 200
     payload = response.get_json()
-    assert payload["temporal"] is True
+    assert payload["condition_type"] == "temporal"
+    assert payload["clock_temporal"] is True
     assert [path["nodes"] for path in payload["paths"]] == [
         ["0", "100001", "100003"]
     ]
@@ -356,3 +357,38 @@ def test_atomic_condition_paths_include_flattened_rows(tmp_path):
         ("100002", "if_sid"),
         ("100002", "field"),
     ]
+
+
+def test_temporal_conditions_do_not_require_clock_classification(tmp_path):
+    paths = write_app_files(tmp_path)
+    graph_path, stats_path, heatmap_path = paths
+
+    with graph_path.open("rb") as stream:
+        graph = pickle.load(stream)
+
+    graph.nodes["100002"]["temporal"] = False
+    graph.nodes["100002"]["temporal_conditions"] = [
+        {"tag": "check_diff", "value": ""},
+    ]
+    with graph_path.open("wb") as stream:
+        pickle.dump(graph, stream)
+
+    client = create_app(
+        str(graph_path),
+        str(stats_path),
+        str(heatmap_path),
+    ).test_client()
+    response = client.get("/api/conditions?id=100002")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["clock_temporal"] is False
+    assert payload["condition_type"] == "temporal"
+    assert (
+        payload["paths"][0]["conditions"][-1]["tag"]
+        == "check_diff"
+    )
+    assert (
+        payload["paths"][0]["conditions"][-1]["scope"]
+        == "temporal"
+    )
