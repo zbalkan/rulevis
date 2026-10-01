@@ -274,3 +274,62 @@ def test_if_group_edge_keeps_selector(tmp_path):
             "selector": "parent_group",
         }
     ]
+
+
+def test_temporal_conditions_are_stored_separately(tmp_path):
+    rules = tmp_path / "rules.xml"
+    rules.write_text(
+        """
+<group name="temporal,">
+  <rule id="100400" level="8" frequency="4" timeframe="60">
+    <if_matched_sid>100399</if_matched_sid>
+    <same_field>srcip</same_field>
+    <different_field>dstip</different_field>
+    <global_frequency />
+    <description>Temporal example</description>
+  </rule>
+</group>
+""".strip(),
+        encoding="utf-8",
+    )
+
+    generator = make_generator(tmp_path)
+    generator.build_graph_from_xml()
+    node = generator.G.nodes["100400"]
+
+    assert node["temporal"] is True
+    assert node["temporal_conditions"] == [
+        {
+            "tag": "frequency",
+            "value": "4",
+            "kind": "rule_attribute",
+        },
+        {
+            "tag": "timeframe",
+            "value": "60",
+            "kind": "rule_attribute",
+        },
+        {"tag": "if_matched_sid", "value": "100399"},
+        {"tag": "same_field", "value": "srcip"},
+        {"tag": "different_field", "value": "dstip"},
+        {"tag": "global_frequency", "value": ""},
+    ]
+
+
+def test_temporal_tags_do_not_change_clock_classification(tmp_path):
+    element = ET.fromstring(
+        '<rule id="100401" level="5">'
+        '<if_matched_sid>100400</if_matched_sid>'
+        '<check_diff />'
+        '<if_fts />'
+        '</rule>'
+    )
+    generator = make_generator(tmp_path)
+
+    assert generator.is_temporal_rule(element) is False
+    assert [
+        condition["tag"]
+        for condition in generator.extract_temporal_conditions(
+            element, {}
+        )
+    ] == ["if_matched_sid", "check_diff", "if_fts"]

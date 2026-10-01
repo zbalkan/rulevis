@@ -20,6 +20,10 @@ TEMPORAL_RULE_ATTRIBUTES: Final[tuple[str, ...]] = (
     "frequency",
     "timeframe",
 )
+TEMPORAL_PARENT_TAGS: Final[frozenset[str]] = frozenset({
+    "if_matched_sid",
+    "if_matched_group",
+})
 
 # RuleVis deliberately omits if_level relationships. Keep the condition model
 # aligned with the graph model so an "effective conditions" trace is complete.
@@ -152,6 +156,51 @@ class GraphGenerator:
             for attribute in TEMPORAL_RULE_ATTRIBUTES
         )
 
+    def extract_temporal_conditions(
+        self,
+        element: ET.Element,
+        regex_values: dict[str, str],
+    ) -> list[dict[str, object]]:
+        conditions: list[dict[str, object]] = []
+
+        for attribute in TEMPORAL_RULE_ATTRIBUTES:
+            value = element.get(attribute)
+            if value is not None:
+                conditions.append({
+                    "tag": attribute,
+                    "value": value,
+                    "kind": "rule_attribute",
+                })
+
+        for child in element:
+            if not isinstance(child.tag, str):
+                continue
+
+            tag = child.tag.lower()
+            is_temporal = (
+                tag.startswith("if_matched_")
+                or tag.startswith("same_")
+                or tag.startswith("different_")
+                or tag.startswith("not_same_")
+                or tag in {"check_diff", "if_fts", "global_frequency"}
+            )
+            if not is_temporal:
+                continue
+
+            value = child.text or ""
+            if tag == "if_matched_regex":
+                value = regex_values.get(value, value)
+
+            condition: dict[str, object] = {
+                "tag": tag,
+                "value": value,
+            }
+            if child.attrib:
+                condition["attributes"] = dict(child.attrib)
+            conditions.append(condition)
+
+        return conditions
+
     def extract_atomic_conditions(
         self,
         element: ET.Element,
@@ -227,6 +276,9 @@ class GraphGenerator:
                     file=os.path.basename(xml_file),
                     temporal=self.is_temporal_rule(element),
                     conditions=self.extract_atomic_conditions(
+                        element, regex_values
+                    ),
+                    temporal_conditions=self.extract_temporal_conditions(
                         element, regex_values
                     ),
                 )
@@ -358,6 +410,24 @@ class GraphGenerator:
                     preserved_parent_conditions + overwrite_conditions
                 )
 
+                preserved_temporal_parents = [
+                    condition
+                    for condition in existing.get(
+                        "temporal_conditions", []
+                    )
+                    if condition.get("tag") in TEMPORAL_PARENT_TAGS
+                ]
+                overwrite_temporal_conditions = [
+                    condition
+                    for condition in self.extract_temporal_conditions(
+                        element, regex_values
+                    )
+                    if condition.get("tag") not in TEMPORAL_PARENT_TAGS
+                ]
+                existing["temporal_conditions"] = (
+                    preserved_temporal_parents
+                    + overwrite_temporal_conditions
+                )
                 existing["temporal"] = self.is_temporal_rule(element)
             else:
                 logging.warning(
@@ -376,6 +446,7 @@ class GraphGenerator:
             groups=["__meta__"],
             temporal=False,
             conditions=[],
+            temporal_conditions=[],
         )
 
         for node in first_level_rules:
