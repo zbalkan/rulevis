@@ -75,7 +75,15 @@ class DetailsPanel {
     render(details) {
         const parentExpandBtn = details.parents && details.parents.some(p => !this.visualizer.displayedRuleIDs.has(p.id)) ? `<button class="expand-all-btn" onclick="window.visualizer.expandAllParents('${details.id}', '${(details.parents || []).map(p => p.id).join(',')}')">Expand All</button>` : '';
         const childExpandBtn = details.children && details.children.some(c => !this.visualizer.displayedRuleIDs.has(c.id)) ? `<button class="expand-all-btn" onclick="window.visualizer.expandNode('${details.id}')">Expand All</button>` : '';
-        const renderList = (items) => !items || items.length === 0 ? `<p>No related rules.</p>` : `<ul>${items.map(item => `<li class="${this.visualizer.displayedRuleIDs.has(item.id) ? 'displayed' : 'not-displayed'}" onclick="window.visualizer.handleSearchById('${item.id}')"><strong>${item.relation_type}:</strong> ${item.id}</li>`).join('')}</ul>`;
+        const renderList = (items) => !items || items.length === 0
+            ? `<p>No related rules.</p>`
+            : `<ul>${items.map(item => `
+                <li class="${this.visualizer.displayedRuleIDs.has(item.id) ? 'displayed' : 'not-displayed'}"
+                    onclick="window.visualizer.handleSearchById('${item.id}')">
+                    <strong>${escapeHTML(item.relation_type)}:</strong>
+                    ${escapeHTML(item.id)}
+                </li>
+            `).join('')}</ul>`;
 
         const ruleLevel = parseInt(details.level, 10);
         const generatesAlert = ruleLevel >= 3;
@@ -84,7 +92,7 @@ class DetailsPanel {
         const levelInfo = details.level ? `
             <div class="details-meta">
                 <strong>Level:</strong>
-                <span>${details.level}</span>
+                <span>${escapeHTML(details.level)}</span>
             </div>
         ` : '';
 
@@ -98,7 +106,7 @@ class DetailsPanel {
         const fileInfo = details.file ? `
             <div class="details-meta-full">
                 <strong>File:</strong>
-                <span>${details.file}</span>
+                <span>${escapeHTML(details.file)}</span>
             </div>
         ` : '';
 
@@ -107,7 +115,7 @@ class DetailsPanel {
             : '';
 
         this.content.innerHTML = `
-            <h3>Details for Rule: ${details.id}</h3>
+            <h3>Details for Rule: ${escapeHTML(details.id)}</h3>
             
             <div class="info-box">
                 <div class="info-box-row">
@@ -119,10 +127,10 @@ class DetailsPanel {
                 </div>
             </div>
 
-            <p><strong>Description:</strong> ${details.description || 'N/A'}</p>
+            <p><strong>Description:</strong> ${escapeHTML(details.description || 'N/A')}</p>
             ${conditionsButton ? `<div class="details-actions">${conditionsButton}</div>` : ''}
             <h4>Groups</h4>
-            ${(details.groups && details.groups.length > 0) ? `<ul>${details.groups.map(g => `<li>${g}</li>`).join('')}</ul>` : '<p>No groups assigned.</p>'}
+            ${(details.groups && details.groups.length > 0) ? `<ul>${details.groups.map(g => `<li>${escapeHTML(g)}</li>`).join('')}</ul>` : '<p>No groups assigned.</p>'}
 
             <div class="details-header"><h4>Parent Rules</h4>${parentExpandBtn}</div>
             ${renderList(details.parents)}
