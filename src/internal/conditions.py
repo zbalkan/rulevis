@@ -188,22 +188,26 @@ def flatten_temporal_conditions(
                 row["attributes"] = dict(condition["attributes"])
             rows.append(row)
 
-        if str(node_id) == target_id:
-            for condition in graph.nodes[node_id].get(
-                "temporal_conditions", []
-            ):
-                row = {
-                    "origin_rule_id": str(node_id),
-                    "scope": "temporal",
-                    "inherited": False,
-                    "tag": condition.get("tag"),
-                    "value": condition.get("value", ""),
-                }
-                if condition.get("kind") is not None:
-                    row["kind"] = condition["kind"]
-                if condition.get("attributes"):
-                    row["attributes"] = dict(condition["attributes"])
-                rows.append(row)
+        for condition in graph.nodes[node_id].get(
+            "temporal_conditions", []
+        ):
+            is_target = str(node_id) == target_id
+            row = {
+                "origin_rule_id": str(node_id),
+                "scope": (
+                    "temporal"
+                    if is_target
+                    else ancestor_scope
+                ),
+                "inherited": not is_target,
+                "tag": condition.get("tag"),
+                "value": condition.get("value", ""),
+            }
+            if condition.get("kind") is not None:
+                row["kind"] = condition["kind"]
+            if condition.get("attributes"):
+                row["attributes"] = dict(condition["attributes"])
+            rows.append(row)
 
     return rows
 

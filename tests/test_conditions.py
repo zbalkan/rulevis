@@ -248,3 +248,41 @@ def test_temporal_path_keeps_atomic_ancestors_current_without_matched_edge():
     assert [
         row["scope"] for row in path["conditions"]
     ] == ["current_event", "current_event", "temporal"]
+
+
+def test_temporal_ancestor_conditions_are_inherited():
+    from internal.conditions import resolve_temporal_paths
+
+    graph = nx.MultiDiGraph()
+    graph.add_node("0", conditions=[], temporal_conditions=[])
+    graph.add_node(
+        "T1",
+        conditions=[{"tag": "field", "value": "source"}],
+        temporal_conditions=[
+            {"tag": "frequency", "value": "2"},
+            {"tag": "timeframe", "value": "30"},
+        ],
+    )
+    graph.add_node(
+        "T2",
+        conditions=[],
+        temporal_conditions=[
+            {"tag": "frequency", "value": "3"},
+            {"tag": "timeframe", "value": "60"},
+        ],
+    )
+    graph.add_edge("0", "T1", relation_type="root")
+    graph.add_edge("T1", "T2", relation_type="if_matched_sid")
+
+    path = resolve_temporal_paths(graph, "T2")[0]
+
+    assert [
+        (row["origin_rule_id"], row["scope"], row["tag"])
+        for row in path["conditions"]
+    ] == [
+        ("T1", "historical_source", "field"),
+        ("T1", "historical_source", "frequency"),
+        ("T1", "historical_source", "timeframe"),
+        ("T2", "temporal", "frequency"),
+        ("T2", "temporal", "timeframe"),
+    ]
