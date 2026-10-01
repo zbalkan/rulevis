@@ -85,7 +85,9 @@ class GraphGenerator:
     def get_all_xml_files(self) -> list[str]:
         xml_files: list[str] = []
         for path in self.paths:
-            for root, _, files in os.walk(path):
+            for root, dirs, files in os.walk(path):
+                dirs.sort()
+                files.sort()
                 for file in files:
                     if file.lower().endswith('.xml'):
                         abs = os.path.abspath(os.path.join(root, file))

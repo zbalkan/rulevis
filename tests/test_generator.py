@@ -536,3 +536,34 @@ def test_identical_relationship_edges_are_deduplicated(tmp_path):
             "selector": "100600",
         },
     ]
+
+
+def test_xml_file_discovery_is_deterministic(tmp_path):
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    nested = first / "nested"
+    first.mkdir()
+    second.mkdir()
+    nested.mkdir()
+
+    for path in [
+        first / "z.xml",
+        first / "a.xml",
+        nested / "c.xml",
+        second / "b.xml",
+        second / "a.xml",
+    ]:
+        path.write_text("<group />", encoding="utf-8")
+
+    generator = GraphGenerator(
+        [str(first), str(second)],
+        str(tmp_path / "graph.pickle"),
+    )
+
+    assert generator.get_all_xml_files() == [
+        str((first / "a.xml").resolve()),
+        str((first / "z.xml").resolve()),
+        str((nested / "c.xml").resolve()),
+        str((second / "a.xml").resolve()),
+        str((second / "b.xml").resolve()),
+    ]
