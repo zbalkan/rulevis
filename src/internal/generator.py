@@ -11,7 +11,9 @@ import networkx as nx
 ENCODING: Final[str] = "utf-8"
 
 REGEX_BLOCK: re.Pattern[str] = re.compile(
-    r"(<regex\b[^>]*>)(.*?)(</regex>)",
+    r"(<(?:regex|if_matched_regex)\b[^>]*>)"
+    r"(.*?)"
+    r"(</(?:regex|if_matched_regex)>)",
     flags=re.DOTALL | re.IGNORECASE,
 )
 REGEX_AMP: re.Pattern[str] = re.compile(r"&(?!amp;|lt;|gt;|quot;|apos;)")

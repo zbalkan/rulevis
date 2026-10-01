@@ -333,3 +333,38 @@ def test_temporal_tags_do_not_change_clock_classification(tmp_path):
             element, {}
         )
     ] == ["if_matched_sid", "check_diff", "if_fts"]
+
+
+def test_if_matched_regex_is_preserved_verbatim(tmp_path):
+    rules = tmp_path / "rules.xml"
+    rules.write_text(
+        """
+<group name="temporal_regex,">
+  <rule id="100410" level="8" frequency="2" timeframe="30">
+    <if_matched_regex>foo<bar&baz</if_matched_regex>
+    <description>Temporal regex</description>
+  </rule>
+</group>
+""".strip(),
+        encoding="utf-8",
+    )
+
+    generator = make_generator(tmp_path)
+    generator.build_graph_from_xml()
+
+    assert generator.G.nodes["100410"]["temporal_conditions"] == [
+        {
+            "tag": "frequency",
+            "value": "2",
+            "kind": "rule_attribute",
+        },
+        {
+            "tag": "timeframe",
+            "value": "30",
+            "kind": "rule_attribute",
+        },
+        {
+            "tag": "if_matched_regex",
+            "value": "foo<bar&baz",
+        },
+    ]
