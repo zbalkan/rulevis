@@ -292,3 +292,44 @@ def test_details_preserve_parallel_parent_relationships(tmp_path):
             "selector": "example",
         },
     ]
+
+
+def test_atomic_conditions_endpoint_returns_all_paths(tmp_path):
+    paths = write_app_files(tmp_path)
+    graph_path, stats_path, heatmap_path = paths
+
+    with graph_path.open("rb") as stream:
+        graph = pickle.load(stream)
+
+    graph.add_node(
+        "100005",
+        description="Second parent",
+        groups=["example"],
+        level="3",
+        file="rules.xml",
+        temporal=False,
+        conditions=[{"tag": "match", "value": "second"}],
+    )
+    graph.add_edge("0", "100005", relation_type="root")
+    graph.add_edge(
+        "100005",
+        "100002",
+        relation_type="if_group",
+        selector="example",
+    )
+    with graph_path.open("wb") as stream:
+        pickle.dump(graph, stream)
+
+    client = create_app(
+        str(graph_path),
+        str(stats_path),
+        str(heatmap_path),
+    ).test_client()
+    response = client.get("/api/conditions?id=100002")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert [path["nodes"] for path in payload["paths"]] == [
+        ["0", "100001", "100002"],
+        ["0", "100005", "100002"],
+    ]
