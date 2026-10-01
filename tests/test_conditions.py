@@ -169,3 +169,82 @@ def test_resolve_atomic_paths_flattens_each_branch():
         [row["origin_rule_id"] for row in path["conditions"]]
         for path in paths
     ] == [["A", "C"], ["B", "C"]]
+
+
+def test_temporal_paths_include_matched_relationships():
+    from internal.conditions import resolve_temporal_paths
+
+    graph = nx.MultiDiGraph()
+    graph.add_node("0", conditions=[], temporal_conditions=[])
+    graph.add_node(
+        "A",
+        conditions=[{"tag": "decoded_as", "value": "json"}],
+        temporal_conditions=[],
+    )
+    graph.add_node(
+        "B",
+        conditions=[{"tag": "field", "value": "^failed$"}],
+        temporal_conditions=[],
+    )
+    graph.add_node(
+        "T",
+        conditions=[{"tag": "location", "value": "server"}],
+        temporal_conditions=[
+            {
+                "tag": "frequency",
+                "value": "4",
+                "kind": "rule_attribute",
+            },
+            {
+                "tag": "timeframe",
+                "value": "60",
+                "kind": "rule_attribute",
+            },
+            {"tag": "if_matched_sid", "value": "B"},
+        ],
+    )
+    graph.add_edge("0", "A", relation_type="root")
+    graph.add_edge("A", "B", relation_type="if_sid")
+    graph.add_edge("B", "T", relation_type="if_matched_sid")
+
+    paths = resolve_temporal_paths(graph, "T")
+
+    assert [path["nodes"] for path in paths] == [["0", "A", "B", "T"]]
+    assert [
+        (row["origin_rule_id"], row["scope"], row["tag"])
+        for row in paths[0]["conditions"]
+    ] == [
+        ("A", "historical_source", "decoded_as"),
+        ("B", "historical_source", "field"),
+        ("T", "current_event", "location"),
+        ("T", "temporal", "frequency"),
+        ("T", "temporal", "timeframe"),
+        ("T", "temporal", "if_matched_sid"),
+    ]
+
+
+def test_temporal_path_keeps_atomic_ancestors_current_without_matched_edge():
+    from internal.conditions import resolve_temporal_paths
+
+    graph = nx.MultiDiGraph()
+    graph.add_node("0", conditions=[], temporal_conditions=[])
+    graph.add_node(
+        "A",
+        conditions=[{"tag": "decoded_as", "value": "json"}],
+        temporal_conditions=[],
+    )
+    graph.add_node(
+        "T",
+        conditions=[{"tag": "field", "value": "x"}],
+        temporal_conditions=[
+            {"tag": "frequency", "value": "2"},
+        ],
+    )
+    graph.add_edge("0", "A", relation_type="root")
+    graph.add_edge("A", "T", relation_type="if_sid")
+
+    path = resolve_temporal_paths(graph, "T")[0]
+
+    assert [
+        row["scope"] for row in path["conditions"]
+    ] == ["current_event", "current_event", "temporal"]

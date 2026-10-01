@@ -9,6 +9,15 @@ ATOMIC_RELATION_TYPES: Final[frozenset[str]] = frozenset({
     "if_sid",
     "if_group",
 })
+TEMPORAL_RELATION_TYPES: Final[frozenset[str]] = frozenset({
+    *ATOMIC_RELATION_TYPES,
+    "if_matched_sid",
+    "if_matched_group",
+})
+TEMPORAL_EDGE_TYPES: Final[frozenset[str]] = frozenset({
+    "if_matched_sid",
+    "if_matched_group",
+})
 
 
 def _parent_edges(
@@ -129,6 +138,88 @@ def resolve_atomic_paths(
     paths = enumerate_paths(graph, target_id)
     for path in paths:
         conditions = flatten_atomic_conditions(graph, path)
+        path["conditions"] = conditions
+        path["condition_count"] = len(conditions)
+    return paths
+
+
+def flatten_temporal_conditions(
+    graph: MultiDiGraph,
+    path: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Flatten a temporal path while retaining condition scope."""
+    nodes = path.get("nodes", [])
+    edges = path.get("edges", [])
+    if not nodes:
+        return []
+
+    target_id = str(nodes[-1])
+    rows: list[dict[str, Any]] = []
+
+    for index, node_id in enumerate(nodes):
+        if node_id == "0" or node_id not in graph:
+            continue
+
+        downstream_edges = edges[index:]
+        ancestor_scope = (
+            "historical_source"
+            if any(
+                edge.get("relation_type") in TEMPORAL_EDGE_TYPES
+                for edge in downstream_edges
+            )
+            else "current_event"
+        )
+
+        for condition in graph.nodes[node_id].get("conditions", []):
+            row = {
+                "origin_rule_id": str(node_id),
+                "scope": (
+                    "current_event"
+                    if str(node_id) == target_id
+                    else ancestor_scope
+                ),
+                "inherited": str(node_id) != target_id,
+                "tag": condition.get("tag"),
+                "value": condition.get("value", ""),
+            }
+            if condition.get("kind") is not None:
+                row["kind"] = condition["kind"]
+            if condition.get("attributes"):
+                row["attributes"] = dict(condition["attributes"])
+            rows.append(row)
+
+        if str(node_id) == target_id:
+            for condition in graph.nodes[node_id].get(
+                "temporal_conditions", []
+            ):
+                row = {
+                    "origin_rule_id": str(node_id),
+                    "scope": "temporal",
+                    "inherited": False,
+                    "tag": condition.get("tag"),
+                    "value": condition.get("value", ""),
+                }
+                if condition.get("kind") is not None:
+                    row["kind"] = condition["kind"]
+                if condition.get("attributes"):
+                    row["attributes"] = dict(condition["attributes"])
+                rows.append(row)
+
+    return rows
+
+
+def resolve_temporal_paths(
+    graph: MultiDiGraph,
+    target_id: str,
+) -> list[dict[str, Any]]:
+    """Enumerate temporal paths and attach scoped flattened conditions."""
+    paths = enumerate_paths(
+        graph,
+        target_id,
+        allowed_relations=TEMPORAL_RELATION_TYPES,
+    )
+    for path in paths:
+        conditions = flatten_temporal_conditions(graph, path)
         path["conditions"] = conditions
         path["condition_count"] = len(conditions)
     return paths

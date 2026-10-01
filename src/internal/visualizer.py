@@ -10,7 +10,10 @@ from flask import Flask, jsonify, render_template_string, request
 from flask.wrappers import Response
 from networkx import MultiDiGraph
 
-from internal.conditions import resolve_atomic_paths
+from internal.conditions import (
+    resolve_atomic_paths,
+    resolve_temporal_paths,
+)
 
 PRECOMPUTED_BLOCK_SIZES: list[int] = [1, 10, 50, 100, 250, 500]
 PRECOMPUTED_HEATMAPS: dict[int, Any] = {}
@@ -404,16 +407,23 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
             return error(f"Node '{node_id}' not found", 404)
         if node_id == "0":
             return error("The synthetic root has no rule conditions", 400)
-        if G.nodes[node_id].get("temporal", False):
-            return error(
-                "Condition expansion is available only for atomic rules",
-                400,
-            )
+
+        temporal = bool(G.nodes[node_id].get("temporal", False))
+        paths = (
+            resolve_temporal_paths(G, node_id)
+            if temporal
+            else resolve_atomic_paths(G, node_id)
+        )
 
         return jsonify({
             "id": node_id,
-            "tree": condition_tree(node_id, node_id, set()),
-            "paths": resolve_atomic_paths(G, node_id),
+            "temporal": temporal,
+            "tree": (
+                None
+                if temporal
+                else condition_tree(node_id, node_id, set())
+            ),
+            "paths": paths,
         })
 
     @app.route("/api/stats", methods=["GET"])

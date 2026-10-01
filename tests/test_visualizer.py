@@ -198,16 +198,51 @@ def test_atomic_condition_tree_reaches_virtual_root(tmp_path):
     assert root["relation_type"] == "root"
 
 
-def test_temporal_rule_condition_expansion_is_rejected(tmp_path):
+def test_temporal_rule_condition_paths_are_resolved(tmp_path):
     paths = write_app_files(tmp_path)
-    client = create_app(*(str(path) for path in paths)).test_client()
+    graph_path, stats_path, heatmap_path = paths
 
+    with graph_path.open("rb") as stream:
+        graph = pickle.load(stream)
+
+    graph.nodes["100003"]["temporal_conditions"] = [
+        {
+            "tag": "frequency",
+            "value": "4",
+            "kind": "rule_attribute",
+        },
+        {
+            "tag": "timeframe",
+            "value": "60",
+            "kind": "rule_attribute",
+        },
+        {"tag": "if_matched_sid", "value": "100001"},
+    ]
+    with graph_path.open("wb") as stream:
+        pickle.dump(graph, stream)
+
+    client = create_app(
+        str(graph_path),
+        str(stats_path),
+        str(heatmap_path),
+    ).test_client()
     response = client.get("/api/conditions?id=100003")
 
-    assert response.status_code == 400
-    assert response.get_json()["error"] == (
-        "Condition expansion is available only for atomic rules"
-    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["temporal"] is True
+    assert [path["nodes"] for path in payload["paths"]] == [
+        ["0", "100001", "100003"]
+    ]
+    assert [
+        (row["origin_rule_id"], row["scope"], row["tag"])
+        for row in payload["paths"][0]["conditions"]
+    ] == [
+        ("100001", "historical_source", "decoded_as"),
+        ("100003", "temporal", "frequency"),
+        ("100003", "temporal", "timeframe"),
+        ("100003", "temporal", "if_matched_sid"),
+    ]
 
 
 def test_atomic_trace_stops_at_temporal_parent(tmp_path):
