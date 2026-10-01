@@ -12,7 +12,7 @@ This tool is designed for security engineers, SOC analysts, and Wazuh administra
 * **Dependency Analysis:** Clearly shows parent-child relationships (`if_sid`, `if_group`, etc.) with directed edges.
 * **Node Expansion:** Interactively expand nodes to reveal their parent or child dependencies on demand.
 * **Detailed Rule Information:** Click on any rule to see its full description, groups, and a complete list of its parents and children.
-* **Atomic Condition Analysis:** Open a large condition-analysis view for an atomic rule, inspect its direct parents, and expand each resolved root-to-rule path as a flattened table of inherited and local conditions.
+* **Condition Path Analysis:** Open a large condition-analysis view for atomic or temporal rules, inspect direct parents, and expand each resolved root-to-rule path as a flattened table with condition provenance.
 * **Powerful Search:** Instantly find and focus on any rule by its ID.
 * **Graph Statistics Panel:** Get at-a-glance insights into your ruleset with statistics like:
   * Top 5 rules with the most direct children (foundational rules).
@@ -109,11 +109,19 @@ Get a bird's-eye view of your rule ID landscape. Dark gray blocks are unused and
 
 ![Heatmap View](https://github.com/zbalkan/rulevis/raw/master/assets/heatmap-view.gif)
 
-### Atomic Condition Analysis
+### Condition Path Analysis
 
-For an atomic rule, **Show Conditions** opens a large modal rather than extending the rule-details panel. The modal lists direct parent relationships and resolves every atomic path from the virtual root to the selected rule. Each path is collapsed by default and expands into a flattened condition table that keeps the originating rule for every condition.
+**Analyze Conditions** opens a large modal rather than extending the rule-details panel. The modal lists direct parent relationships and resolves each graph path from the virtual root to the selected rule. Every path is collapsed by default and expands into a flattened condition table that keeps the originating rule for every condition.
 
-Separate paths are preserved when a rule can be reached through different parents or relationship branches; RuleVis does not merge those alternatives into one condition set.
+For atomic rules, RuleVis follows atomic parent relationships and keeps alternative parent branches as separate paths rather than merging them into one condition set.
+
+For temporal rules, the same path view also follows historical `if_matched_sid` and `if_matched_group` relationships. Temporal tables add a **Scope** column:
+
+* `historical_source` identifies predicates belonging to events whose earlier matches feed the temporal rule;
+* `current_event` identifies predicates applied on the current-event side of the path;
+* `temporal` identifies correlation conditions on the selected temporal rule, such as `frequency` and `timeframe`.
+
+The clock shape is intentionally classified only by the presence of the `frequency` or `timeframe` rule attributes. Other temporal-looking tags are retained for analysis but do not independently change the node shape.
 
 ## Technical Overview
 

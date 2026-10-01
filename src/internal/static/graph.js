@@ -102,8 +102,8 @@ class DetailsPanel {
             </div>
         ` : '';
 
-        const conditionsButton = details.id !== "0" && !details.temporal
-            ? `<button id="showConditionsBtn" class="conditions-btn" onclick="window.visualizer.detailsPanel.showConditions('${details.id}')">Show Conditions</button>`
+        const conditionsButton = details.id !== "0"
+            ? `<button id="showConditionsBtn" class="conditions-btn" onclick="window.visualizer.detailsPanel.showConditions('${details.id}')">Analyze Conditions</button>`
             : '';
 
         this.content.innerHTML = `
@@ -394,14 +394,16 @@ class ConditionsModal {
             .join(" ");
     }
 
-    renderConditionRows(conditions) {
+    renderConditionRows(conditions, temporal) {
+        const columnCount = temporal ? 5 : 4;
         if (!conditions || conditions.length === 0) {
-            return '<tr><td colspan="4">No conditions on this path.</td></tr>';
+            return `<tr><td colspan="${columnCount}">No conditions on this path.</td></tr>`;
         }
 
         return conditions.map(condition => `
             <tr>
                 <td>${escapeHTML(condition.origin_rule_id)}</td>
+                ${temporal ? `<td><code>${escapeHTML(condition.scope || "current_event")}</code></td>` : ""}
                 <td><code>${escapeHTML(condition.tag)}</code></td>
                 <td>${this.renderAttributes(condition.attributes)}</td>
                 <td><code class="condition-value-cell">${escapeHTML(condition.value ?? "") || "(empty)"}</code></td>
@@ -409,7 +411,7 @@ class ConditionsModal {
         `).join("");
     }
 
-    renderPaths(paths) {
+    renderPaths(paths, temporal) {
         if (!paths || paths.length === 0) {
             return "<p>No root-to-rule atomic paths were resolved.</p>";
         }
@@ -427,13 +429,14 @@ class ConditionsModal {
                             <thead>
                                 <tr>
                                     <th>Origin</th>
+                                    ${temporal ? "<th>Scope</th>" : ""}
                                     <th>Condition</th>
                                     <th>Attributes</th>
                                     <th>Value</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                ${this.renderConditionRows(path.conditions)}
+                                ${this.renderConditionRows(path.conditions, temporal)}
                             </tbody>
                         </table>
                     </div>
@@ -456,13 +459,20 @@ class ConditionsModal {
         ]).then(([details, conditions]) => {
             if (!this.isOpen) return;
             this.body.innerHTML = `
+                <div class="conditions-rule-type">
+                    Rule type:
+                    <strong>${conditions.temporal ? "Temporal" : "Atomic"}</strong>
+                </div>
                 <section class="conditions-section">
                     <h3>Direct Parents</h3>
                     ${this.renderParents(details.parents)}
                 </section>
                 <section class="conditions-section">
                     <h3>Resolved Paths</h3>
-                    ${this.renderPaths(conditions.paths)}
+                    ${this.renderPaths(
+                        conditions.paths,
+                        conditions.temporal
+                    )}
                 </section>
             `;
         }).catch(() => {
