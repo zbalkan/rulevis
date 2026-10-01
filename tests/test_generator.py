@@ -567,3 +567,39 @@ def test_xml_file_discovery_is_deterministic(tmp_path):
         str((second / "a.xml").resolve()),
         str((second / "b.xml").resolve()),
     ]
+
+
+def test_if_matched_group_resolves_members_with_selector(tmp_path):
+    rules = tmp_path / "rules.xml"
+    rules.write_text(
+        """
+<group name="source_group,">
+  <rule id="100700" level="3">
+    <description>First source</description>
+  </rule>
+  <rule id="100701" level="3">
+    <description>Second source</description>
+  </rule>
+</group>
+<group name="temporal,">
+  <rule id="100702" level="8" frequency="2" timeframe="30">
+    <if_matched_group>source_group</if_matched_group>
+    <description>Temporal group rule</description>
+  </rule>
+</group>
+""".strip(),
+        encoding="utf-8",
+    )
+
+    generator = make_generator(tmp_path)
+    generator.build_graph_from_xml()
+
+    for source in ("100700", "100701"):
+        edge_data = generator.G.get_edge_data(source, "100702")
+        assert edge_data is not None
+        assert list(edge_data.values()) == [
+            {
+                "relation_type": "if_matched_group",
+                "selector": "source_group",
+            }
+        ]

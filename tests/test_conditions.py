@@ -286,3 +286,49 @@ def test_temporal_ancestor_conditions_are_inherited():
         ("T2", "temporal", "frequency"),
         ("T2", "temporal", "timeframe"),
     ]
+
+
+def test_temporal_matched_group_branches_are_separate_paths():
+    from internal.conditions import resolve_temporal_paths
+
+    graph = nx.MultiDiGraph()
+    graph.add_node("0", conditions=[], temporal_conditions=[])
+    for node_id in ("A", "B"):
+        graph.add_node(
+            node_id,
+            conditions=[{"tag": "match", "value": node_id.lower()}],
+            temporal_conditions=[],
+        )
+        graph.add_edge("0", node_id, relation_type="root")
+
+    graph.add_node(
+        "T",
+        conditions=[],
+        temporal_conditions=[
+            {"tag": "frequency", "value": "2"},
+            {"tag": "timeframe", "value": "30"},
+            {"tag": "if_matched_group", "value": "source_group"},
+        ],
+    )
+    for node_id in ("A", "B"):
+        graph.add_edge(
+            node_id,
+            "T",
+            relation_type="if_matched_group",
+            selector="source_group",
+        )
+
+    paths = resolve_temporal_paths(graph, "T")
+
+    assert [path["nodes"] for path in paths] == [
+        ["0", "A", "T"],
+        ["0", "B", "T"],
+    ]
+    assert {
+        path["edges"][-1]["selector"]
+        for path in paths
+    } == {"source_group"}
+    assert all(
+        path["conditions"][0]["scope"] == "historical_source"
+        for path in paths
+    )
