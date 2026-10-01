@@ -384,15 +384,76 @@ class ConditionsModal {
         `;
     }
 
+    renderAttributes(attributes) {
+        const entries = Object.entries(attributes || {});
+        if (entries.length === 0) return "—";
+        return entries
+            .map(([key, value]) =>
+                `<code>${escapeHTML(key)}=${escapeHTML(value)}</code>`
+            )
+            .join(" ");
+    }
+
+    renderConditionRows(conditions) {
+        if (!conditions || conditions.length === 0) {
+            return '<tr><td colspan="4">No conditions on this path.</td></tr>';
+        }
+
+        return conditions.map(condition => `
+            <tr>
+                <td>${escapeHTML(condition.origin_rule_id)}</td>
+                <td><code>${escapeHTML(condition.tag)}</code></td>
+                <td>${this.renderAttributes(condition.attributes)}</td>
+                <td><code class="condition-value-cell">${escapeHTML(condition.value ?? "") || "(empty)"}</code></td>
+            </tr>
+        `).join("");
+    }
+
+    renderPaths(paths) {
+        if (!paths || paths.length === 0) {
+            return "<p>No root-to-rule atomic paths were resolved.</p>";
+        }
+
+        return paths.map((path, index) => {
+            const pathLabel = (path.nodes || []).join(" → ");
+            return `
+                <details class="condition-path">
+                    <summary>
+                        <span>Path ${index + 1}: ${escapeHTML(pathLabel)}</span>
+                        <span class="condition-count">${path.condition_count} conditions</span>
+                    </summary>
+                    <div class="conditions-table-wrap">
+                        <table class="conditions-table">
+                            <thead>
+                                <tr>
+                                    <th>Origin</th>
+                                    <th>Condition</th>
+                                    <th>Attributes</th>
+                                    <th>Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${this.renderConditionRows(path.conditions)}
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+            `;
+        }).join("");
+    }
+
     show(ruleId) {
         this.title.textContent = `Conditions for Rule ${ruleId}`;
-        this.body.innerHTML = "<p><i>Loading rule relationships...</i></p>";
+        this.body.innerHTML = "<p><i>Loading condition analysis...</i></p>";
         this.modal.classList.add("visible");
         this.isOpen = true;
 
-        fetchJSON(
-            `/api/nodes?id=${encodeURIComponent(ruleId)}&neighbors=both&include=details`
-        ).then(details => {
+        Promise.all([
+            fetchJSON(
+                `/api/nodes?id=${encodeURIComponent(ruleId)}&neighbors=both&include=details`
+            ),
+            fetchJSON(`/api/conditions?id=${encodeURIComponent(ruleId)}`)
+        ]).then(([details, conditions]) => {
             if (!this.isOpen) return;
             this.body.innerHTML = `
                 <section class="conditions-section">
@@ -401,15 +462,13 @@ class ConditionsModal {
                 </section>
                 <section class="conditions-section">
                     <h3>Resolved Paths</h3>
-                    <div class="conditions-placeholder">
-                        <p>Resolved condition paths will appear here.</p>
-                    </div>
+                    ${this.renderPaths(conditions.paths)}
                 </section>
             `;
         }).catch(() => {
             if (!this.isOpen) return;
             this.body.innerHTML =
-                '<p style="color: #ff8a8a;">Could not load rule relationships.</p>';
+                '<p style="color: #ff8a8a;">Could not load condition analysis.</p>';
         });
     }
 
