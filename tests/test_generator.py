@@ -242,3 +242,35 @@ def test_synthetic_root_and_children_are_precomputed(tmp_path):
     assert generator.G.nodes["0"]["temporal"] is False
     assert generator.G.has_edge("0", "100200")
     assert generator.G.nodes["100200"]["children_ids"] == ["100201"]
+
+
+def test_if_group_edge_keeps_selector(tmp_path):
+    rules = tmp_path / "rules.xml"
+    rules.write_text(
+        """
+<group name="parent_group,">
+  <rule id="100300" level="3">
+    <description>Parent</description>
+  </rule>
+</group>
+<group name="child_group,">
+  <rule id="100301" level="4">
+    <if_group>parent_group</if_group>
+    <description>Child</description>
+  </rule>
+</group>
+""".strip(),
+        encoding="utf-8",
+    )
+
+    generator = make_generator(tmp_path)
+    generator.build_graph_from_xml()
+
+    edge_data = generator.G.get_edge_data("100300", "100301")
+    assert edge_data is not None
+    assert list(edge_data.values()) == [
+        {
+            "relation_type": "if_group",
+            "selector": "parent_group",
+        }
+    ]

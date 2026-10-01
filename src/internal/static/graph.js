@@ -355,15 +355,62 @@ class ConditionsModal {
         });
     }
 
-    show(ruleId) {
-        this.title.textContent = `Conditions for Rule ${ruleId}`;
-        this.body.innerHTML = `
-            <div class="conditions-placeholder">
-                <p>Resolved condition paths will appear here.</p>
+    renderParents(parents) {
+        if (!parents || parents.length === 0) {
+            return "<p>No direct parent rules.</p>";
+        }
+
+        const rows = parents.map(parent => `
+            <tr>
+                <td>${escapeHTML(parent.id)}</td>
+                <td><code>${escapeHTML(parent.relation_type)}</code></td>
+                <td>${parent.selector ? `<code>${escapeHTML(parent.selector)}</code>` : "—"}</td>
+            </tr>
+        `).join("");
+
+        return `
+            <div class="conditions-table-wrap">
+                <table class="conditions-table">
+                    <thead>
+                        <tr>
+                            <th>Parent rule</th>
+                            <th>Relationship</th>
+                            <th>Selector</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
             </div>
         `;
+    }
+
+    show(ruleId) {
+        this.title.textContent = `Conditions for Rule ${ruleId}`;
+        this.body.innerHTML = "<p><i>Loading rule relationships...</i></p>";
         this.modal.classList.add("visible");
         this.isOpen = true;
+
+        fetchJSON(
+            `/api/nodes?id=${encodeURIComponent(ruleId)}&neighbors=both&include=details`
+        ).then(details => {
+            if (!this.isOpen) return;
+            this.body.innerHTML = `
+                <section class="conditions-section">
+                    <h3>Direct Parents</h3>
+                    ${this.renderParents(details.parents)}
+                </section>
+                <section class="conditions-section">
+                    <h3>Resolved Paths</h3>
+                    <div class="conditions-placeholder">
+                        <p>Resolved condition paths will appear here.</p>
+                    </div>
+                </section>
+            `;
+        }).catch(() => {
+            if (!this.isOpen) return;
+            this.body.innerHTML =
+                '<p style="color: #ff8a8a;">Could not load rule relationships.</p>';
+        });
     }
 
     hide() {

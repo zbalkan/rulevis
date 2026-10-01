@@ -224,11 +224,29 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         if include_details:
             node_data = G.nodes[node_id]
             parents = [
-                {"id": p, "relation_type": make_edge(p, node_id)["relation_type"]} for p in G.predecessors(node_id)
-                ]
+                {
+                    "id": parent_id,
+                    "relation_type": edge_data.get(
+                        "relation_type", "unknown"
+                    ),
+                    "selector": edge_data.get("selector"),
+                }
+                for parent_id, _, _, edge_data in G.in_edges(
+                    node_id, keys=True, data=True
+                )
+            ]
             children = [
-                {"id": c, "relation_type": make_edge(node_id, c)["relation_type"]} for c in G.successors(node_id)
-                ]
+                {
+                    "id": child_id,
+                    "relation_type": edge_data.get(
+                        "relation_type", "unknown"
+                    ),
+                    "selector": edge_data.get("selector"),
+                }
+                for _, child_id, _, edge_data in G.out_edges(
+                    node_id, keys=True, data=True
+                )
+            ]
             return jsonify({
                 "id": node_id,
                 "description": node_data.get("description"),

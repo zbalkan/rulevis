@@ -657,3 +657,42 @@ button:hover {
 .conditions-placeholder {
     color: #aaa;
 }
+
+
+.conditions-section + .conditions-section {
+    margin-top: 24px;
+}
+
+.conditions-section h3 {
+    margin: 0 0 12px;
+    color: #ccc;
+    border-bottom: 1px solid #444;
+    padding-bottom: 8px;
+}
+
+.conditions-table-wrap {
+    overflow-x: auto;
+}
+
+.conditions-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #222;
+}
+
+.conditions-table th,
+.conditions-table td {
+    padding: 9px 10px;
+    border: 1px solid #444;
+    text-align: left;
+    vertical-align: top;
+}
+
+.conditions-table th {
+    color: #4e9af1;
+    background: #292929;
+}
+
+.conditions-table code {
+    color: #ddd;
+}

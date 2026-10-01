@@ -251,3 +251,44 @@ def test_index_contains_conditions_modal(tmp_path):
     assert 'id="conditionsModal"' in html
     assert 'id="conditionsCloseBtn"' in html
     assert 'id="conditionsBody"' in html
+
+
+def test_details_preserve_parallel_parent_relationships(tmp_path):
+    paths = write_app_files(tmp_path)
+    graph_path, stats_path, heatmap_path = paths
+
+    with graph_path.open("rb") as stream:
+        graph = pickle.load(stream)
+
+    graph.add_edge(
+        "100001",
+        "100002",
+        relation_type="if_group",
+        selector="example",
+    )
+    with graph_path.open("wb") as stream:
+        pickle.dump(graph, stream)
+
+    client = create_app(
+        str(graph_path),
+        str(stats_path),
+        str(heatmap_path),
+    ).test_client()
+    response = client.get(
+        "/api/nodes?id=100002&neighbors=both&include=details"
+    )
+
+    assert response.status_code == 200
+    parents = response.get_json()["parents"]
+    assert parents == [
+        {
+            "id": "100001",
+            "relation_type": "if_sid",
+            "selector": None,
+        },
+        {
+            "id": "100001",
+            "relation_type": "if_group",
+            "selector": "example",
+        },
+    ]

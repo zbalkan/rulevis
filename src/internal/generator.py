@@ -88,13 +88,20 @@ class GraphGenerator:
         return xml_files
 
     def add_edge_with_type(
-        self, source: str, target: str, relation_type: str
+        self,
+        source: str,
+        target: str,
+        relation_type: str,
+        selector: Optional[str] = None,
     ) -> None:
         if logging.getLogger().getEffectiveLevel() <= logging.DEBUG:
             logging.debug(
                 f"Adding edge from {source} to {target} with type {relation_type}"
             )
-        self.G.add_edge(source, target, relation_type=relation_type)
+        edge_data = {"relation_type": relation_type}
+        if selector is not None:
+            edge_data["selector"] = selector
+        self.G.add_edge(source, target, **edge_data)
 
     def add_relationship_edges(
         self,
@@ -107,19 +114,25 @@ class GraphGenerator:
         if if_sid:
             for sid in re.split(r'[,\s]+', if_sid.strip()):
                 if sid:
-                    self.add_edge_with_type(sid, rule_id, 'if_sid')
+                    self.add_edge_with_type(
+                        sid, rule_id, 'if_sid', selector=sid
+                    )
 
         if if_matched_sid:
             for sid in re.split(r'[,\s]+', if_matched_sid.strip()):
                 if sid:
-                    self.add_edge_with_type(sid, rule_id, 'if_matched_sid')
+                    self.add_edge_with_type(
+                        sid, rule_id, 'if_matched_sid', selector=sid
+                    )
 
         if if_group:
             for group in re.split(r'[,\s]+', if_group.strip()):
                 if not group:
                     continue
                 for parent_rule in self.group_membership.get(group, []):
-                    self.add_edge_with_type(parent_rule, rule_id, 'if_group')
+                    self.add_edge_with_type(
+                        parent_rule, rule_id, 'if_group', selector=group
+                    )
 
         if if_matched_group:
             for group in re.split(r'[,\s]+', if_matched_group.strip()):
@@ -127,7 +140,10 @@ class GraphGenerator:
                     continue
                 for parent_rule in self.group_membership.get(group, []):
                     self.add_edge_with_type(
-                        parent_rule, rule_id, 'if_matched_group'
+                        parent_rule,
+                        rule_id,
+                        'if_matched_group',
+                        selector=group,
                     )
 
     def is_temporal_rule(self, element: ET.Element) -> bool:
