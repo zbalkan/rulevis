@@ -113,7 +113,7 @@ Get a bird's-eye view of your rule ID landscape. Dark gray blocks are unused and
 
 **Analyze Conditions** opens a large modal rather than extending the rule-details panel. The modal lists direct parent relationships and resolves each graph path from the virtual root to the selected rule. Every path is collapsed by default and expands into a flattened condition table that keeps the originating rule for every condition.
 
-For atomic rules, RuleVis follows atomic parent relationships and keeps alternative parent branches as separate paths rather than merging them into one condition set.
+For atomic rules, RuleVis follows atomic parent relationships and keeps alternative parent branches as separate paths rather than merging them into one condition set. **RuleVis intentionally does not model `if_level` relationships**, so "resolved paths" means all paths represented by RuleVis, not every parent relationship supported by Wazuh.
 
 For temporal rules, the same path view also follows historical `if_matched_sid` and `if_matched_group` relationships. Temporal tables add a **Scope** column:
 
@@ -153,6 +153,6 @@ The log file records informational messages, warnings, and errors emitted during
 
 ## Notes
 
-While the documentation defines <if_level> as another condition creating a parent-child relationship, it has not been used in any built-in rules. And as a personal choicem I decided to omit that deliberately.
+Wazuh documents `<if_level>` as a condition that can create a parent-child relationship. RuleVis deliberately does not model `if_level`. As a result, graph ancestry and resolved condition paths cover the relationship types represented by RuleVis (`if_sid`, `if_group`, `if_matched_sid`, and `if_matched_group`), not every relationship type supported by Wazuh.
 
-There is another `if`, called `<if_fts>`, that is used for *first time seen* events, not creating a parent-child relationship. Theefore it is not mentioned.
+The `<if_fts>` condition represents first-time-seen state rather than a parent-child graph relationship, so it is retained for condition analysis but does not create a graph edge.

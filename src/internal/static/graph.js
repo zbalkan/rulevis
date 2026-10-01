@@ -494,6 +494,10 @@ class ConditionsModal {
                     Condition type:
                     <strong>${temporal ? "Temporal" : "Atomic"}</strong>
                 </div>
+                <p class="conditions-scope-note">
+                    Resolved paths include RuleVis-supported relationships only.
+                    <code>if_level</code> is intentionally not modeled.
+                </p>
                 <section class="conditions-section">
                     <h3>Direct Parents</h3>
                     ${this.renderParents(details.parents)}

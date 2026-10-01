@@ -432,3 +432,15 @@ def test_if_matched_rule_can_be_temporal_analysis_without_clock(tmp_path):
     assert payload["paths"][0]["conditions"][0]["scope"] == (
         "historical_source"
     )
+
+
+def test_index_documents_if_level_path_deviation(tmp_path):
+    paths = write_app_files(tmp_path)
+    client = create_app(*(str(path) for path in paths)).test_client()
+
+    response = client.get("/")
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "if_level" in html
+    assert "intentionally not modeled" in html
