@@ -500,3 +500,39 @@ def test_numeric_xml_entities_are_not_escaped(tmp_path):
             "attributes": {"name": "letters"},
         }
     ]
+
+
+def test_identical_relationship_edges_are_deduplicated(tmp_path):
+    generator = make_generator(tmp_path)
+
+    generator.add_edge_with_type(
+        "100600",
+        "100601",
+        "if_group",
+        selector="shared",
+    )
+    generator.add_edge_with_type(
+        "100600",
+        "100601",
+        "if_group",
+        selector="shared",
+    )
+    generator.add_edge_with_type(
+        "100600",
+        "100601",
+        "if_sid",
+        selector="100600",
+    )
+
+    edge_data = generator.G.get_edge_data("100600", "100601")
+    assert edge_data is not None
+    assert list(edge_data.values()) == [
+        {
+            "relation_type": "if_group",
+            "selector": "shared",
+        },
+        {
+            "relation_type": "if_sid",
+            "selector": "100600",
+        },
+    ]

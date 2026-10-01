@@ -109,6 +109,15 @@ class GraphGenerator:
         edge_data = {"relation_type": relation_type}
         if selector is not None:
             edge_data["selector"] = selector
+
+        existing_edges = self.G.get_edge_data(source, target) or {}
+        if any(
+            data.get("relation_type") == relation_type
+            and data.get("selector") == selector
+            for data in existing_edges.values()
+        ):
+            return
+
         self.G.add_edge(source, target, **edge_data)
 
     def add_relationship_edges(
