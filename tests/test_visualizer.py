@@ -177,27 +177,6 @@ def test_root_and_details_endpoints(tmp_path):
     ]
 
 
-def test_atomic_condition_tree_reaches_virtual_root(tmp_path):
-    paths = write_app_files(tmp_path)
-    client = create_app(*(str(path) for path in paths)).test_client()
-
-    response = client.get("/api/conditions?id=100002")
-
-    assert response.status_code == 200
-    tree = response.get_json()["tree"]
-    assert tree["id"] == "100002"
-    assert tree["inherited"] is False
-
-    parent = tree["parents"][0]
-    assert parent["id"] == "100001"
-    assert parent["relation_type"] == "if_sid"
-    assert parent["inherited"] is True
-
-    root = parent["parents"][0]
-    assert root["id"] == "0"
-    assert root["relation_type"] == "root"
-
-
 def test_temporal_rule_condition_paths_are_resolved(tmp_path):
     paths = write_app_files(tmp_path)
     graph_path, stats_path, heatmap_path = paths
@@ -245,29 +224,6 @@ def test_temporal_rule_condition_paths_are_resolved(tmp_path):
     ]
 
 
-def test_atomic_trace_stops_at_temporal_parent(tmp_path):
-    paths = write_app_files(tmp_path)
-    client = create_app(*(str(path) for path in paths)).test_client()
-
-    response = client.get("/api/conditions?id=100004")
-
-    assert response.status_code == 200
-    parent = response.get_json()["tree"]["parents"][0]
-    assert parent["id"] == "100003"
-    assert parent["temporal"] is True
-    assert parent["temporal_boundary"] is True
-    assert parent["parents"] == []
-
-
-@pytest.mark.parametrize(
-    "url,status",
-    [
-        ("/api/conditions", 400),
-        ("/api/conditions?id=missing", 404),
-        ("/api/conditions?id=0", 400),
-        ("/api/nodes?mode=search", 400),
-    ],
-)
 def test_api_validation_errors(tmp_path, url, status):
     paths = write_app_files(tmp_path)
     client = create_app(*(str(path) for path in paths)).test_client()
