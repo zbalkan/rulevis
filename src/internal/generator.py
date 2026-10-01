@@ -16,7 +16,9 @@ REGEX_BLOCK: re.Pattern[str] = re.compile(
     r"(</(?:regex|if_matched_regex)>)",
     flags=re.DOTALL | re.IGNORECASE,
 )
-REGEX_AMP: re.Pattern[str] = re.compile(r"&(?!amp;|lt;|gt;|quot;|apos;)")
+REGEX_AMP: re.Pattern[str] = re.compile(
+    r"&(?!amp;|lt;|gt;|quot;|apos;|#\\d+;|#x[0-9A-Fa-f]+;)"
+)
 
 TEMPORAL_RULE_ATTRIBUTES: Final[tuple[str, ...]] = (
     "frequency",

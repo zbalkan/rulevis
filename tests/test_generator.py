@@ -474,3 +474,29 @@ def test_overwrite_keeps_original_parent_relationship(tmp_path, monkeypatch):
 
     assert generator.G.get_edge_data("100510", "100511") is not None
     assert generator.G.get_edge_data("999999", "100511") is None
+
+
+def test_numeric_xml_entities_are_not_escaped(tmp_path):
+    rules = tmp_path / "rules.xml"
+    rules.write_text(
+        """
+<group name="entities,">
+  <rule id="100520" level="3">
+    <field name="letters">&#65;&#x42;</field>
+    <description>Numeric entities</description>
+  </rule>
+</group>
+""".strip(),
+        encoding="utf-8",
+    )
+
+    generator = make_generator(tmp_path)
+    generator.build_graph_from_xml()
+
+    assert generator.G.nodes["100520"]["conditions"] == [
+        {
+            "tag": "field",
+            "value": "AB",
+            "attributes": {"name": "letters"},
+        }
+    ]
