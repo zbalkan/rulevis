@@ -134,13 +134,51 @@ def test_temporal_sid_is_synthesized_as_structural_parent():
     assert model.children[parent] == (child,)
 
 
-def test_missing_default_category_parent_is_explicitly_pending():
+def test_default_category_uses_first_matching_preorder_occurrence():
     catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="windows")
+    add_rule(catalog, 2, 0, category="syslog")
     add_rule(catalog, 100050, 5, category="windows")
+    add_rule(catalog, 100051, 6, category="windows")
 
     model = EvaluationBuilder(catalog).build()
 
-    assert "100050" not in model.rules
-    assert [(issue.code, issue.rule_id) for issue in model.issues] == [
-        ("CATEGORY_PLACEMENT_PENDING", "100050")
+    root = model.occurrences_by_rule["1"][0]
+    ordered = [
+        model.occurrences[occurrence].rule_id
+        for occurrence in model.children[root]
     ]
+    assert ordered == ["100051", "100050"]
+
+
+def test_missing_default_category_parent_is_rejected():
+    catalog = RuleCatalog()
+    add_rule(catalog, 100060, 5, category="windows")
+
+    model = EvaluationBuilder(catalog).build()
+
+    assert "100060" not in model.rules
+    assert [(issue.code, issue.rule_id) for issue in model.issues] == [
+        ("CATEGORY_NOT_FOUND", "100060")
+    ]
+
+
+def test_overwrite_category_updates_preorder_index():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="windows")
+    add_rule(catalog, 2, 0, category="syslog")
+    add_rule(catalog, 100070, 5, if_sid="1")
+    add_rule(
+        catalog,
+        100070,
+        5,
+        category="custom",
+        overwrite=True,
+    )
+    add_rule(catalog, 100071, 6, category="custom")
+
+    model = EvaluationBuilder(catalog).build()
+
+    parent = model.occurrences_by_rule["100070"][0]
+    child = model.occurrences_by_rule["100071"][0]
+    assert model.children[parent] == (child,)

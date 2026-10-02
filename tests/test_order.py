@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from internal.order import PrioritySequence
+from internal.order import CategoryOrder, PrioritySequence
 
 
 def test_priority_sequence_matches_wazuh_insertion_order():
@@ -74,3 +74,34 @@ def test_adversarial_insertions_keep_logarithmic_height(count):
     maximum_reasonable_height = 2 * math.ceil(math.log2(count + 1))
     assert sequence.height <= maximum_reasonable_height
     assert len(sequence) == count
+
+
+
+def test_category_order_finds_first_matching_preorder_token():
+    order = CategoryOrder()
+    order.append(0, 1)
+    order.append(2, 2)
+    order.append(3)
+    order.append(1)
+    order.append(4, 2)
+    order.append(5)
+
+    assert order.first_with_category(1) == 0
+    assert order.first_with_category(2) == 2
+
+    order.update_category(2, 4)
+
+    assert order.first_with_category(2) == 4
+    assert order.first_with_category(4) == 2
+
+
+def test_category_order_insert_before_preserves_preorder():
+    order = CategoryOrder()
+    order.append(0, 1)
+    order.append(1)
+    order.insert_before(1, 2, 2)
+    order.insert_before(1, 3)
+
+    assert list(order) == [0, 2, 3, 1]
+    assert order.rank(2) == 1
+    assert order.first_with_category(2) == 2

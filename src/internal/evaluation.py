@@ -8,7 +8,7 @@ import networkx as nx
 
 from internal.catalog import RuleCatalog, RuleDeclaration
 from internal.group_index import GroupMembershipIndex
-from internal.order import PrioritySequence
+from internal.order import CategoryOrder, PrioritySequence
 
 
 @dataclass
@@ -54,13 +54,7 @@ class _EffectiveParents:
 
 
 class EvaluationBuilder:
-    """Replay the Wazuh 4.14.10 RuleNode construction semantics.
-
-    Category-based fallback placement is intentionally not implemented yet.
-    It requires an indexed dynamic preorder structure to preserve the
-    O(N log N) complexity target after overwrites.  Such declarations are
-    reported explicitly as CATEGORY_PLACEMENT_PENDING.
-    """
+    """Replay the Wazuh 4.14.10 RuleNode construction semantics."""
 
     def __init__(self, catalog: RuleCatalog) -> None:
         self.catalog = catalog
@@ -75,6 +69,11 @@ class EvaluationBuilder:
         self.parent_by_occurrence: dict[int, Optional[int]] = {}
         self.issues: list[LoadIssue] = []
         self._next_occurrence = 0
+        self.order = CategoryOrder()
+        self.enter_token_by_occurrence: dict[int, int] = {}
+        self.exit_token_by_occurrence: dict[int, int] = {}
+        self.occurrence_by_enter_token: dict[int, int] = {}
+        self.category_bits: dict[Optional[str], int] = {}
 
         selectors = {
             parents.if_group
@@ -117,6 +116,32 @@ class EvaluationBuilder:
             if_group=if_group,
         )
 
+    def _category_bit(self, category: Optional[str]) -> int:
+        bit = self.category_bits.get(category)
+        if bit is None:
+            bit = 1 << len(self.category_bits)
+            self.category_bits[category] = bit
+        return bit
+
+    def _set_category(
+        self,
+        state: RuleState,
+        category: Optional[str],
+    ) -> None:
+        if state.category == category:
+            return
+
+        state.category = category
+        bit = self._category_bit(category)
+        for occurrence_id in self.occurrences_by_rule.get(
+            state.rule_id,
+            (),
+        ):
+            self.order.update_category(
+                self.enter_token_by_occurrence[occurrence_id],
+                bit,
+            )
+
     def _priority_add(self, rule_id: str, priority: int) -> None:
         self.rules_by_priority.setdefault(priority, set()).add(rule_id)
 
@@ -151,7 +176,44 @@ class EvaluationBuilder:
             parent_id,
             PrioritySequence(),
         )
-        sequence.insert(occurrence_id, state.load_priority)
+        insertion_index = sequence.insert(
+            occurrence_id,
+            state.load_priority,
+        )
+
+        next_sibling = (
+            sequence.item_at(insertion_index + 1)
+            if insertion_index + 1 < len(sequence)
+            else None
+        )
+
+        enter_token = occurrence_id * 2
+        exit_token = enter_token + 1
+        category_bit = self._category_bit(state.category)
+
+        if next_sibling is not None:
+            reference = self.enter_token_by_occurrence[next_sibling]
+            self.order.insert_before(
+                reference,
+                enter_token,
+                category_bit,
+            )
+            self.order.insert_before(reference, exit_token)
+        elif parent_id is not None:
+            reference = self.exit_token_by_occurrence[parent_id]
+            self.order.insert_before(
+                reference,
+                enter_token,
+                category_bit,
+            )
+            self.order.insert_before(reference, exit_token)
+        else:
+            self.order.append(enter_token, category_bit)
+            self.order.append(exit_token)
+
+        self.enter_token_by_occurrence[occurrence_id] = enter_token
+        self.exit_token_by_occurrence[occurrence_id] = exit_token
+        self.occurrence_by_enter_token[enter_token] = occurrence_id
 
         occurrence = Occurrence(
             occurrence_id=occurrence_id,
@@ -193,7 +255,7 @@ class EvaluationBuilder:
 
         state.load_priority = declaration.load_priority
         state.runtime_group = declaration.runtime_group
-        state.category = declaration.category
+        self._set_category(state, declaration.category)
         state.noalert = declaration.noalert
         state.conditions = declaration.conditions
         state.temporal_conditions = declaration.temporal_conditions
@@ -238,7 +300,10 @@ class EvaluationBuilder:
                 continue
 
             parent_rule_id = self.occurrences[parent_id].rule_id
-            state.category = self.rules[parent_rule_id].category
+            self._set_category(
+                state,
+                self.rules[parent_rule_id].category,
+            )
             self._new_occurrence(state.rule_id, parent_id)
             attached = True
 
@@ -355,14 +420,26 @@ class EvaluationBuilder:
                 parents.if_group,
             )
         else:
-            self.issues.append(
-                LoadIssue(
-                    "CATEGORY_PLACEMENT_PENDING",
-                    state.rule_id,
-                    state.category,
+            category_bit = self._category_bit(state.category)
+            token = self.order.first_with_category(category_bit)
+            if token is None:
+                self.issues.append(
+                    LoadIssue(
+                        "CATEGORY_NOT_FOUND",
+                        state.rule_id,
+                        state.category,
+                    )
                 )
-            )
-            attached = False
+                attached = False
+            else:
+                parent_id = self.occurrence_by_enter_token[token]
+                parent_rule_id = self.occurrences[parent_id].rule_id
+                self._set_category(
+                    state,
+                    self.rules[parent_rule_id].category,
+                )
+                self._new_occurrence(state.rule_id, parent_id)
+                attached = True
 
         if not attached:
             self._unregister_state(state)
