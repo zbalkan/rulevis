@@ -1,4 +1,5 @@
 import networkx as nx
+import pytest
 
 from internal.conditions import (
     ATOMIC_RELATION_TYPES,
