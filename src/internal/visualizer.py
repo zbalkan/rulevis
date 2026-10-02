@@ -197,6 +197,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                 "id": node_id,
                 "description": node_data.get("description"),
                 "groups": node_data.get("groups", []),
+                "mitre": node_data.get("mitre", []),
                 "level": node_data.get("level"),
                 "file": node_data.get("file"),
                 "temporal": bool(node_data.get("temporal", False)),

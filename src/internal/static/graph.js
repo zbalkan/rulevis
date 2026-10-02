@@ -364,6 +364,48 @@ class ConditionsModal {
         });
     }
 
+    renderMetadataValues(values) {
+        if (!values || values.length === 0) return "—";
+        return values
+            .map(value =>
+                `<code class="condition-meta-tag">${escapeHTML(value)}</code>`
+            )
+            .join(" ");
+    }
+
+    renderRuleMetadata(details, temporal) {
+        return `
+            <section class="conditions-rule-summary">
+                <div class="conditions-rule-summary-grid">
+                    <div>
+                        <span class="condition-meta-label">Type</span>
+                        <strong>${temporal ? "Temporal" : "Atomic"}</strong>
+                    </div>
+                    <div>
+                        <span class="condition-meta-label">Level</span>
+                        <span>${escapeHTML(details.level ?? "—")}</span>
+                    </div>
+                    <div>
+                        <span class="condition-meta-label">File</span>
+                        <span>${escapeHTML(details.file || "—")}</span>
+                    </div>
+                </div>
+                <div class="condition-meta-row">
+                    <span class="condition-meta-label">Description</span>
+                    <span>${escapeHTML(details.description || "—")}</span>
+                </div>
+                <div class="condition-meta-row">
+                    <span class="condition-meta-label">Groups</span>
+                    <span>${this.renderMetadataValues(details.groups)}</span>
+                </div>
+                <div class="condition-meta-row">
+                    <span class="condition-meta-label">MITRE ATT&amp;CK</span>
+                    <span>${this.renderMetadataValues(details.mitre)}</span>
+                </div>
+            </section>
+        `;
+    }
+
     renderParents(parents) {
         if (!parents || parents.length === 0) {
             return "<p>No direct parent rules.</p>";
@@ -489,10 +531,7 @@ class ConditionsModal {
             const temporal =
                 conditions.condition_type === "temporal";
             this.body.innerHTML = `
-                <div class="conditions-rule-type">
-                    Condition type:
-                    <strong>${temporal ? "Temporal" : "Atomic"}</strong>
-                </div>
+                ${this.renderRuleMetadata(details, temporal)}
                 <section class="conditions-section">
                     <h3>Direct Parents</h3>
                     ${this.renderParents(details.parents)}

@@ -611,3 +611,54 @@ button:hover {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
+
+
+.conditions-rule-summary {
+    margin-bottom: 24px;
+    padding: 14px 16px;
+    border: 1px solid #444;
+    border-radius: 4px;
+    background: #202020;
+}
+
+.conditions-rule-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.condition-meta-row {
+    display: grid;
+    grid-template-columns: 130px minmax(0, 1fr);
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.condition-meta-label {
+    display: block;
+    color: #4e9af1;
+    font-size: 0.8em;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+}
+
+.condition-meta-row .condition-meta-label {
+    margin-bottom: 0;
+}
+
+.condition-meta-tag {
+    display: inline-block;
+    margin: 0 4px 4px 0;
+}
+
+@media (max-width: 800px) {
+    .conditions-rule-summary-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .condition-meta-row {
+        grid-template-columns: 1fr;
+    }
+}

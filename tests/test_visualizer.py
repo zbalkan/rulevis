@@ -50,6 +50,7 @@ def write_app_files(tmp_path):
         "100003",
         description="Temporal rule",
         groups=["example"],
+        mitre=["T1110", "T1059.001"],
         level="8",
         file="rules.xml",
         temporal=True,
@@ -167,6 +168,7 @@ def test_root_and_details_endpoints(tmp_path):
     assert detail_response.status_code == 200
     details = detail_response.get_json()
     assert details["temporal"] is True
+    assert details["mitre"] == ["T1110", "T1059.001"]
     assert details["parents"] == [
         {
             "id": "100001",
