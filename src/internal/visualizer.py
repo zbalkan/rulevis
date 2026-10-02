@@ -275,6 +275,10 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                     <button id="conditionsCloseBtn" class="modal-close-btn"
                             aria-label="Close conditions">×</button>
                 </div>
+                <p class="conditions-scope-note">
+                    Resolved paths include RuleVis-supported relationships only.
+                    <code>if_level</code> is intentionally not modeled.
+                </p>
                 <div id="conditionsBody"></div>
             </div>
         </div>
