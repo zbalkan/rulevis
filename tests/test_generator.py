@@ -603,3 +603,114 @@ def test_if_matched_group_resolves_members_with_selector(tmp_path):
                 "selector": "source_group",
             }
         ]
+
+
+def test_mitre_ids_are_captured_as_rule_metadata(tmp_path):
+    rules = tmp_path / "rules.xml"
+    rules.write_text(
+        """
+<group name="attack,">
+  <rule id="100800" level="10">
+    <description>Mapped rule</description>
+    <mitre>
+      <id>T1110</id>
+      <id>T1037.001</id>
+    </mitre>
+  </rule>
+</group>
+""".strip(),
+        encoding="utf-8",
+    )
+
+    generator = make_generator(tmp_path)
+    generator.build_graph_from_xml()
+
+    assert generator.G.nodes["100800"]["mitre"] == [
+        "T1110",
+        "T1037.001",
+    ]
+
+
+def test_overwrite_replaces_mitre_metadata(tmp_path, monkeypatch):
+    base = tmp_path / "00-base.xml"
+    overwrite = tmp_path / "99-overwrite.xml"
+
+    base.write_text(
+        """
+<group name="base,">
+  <rule id="100810" level="5">
+    <description>Base</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+</group>
+""".strip(),
+        encoding="utf-8",
+    )
+    overwrite.write_text(
+        """
+<group name="custom,">
+  <rule id="100810" level="7" overwrite="yes">
+    <description>Overwrite</description>
+    <mitre>
+      <id>T1059</id>
+      <id>T1059.001</id>
+    </mitre>
+  </rule>
+</group>
+""".strip(),
+        encoding="utf-8",
+    )
+
+    generator = make_generator(tmp_path)
+    monkeypatch.setattr(
+        generator,
+        "get_all_xml_files",
+        lambda: [str(base), str(overwrite)],
+    )
+    generator.build_graph_from_xml()
+
+    assert generator.G.nodes["100810"]["mitre"] == [
+        "T1059",
+        "T1059.001",
+    ]
+
+
+def test_overwrite_can_clear_mitre_metadata(tmp_path, monkeypatch):
+    base = tmp_path / "00-base.xml"
+    overwrite = tmp_path / "99-overwrite.xml"
+
+    base.write_text(
+        """
+<group name="base,">
+  <rule id="100811" level="5">
+    <description>Base</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+</group>
+""".strip(),
+        encoding="utf-8",
+    )
+    overwrite.write_text(
+        """
+<group name="custom,">
+  <rule id="100811" level="7" overwrite="yes">
+    <description>Overwrite</description>
+  </rule>
+</group>
+""".strip(),
+        encoding="utf-8",
+    )
+
+    generator = make_generator(tmp_path)
+    monkeypatch.setattr(
+        generator,
+        "get_all_xml_files",
+        lambda: [str(base), str(overwrite)],
+    )
+    generator.build_graph_from_xml()
+
+    assert generator.G.nodes["100811"]["mitre"] == []

@@ -297,6 +297,7 @@ class GraphGenerator:
                     level=rule_level,
                     file=os.path.basename(xml_file),
                     temporal=self.is_temporal_rule(element),
+                    mitre=self.extract_mitre_ids(element),
                     conditions=self.extract_atomic_conditions(
                         element, regex_values
                     ),
@@ -331,6 +332,20 @@ class GraphGenerator:
                     xml_file,
                     regex_values,
                 )
+
+    def extract_mitre_ids(
+        self,
+        element: ET.Element,
+    ) -> list[str]:
+        mitre = element.find("mitre")
+        if mitre is None:
+            return []
+
+        return [
+            child.text.strip()
+            for child in mitre
+            if child.tag == "id" and child.text and child.text.strip()
+        ]
 
     def extract_rule_groups(
         self,
@@ -422,6 +437,7 @@ class GraphGenerator:
                         if member != rule_id
                     ]
                 existing["groups"] = effective_groups
+                existing["mitre"] = self.extract_mitre_ids(element)
                 for group in effective_groups:
                     if rule_id not in self.group_membership[group]:
                         self.group_membership[group].append(rule_id)
@@ -487,6 +503,7 @@ class GraphGenerator:
             description="Synthetic root node",
             groups=["__meta__"],
             temporal=False,
+            mitre=[],
             conditions=[],
             temporal_conditions=[],
         )
