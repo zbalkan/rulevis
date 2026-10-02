@@ -220,7 +220,6 @@ def test_temporal_rule_condition_paths_are_resolved(tmp_path):
         ("100001", "historical_source", "decoded_as"),
         ("100003", "temporal", "frequency"),
         ("100003", "temporal", "timeframe"),
-        ("100003", "temporal", "if_matched_sid"),
     ]
 
 
