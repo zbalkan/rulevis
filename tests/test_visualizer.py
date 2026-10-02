@@ -444,3 +444,42 @@ def test_index_documents_if_level_path_deviation(tmp_path):
     assert response.status_code == 200
     assert "if_level" in html
     assert "intentionally not modeled" in html
+
+
+def test_conditions_api_marks_subsumed_field_constraint(tmp_path):
+    paths = write_app_files(tmp_path)
+    graph_path, stats_path, heatmap_path = paths
+
+    with graph_path.open("rb") as stream:
+        graph = pickle.load(stream)
+
+    graph.nodes["100001"]["conditions"] = [
+        {
+            "tag": "field",
+            "value": "^root$|^admin$|^administrator$",
+            "attributes": {"name": "user"},
+        }
+    ]
+    graph.nodes["100002"]["conditions"] = [
+        {"tag": "if_sid", "value": "100001"},
+        {
+            "tag": "field",
+            "value": "^admin$",
+            "attributes": {"name": "user"},
+        },
+    ]
+    with graph_path.open("wb") as stream:
+        pickle.dump(graph, stream)
+
+    client = create_app(
+        str(graph_path),
+        str(stats_path),
+        str(heatmap_path),
+    ).test_client()
+    response = client.get("/api/conditions?id=100002")
+
+    assert response.status_code == 200
+    rows = response.get_json()["paths"][0]["conditions"]
+    assert rows[0]["resolution_status"] == "subsumed"
+    assert rows[0]["resolution_note"] == "Subsumed by rule 100002"
+    assert "resolution_status" not in rows[1]

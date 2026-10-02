@@ -667,3 +667,54 @@ button:hover {
         grid-template-columns: 1fr;
     }
 }
+
+
+.condition-expression {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.condition-resolution {
+    display: inline-block;
+    padding: 1px 6px;
+    border: 1px solid #666;
+    border-radius: 9px;
+    font-size: 0.75em;
+    line-height: 1.4;
+    text-transform: uppercase;
+    text-decoration: none;
+}
+
+.condition-resolution-note {
+    color: #999;
+    font-size: 0.8em;
+    text-decoration: none;
+}
+
+.condition-resolution-subsumed,
+.condition-resolution-redundant {
+    color: #bbb;
+    border-color: #666;
+    background: #303030;
+}
+
+.condition-row-subsumed .condition-expression > code,
+.condition-row-subsumed .condition-value-cell,
+.condition-row-redundant .condition-expression > code,
+.condition-row-redundant .condition-value-cell {
+    color: #888;
+    text-decoration: line-through;
+    text-decoration-thickness: 1px;
+}
+
+.condition-row-contradiction {
+    background: rgba(160, 30, 30, 0.16);
+}
+
+.condition-resolution-contradiction {
+    color: #ff9b9b;
+    border-color: #9b3a3a;
+    background: #3a2020;
+}

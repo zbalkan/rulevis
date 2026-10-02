@@ -446,20 +446,48 @@ class ConditionsModal {
         return `<code>${escapeHTML(condition.tag)}${suffix}</code>`;
     }
 
+    renderResolution(condition) {
+        const status = condition.resolution_status;
+        if (!status) return "";
+
+        const note = condition.resolution_note
+            ? `<span class="condition-resolution-note">${escapeHTML(condition.resolution_note)}</span>`
+            : "";
+
+        return `
+            <span class="condition-resolution condition-resolution-${escapeHTML(status)}">
+                ${escapeHTML(status)}
+            </span>
+            ${note}
+        `;
+    }
+
     renderConditionRows(conditions, temporal) {
         const columnCount = temporal ? 4 : 3;
         if (!conditions || conditions.length === 0) {
             return `<tr><td colspan="${columnCount}">No conditions on this path.</td></tr>`;
         }
 
-        return conditions.map(condition => `
-            <tr>
-                <td>${escapeHTML(condition.origin_rule_id)}</td>
-                ${temporal ? `<td><code>${escapeHTML(condition.scope || "current_event")}</code></td>` : ""}
-                <td>${this.renderCondition(condition)}</td>
-                <td><code class="condition-value-cell">${escapeHTML(condition.value ?? "") || "(empty)"}</code></td>
-            </tr>
-        `).join("");
+        return conditions.map(condition => {
+            const status = condition.resolution_status || "";
+            const rowClass = status
+                ? ` class="condition-row-${escapeHTML(status)}"`
+                : "";
+
+            return `
+                <tr${rowClass}>
+                    <td>${escapeHTML(condition.origin_rule_id)}</td>
+                    ${temporal ? `<td><code>${escapeHTML(condition.scope || "current_event")}</code></td>` : ""}
+                    <td>
+                        <div class="condition-expression">
+                            ${this.renderCondition(condition)}
+                            ${this.renderResolution(condition)}
+                        </div>
+                    </td>
+                    <td><code class="condition-value-cell">${escapeHTML(condition.value ?? "") || "(empty)"}</code></td>
+                </tr>
+            `;
+        }).join("");
     }
 
     renderPathLabel(path) {
