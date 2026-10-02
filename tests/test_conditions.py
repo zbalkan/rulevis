@@ -104,11 +104,12 @@ def test_flatten_atomic_conditions_preserves_order_and_origin():
     graph.add_node(
         "B",
         conditions=[
+            {"tag": "if_sid", "value": "A"},
             {
                 "tag": "field",
                 "value": "^deny$",
                 "attributes": {"name": "event.action"},
-            }
+            },
         ],
     )
 
@@ -219,7 +220,6 @@ def test_temporal_paths_include_matched_relationships():
         ("T", "current_event", "location"),
         ("T", "temporal", "frequency"),
         ("T", "temporal", "timeframe"),
-        ("T", "temporal", "if_matched_sid"),
     ]
 
 
@@ -332,3 +332,60 @@ def test_temporal_matched_group_branches_are_separate_paths():
         path["conditions"][0]["scope"] == "historical_source"
         for path in paths
     )
+
+
+def test_flattened_conditions_omit_all_relationship_selectors():
+    from internal.conditions import (
+        resolve_atomic_paths,
+        resolve_temporal_paths,
+    )
+
+    graph = nx.MultiDiGraph()
+    graph.add_node("0", conditions=[], temporal_conditions=[])
+    graph.add_node(
+        "A",
+        conditions=[{"tag": "match", "value": "source"}],
+        temporal_conditions=[],
+    )
+    graph.add_node(
+        "B",
+        conditions=[
+            {"tag": "if_sid", "value": "A"},
+            {"tag": "if_group", "value": "source_group"},
+            {"tag": "field", "value": "current"},
+        ],
+        temporal_conditions=[],
+    )
+    graph.add_edge("0", "A", relation_type="root")
+    graph.add_edge("A", "B", relation_type="if_sid", selector="A")
+
+    atomic = resolve_atomic_paths(graph, "B")[0]
+    assert [row["tag"] for row in atomic["conditions"]] == [
+        "match",
+        "field",
+    ]
+
+    graph.add_node(
+        "T",
+        conditions=[],
+        temporal_conditions=[
+            {"tag": "frequency", "value": "2"},
+            {"tag": "timeframe", "value": "30"},
+            {"tag": "if_matched_sid", "value": "B"},
+            {"tag": "if_matched_group", "value": "source_group"},
+        ],
+    )
+    graph.add_edge(
+        "B",
+        "T",
+        relation_type="if_matched_sid",
+        selector="B",
+    )
+
+    temporal = resolve_temporal_paths(graph, "T")[0]
+    assert [row["tag"] for row in temporal["conditions"]] == [
+        "match",
+        "field",
+        "frequency",
+        "timeframe",
+    ]

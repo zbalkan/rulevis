@@ -111,7 +111,7 @@ Get a bird's-eye view of your rule ID landscape. Dark gray blocks are unused and
 
 ### Condition Path Analysis
 
-**Analyze Conditions** opens a large modal rather than extending the rule-details panel. The modal lists direct parent relationships and resolves each graph path from the virtual root to the selected rule. Every path is collapsed by default and expands into a flattened condition table that keeps the originating rule for every condition.
+**Analyze Conditions** opens a large modal rather than extending the rule-details panel. The modal lists direct parent relationships and resolves each graph path from the virtual root to the selected rule. Every path is collapsed by default and expands into a flattened condition table that keeps the originating rule for every condition. Relationship selectors such as `if_sid`, `if_group`, `if_matched_sid`, and `if_matched_group` are represented by the resolved path and are omitted from the flattened condition rows. Condition attributes are rendered inline with the condition name, leaving `Origin | Condition | Value` for atomic tables and `Origin | Scope | Condition | Value` for temporal tables.
 
 For atomic rules, RuleVis follows atomic parent relationships and keeps alternative parent branches as separate paths rather than merging them into one condition set. **RuleVis intentionally does not model `if_level` relationships**, so "resolved paths" means all paths represented by RuleVis, not every parent relationship supported by Wazuh.
 

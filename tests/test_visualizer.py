@@ -343,13 +343,12 @@ def test_atomic_condition_paths_include_flattened_rows(tmp_path):
 
     assert response.status_code == 200
     path = response.get_json()["paths"][0]
-    assert path["condition_count"] == 3
+    assert path["condition_count"] == 2
     assert [
         (row["origin_rule_id"], row["tag"])
         for row in path["conditions"]
     ] == [
         ("100001", "decoded_as"),
-        ("100002", "if_sid"),
         ("100002", "field"),
     ]
 

@@ -18,6 +18,12 @@ TEMPORAL_EDGE_TYPES: Final[frozenset[str]] = frozenset({
     "if_matched_sid",
     "if_matched_group",
 })
+RELATION_CONDITION_TAGS: Final[frozenset[str]] = frozenset({
+    "if_sid",
+    "if_group",
+    "if_matched_sid",
+    "if_matched_group",
+})
 
 
 def _parent_edges(
@@ -115,6 +121,9 @@ def flatten_atomic_conditions(
             continue
 
         for condition in graph.nodes[node_id].get("conditions", []):
+            if condition.get("tag") in RELATION_CONDITION_TAGS:
+                continue
+
             row = {
                 "origin_rule_id": str(node_id),
                 "inherited": str(node_id) != target_id,
@@ -171,6 +180,9 @@ def flatten_temporal_conditions(
         )
 
         for condition in graph.nodes[node_id].get("conditions", []):
+            if condition.get("tag") in RELATION_CONDITION_TAGS:
+                continue
+
             row = {
                 "origin_rule_id": str(node_id),
                 "scope": (
@@ -191,6 +203,9 @@ def flatten_temporal_conditions(
         for condition in graph.nodes[node_id].get(
             "temporal_conditions", []
         ):
+            if condition.get("tag") in RELATION_CONDITION_TAGS:
+                continue
+
             is_target = str(node_id) == target_id
             row = {
                 "origin_rule_id": str(node_id),

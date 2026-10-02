@@ -393,18 +393,19 @@ class ConditionsModal {
         `;
     }
 
-    renderAttributes(attributes) {
-        const entries = Object.entries(attributes || {});
-        if (entries.length === 0) return "—";
-        return entries
-            .map(([key, value]) =>
-                `<code>${escapeHTML(key)}=${escapeHTML(value)}</code>`
-            )
-            .join(" ");
+    renderCondition(condition) {
+        const attributes = Object.entries(
+            condition.attributes || {}
+        ).map(([key, value]) =>
+            `${escapeHTML(key)}=${escapeHTML(value)}`
+        ).join(" ");
+
+        const suffix = attributes ? ` ${attributes}` : "";
+        return `<code>${escapeHTML(condition.tag)}${suffix}</code>`;
     }
 
     renderConditionRows(conditions, temporal) {
-        const columnCount = temporal ? 5 : 4;
+        const columnCount = temporal ? 4 : 3;
         if (!conditions || conditions.length === 0) {
             return `<tr><td colspan="${columnCount}">No conditions on this path.</td></tr>`;
         }
@@ -413,8 +414,7 @@ class ConditionsModal {
             <tr>
                 <td>${escapeHTML(condition.origin_rule_id)}</td>
                 ${temporal ? `<td><code>${escapeHTML(condition.scope || "current_event")}</code></td>` : ""}
-                <td><code>${escapeHTML(condition.tag)}</code></td>
-                <td>${this.renderAttributes(condition.attributes)}</td>
+                <td>${this.renderCondition(condition)}</td>
                 <td><code class="condition-value-cell">${escapeHTML(condition.value ?? "") || "(empty)"}</code></td>
             </tr>
         `).join("");
@@ -459,7 +459,6 @@ class ConditionsModal {
                                     <th>Origin</th>
                                     ${temporal ? "<th>Scope</th>" : ""}
                                     <th>Condition</th>
-                                    <th>Attributes</th>
                                     <th>Value</th>
                                 </tr>
                             </thead>
