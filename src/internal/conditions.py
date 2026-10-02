@@ -24,8 +24,14 @@ RELATION_CONDITION_TAGS: Final[frozenset[str]] = frozenset({
     "if_matched_sid",
     "if_matched_group",
 })
-REGEX_META_CHARACTERS: Final[frozenset[str]] = frozenset(
+PCRE2_META_CHARACTERS: Final[frozenset[str]] = frozenset(
     ".^$*+?{}[]()|"
+)
+OSREGEX_META_CHARACTERS: Final[frozenset[str]] = frozenset(
+    "^$*+?{}[]()|\\<"
+)
+OSMATCH_META_CHARACTERS: Final[frozenset[str]] = frozenset(
+    "^$|!\\"
 )
 
 
@@ -33,8 +39,9 @@ REGEX_META_CHARACTERS: Final[frozenset[str]] = frozenset(
 
 def _parse_exact_literal_alternatives(
     value: Any,
+    engine: str,
 ) -> frozenset[str] | None:
-    """Parse ^literal$ alternatives without evaluating general regexes."""
+    """Parse exact alternatives without evaluating general regexes."""
     if not isinstance(value, str) or not value:
         return None
 
@@ -65,33 +72,45 @@ def _parse_exact_literal_alternatives(
             return None
 
         body = part[1:-1]
-        literal: list[str] = []
-        index = 0
 
-        while index < len(body):
-            char = body[index]
-            if char == "\\":
-                if index + 1 >= len(body):
-                    return None
-                escaped = body[index + 1]
-                if escaped.isalnum():
-                    return None
-                literal.append(escaped)
-                index += 2
-                continue
-            if char in REGEX_META_CHARACTERS:
+        if engine in {"osregex", "osmatch"}:
+            meta = (
+                OSREGEX_META_CHARACTERS
+                if engine == "osregex"
+                else OSMATCH_META_CHARACTERS
+            )
+            if any(char in meta for char in body):
                 return None
-            literal.append(char)
-            index += 1
+            literal = body.lower()
+        elif engine == "pcre2":
+            literal_chars: list[str] = []
+            index = 0
+            while index < len(body):
+                char = body[index]
+                if char == "\\":
+                    if index + 1 >= len(body):
+                        return None
+                    escaped = body[index + 1]
+                    if escaped.isalnum():
+                        return None
+                    literal_chars.append(escaped)
+                    index += 2
+                    continue
+                if char in PCRE2_META_CHARACTERS:
+                    return None
+                literal_chars.append(char)
+                index += 1
+            literal = "".join(literal_chars)
+        else:
+            return None
 
-        literals.add("".join(literal))
+        literals.add(literal)
 
     return frozenset(literals)
 
-
 def _field_resolution_key(
     row: dict[str, Any],
-) -> tuple[str | None, str] | None:
+) -> tuple[str | None, str, str] | None:
     if row.get("tag") != "field":
         return None
 
@@ -107,19 +126,23 @@ def _field_resolution_key(
     if negate in {"yes", "true", "1"}:
         return None
 
+    engine = str(attributes.get("type", "osregex")).lower()
+    if engine not in {"osregex", "osmatch", "pcre2"}:
+        return None
+
     scope = row.get("scope")
     return (
         str(scope) if scope is not None else None,
         name,
+        engine,
     )
-
 
 def annotate_field_resolution(
     rows: list[dict[str, Any]],
 ) -> None:
     """Annotate provable same-field simplifications conservatively."""
     states: dict[
-        tuple[str | None, str],
+        tuple[str | None, str, str],
         dict[str, Any],
     ] = {}
 
@@ -128,7 +151,10 @@ def annotate_field_resolution(
         if key is None:
             continue
 
-        values = _parse_exact_literal_alternatives(row.get("value"))
+        values = _parse_exact_literal_alternatives(
+            row.get("value"),
+            key[2],
+        )
         if values is None:
             continue
 

@@ -571,3 +571,72 @@ def test_temporal_field_simplification_does_not_cross_scope():
         "resolution_status" not in row
         for row in user_rows
     )
+
+
+
+def test_default_osregex_literal_sets_are_case_insensitive():
+    from internal.conditions import resolve_atomic_paths
+
+    graph = nx.MultiDiGraph()
+    graph.add_node("0", conditions=[])
+    graph.add_node(
+        "A",
+        conditions=[_field_condition("user", "^Admin$")],
+    )
+    graph.add_node(
+        "B",
+        conditions=[_field_condition("user", "^admin$")],
+    )
+    graph.add_edge("0", "A", relation_type="root")
+    graph.add_edge("A", "B", relation_type="if_sid")
+
+    rows = resolve_atomic_paths(graph, "B")[0]["conditions"]
+
+    assert rows[1]["resolution_status"] == "redundant"
+    assert "resolution_status" not in rows[0]
+
+
+def test_different_regex_engines_are_not_compared():
+    from internal.conditions import resolve_atomic_paths
+
+    graph = nx.MultiDiGraph()
+    graph.add_node("0", conditions=[])
+    graph.add_node(
+        "A",
+        conditions=[
+            _field_condition("user", "^Admin$", type="osregex")
+        ],
+    )
+    graph.add_node(
+        "B",
+        conditions=[
+            _field_condition("user", "^admin$", type="pcre2")
+        ],
+    )
+    graph.add_edge("0", "A", relation_type="root")
+    graph.add_edge("A", "B", relation_type="if_sid")
+
+    rows = resolve_atomic_paths(graph, "B")[0]["conditions"]
+
+    assert all("resolution_status" not in row for row in rows)
+
+
+def test_osregex_escape_syntax_is_not_misread_as_literal():
+    from internal.conditions import resolve_atomic_paths
+
+    graph = nx.MultiDiGraph()
+    graph.add_node("0", conditions=[])
+    graph.add_node(
+        "A",
+        conditions=[_field_condition("user", r"^adm\.$")],
+    )
+    graph.add_node(
+        "B",
+        conditions=[_field_condition("user", "^admin$")],
+    )
+    graph.add_edge("0", "A", relation_type="root")
+    graph.add_edge("A", "B", relation_type="if_sid")
+
+    rows = resolve_atomic_paths(graph, "B")[0]["conditions"]
+
+    assert all("resolution_status" not in row for row in rows)
