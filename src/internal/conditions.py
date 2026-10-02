@@ -24,6 +24,157 @@ RELATION_CONDITION_TAGS: Final[frozenset[str]] = frozenset({
     "if_matched_sid",
     "if_matched_group",
 })
+REGEX_META_CHARACTERS: Final[frozenset[str]] = frozenset(
+    ".^$*+?{}[]()|"
+)
+
+
+
+
+def _parse_exact_literal_alternatives(
+    value: Any,
+) -> frozenset[str] | None:
+    """Parse ^literal$ alternatives without evaluating general regexes."""
+    if not isinstance(value, str) or not value:
+        return None
+
+    parts: list[str] = []
+    current: list[str] = []
+    index = 0
+
+    while index < len(value):
+        char = value[index]
+        if char == "\\":
+            if index + 1 >= len(value):
+                return None
+            current.extend((char, value[index + 1]))
+            index += 2
+            continue
+        if char == "|":
+            parts.append("".join(current))
+            current = []
+        else:
+            current.append(char)
+        index += 1
+
+    parts.append("".join(current))
+    literals: set[str] = set()
+
+    for part in parts:
+        if len(part) < 2 or not part.startswith("^") or not part.endswith("$"):
+            return None
+
+        body = part[1:-1]
+        literal: list[str] = []
+        index = 0
+
+        while index < len(body):
+            char = body[index]
+            if char == "\\":
+                if index + 1 >= len(body):
+                    return None
+                escaped = body[index + 1]
+                if escaped.isalnum():
+                    return None
+                literal.append(escaped)
+                index += 2
+                continue
+            if char in REGEX_META_CHARACTERS:
+                return None
+            literal.append(char)
+            index += 1
+
+        literals.add("".join(literal))
+
+    return frozenset(literals)
+
+
+def _field_resolution_key(
+    row: dict[str, Any],
+) -> tuple[str | None, str] | None:
+    if row.get("tag") != "field":
+        return None
+
+    attributes = row.get("attributes")
+    if not isinstance(attributes, dict):
+        return None
+
+    name = attributes.get("name")
+    if not isinstance(name, str) or not name:
+        return None
+
+    negate = str(attributes.get("negate", "")).lower()
+    if negate in {"yes", "true", "1"}:
+        return None
+
+    scope = row.get("scope")
+    return (
+        str(scope) if scope is not None else None,
+        name,
+    )
+
+
+def annotate_field_resolution(
+    rows: list[dict[str, Any]],
+) -> None:
+    """Annotate provable same-field simplifications conservatively."""
+    states: dict[
+        tuple[str | None, str],
+        dict[str, Any],
+    ] = {}
+
+    for row in rows:
+        key = _field_resolution_key(row)
+        if key is None:
+            continue
+
+        values = _parse_exact_literal_alternatives(row.get("value"))
+        if values is None:
+            continue
+
+        state = states.get(key)
+        if state is None:
+            states[key] = {
+                "effective": values,
+                "active": [row],
+                "contradiction": False,
+            }
+            continue
+
+        if state["contradiction"]:
+            continue
+
+        effective = state["effective"]
+        intersection = effective & values
+
+        if not intersection:
+            row["resolution_status"] = "contradiction"
+            row["resolution_note"] = (
+                f"Contradicts prior constraints on {key[1]}"
+            )
+            state["contradiction"] = True
+            continue
+
+        if intersection == effective:
+            row["resolution_status"] = "redundant"
+            row["resolution_note"] = (
+                f"Redundant after prior constraints on {key[1]}"
+            )
+            continue
+
+        if intersection == values:
+            for previous in state["active"]:
+                previous["resolution_status"] = "subsumed"
+                previous["resolution_note"] = (
+                    "Subsumed by rule "
+                    f"{row.get('origin_rule_id', '?')}"
+                )
+            state["effective"] = values
+            state["active"] = [row]
+            continue
+
+        state["effective"] = intersection
+        state["active"].append(row)
 
 
 def _parent_edges(
@@ -147,6 +298,7 @@ def resolve_atomic_paths(
     paths = enumerate_paths(graph, target_id)
     for path in paths:
         conditions = flatten_atomic_conditions(graph, path)
+        annotate_field_resolution(conditions)
         path["conditions"] = conditions
         path["condition_count"] = len(conditions)
     return paths
@@ -239,6 +391,7 @@ def resolve_temporal_paths(
     )
     for path in paths:
         conditions = flatten_temporal_conditions(graph, path)
+        annotate_field_resolution(conditions)
         path["conditions"] = conditions
         path["condition_count"] = len(conditions)
     return paths

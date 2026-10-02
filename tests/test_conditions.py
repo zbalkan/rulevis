@@ -389,3 +389,185 @@ def test_flattened_conditions_omit_all_relationship_selectors():
         "frequency",
         "timeframe",
     ]
+
+
+
+def _field_condition(
+    name: str,
+    value: str,
+    **attributes: str,
+) -> dict[str, object]:
+    return {
+        "tag": "field",
+        "value": value,
+        "attributes": {"name": name, **attributes},
+    }
+
+
+def test_narrower_child_field_subsumes_parent_condition():
+    from internal.conditions import resolve_atomic_paths
+
+    graph = nx.MultiDiGraph()
+    graph.add_node("0", conditions=[])
+    graph.add_node(
+        "A",
+        conditions=[
+            _field_condition(
+                "user",
+                "^root$|^admin$|^administrator$",
+            )
+        ],
+    )
+    graph.add_node(
+        "B",
+        conditions=[_field_condition("user", "^admin$")],
+    )
+    graph.add_edge("0", "A", relation_type="root")
+    graph.add_edge("A", "B", relation_type="if_sid")
+
+    rows = resolve_atomic_paths(graph, "B")[0]["conditions"]
+
+    assert rows[0]["resolution_status"] == "subsumed"
+    assert rows[0]["resolution_note"] == "Subsumed by rule B"
+    assert "resolution_status" not in rows[1]
+
+
+def test_broader_child_field_is_redundant():
+    from internal.conditions import resolve_atomic_paths
+
+    graph = nx.MultiDiGraph()
+    graph.add_node("0", conditions=[])
+    graph.add_node(
+        "A",
+        conditions=[_field_condition("user", "^admin$")],
+    )
+    graph.add_node(
+        "B",
+        conditions=[
+            _field_condition(
+                "user",
+                "^root$|^admin$|^administrator$",
+            )
+        ],
+    )
+    graph.add_edge("0", "A", relation_type="root")
+    graph.add_edge("A", "B", relation_type="if_sid")
+
+    rows = resolve_atomic_paths(graph, "B")[0]["conditions"]
+
+    assert "resolution_status" not in rows[0]
+    assert rows[1]["resolution_status"] == "redundant"
+
+
+def test_partial_same_field_overlap_is_not_simplified():
+    from internal.conditions import resolve_atomic_paths
+
+    graph = nx.MultiDiGraph()
+    graph.add_node("0", conditions=[])
+    graph.add_node(
+        "A",
+        conditions=[_field_condition("user", "^root$|^admin$")],
+    )
+    graph.add_node(
+        "B",
+        conditions=[
+            _field_condition("user", "^admin$|^administrator$")
+        ],
+    )
+    graph.add_edge("0", "A", relation_type="root")
+    graph.add_edge("A", "B", relation_type="if_sid")
+
+    rows = resolve_atomic_paths(graph, "B")[0]["conditions"]
+
+    assert all("resolution_status" not in row for row in rows)
+
+
+def test_disjoint_same_field_constraints_are_contradictory():
+    from internal.conditions import resolve_atomic_paths
+
+    graph = nx.MultiDiGraph()
+    graph.add_node("0", conditions=[])
+    graph.add_node(
+        "A",
+        conditions=[_field_condition("user", "^root$")],
+    )
+    graph.add_node(
+        "B",
+        conditions=[_field_condition("user", "^admin$")],
+    )
+    graph.add_edge("0", "A", relation_type="root")
+    graph.add_edge("A", "B", relation_type="if_sid")
+
+    rows = resolve_atomic_paths(graph, "B")[0]["conditions"]
+
+    assert rows[1]["resolution_status"] == "contradiction"
+    assert rows[1]["resolution_note"] == (
+        "Contradicts prior constraints on user"
+    )
+
+
+@pytest.mark.parametrize(
+    "parent,child,attributes",
+    [
+        ("^adm.*$", "^admin$", {}),
+        ("^admin$", "^admin$", {"negate": "yes"}),
+        ("^\\d+$", "^123$", {}),
+    ],
+)
+def test_unproven_regex_relationships_are_left_unchanged(
+    parent, child, attributes
+):
+    from internal.conditions import resolve_atomic_paths
+
+    graph = nx.MultiDiGraph()
+    graph.add_node("0", conditions=[])
+    graph.add_node(
+        "A",
+        conditions=[_field_condition("user", parent, **attributes)],
+    )
+    graph.add_node(
+        "B",
+        conditions=[_field_condition("user", child)],
+    )
+    graph.add_edge("0", "A", relation_type="root")
+    graph.add_edge("A", "B", relation_type="if_sid")
+
+    rows = resolve_atomic_paths(graph, "B")[0]["conditions"]
+
+    assert all("resolution_status" not in row for row in rows)
+
+
+def test_temporal_field_simplification_does_not_cross_scope():
+    from internal.conditions import resolve_temporal_paths
+
+    graph = nx.MultiDiGraph()
+    graph.add_node("0", conditions=[], temporal_conditions=[])
+    graph.add_node(
+        "A",
+        conditions=[
+            _field_condition(
+                "user",
+                "^root$|^admin$|^administrator$",
+            )
+        ],
+        temporal_conditions=[],
+    )
+    graph.add_node(
+        "T",
+        conditions=[_field_condition("user", "^admin$")],
+        temporal_conditions=[{"tag": "frequency", "value": "2"}],
+    )
+    graph.add_edge("0", "A", relation_type="root")
+    graph.add_edge("A", "T", relation_type="if_matched_sid")
+
+    rows = resolve_temporal_paths(graph, "T")[0]["conditions"]
+    user_rows = [row for row in rows if row["tag"] == "field"]
+
+    assert [row["scope"] for row in user_rows] == [
+        "historical_source",
+        "current_event",
+    ]
+    assert all(
+        "resolution_status" not in row
+        for row in user_rows
+    )
