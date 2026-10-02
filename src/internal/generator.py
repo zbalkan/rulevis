@@ -331,6 +331,11 @@ class GraphGenerator:
             overwrite=element.get("overwrite", "").lower() == "yes",
             runtime_group=runtime_group_value,
             display_groups=display_groups,
+            category=(
+                self._concat_child_text(element, "category")
+                if self._concat_child_text(element, "category")
+                else None
+            ),
             if_sid=self._concat_child_text(element, "if_sid"),
             if_level=self._last_int_child(element, "if_level"),
             if_group=self._concat_child_text(element, "if_group"),

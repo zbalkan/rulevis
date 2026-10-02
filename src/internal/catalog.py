@@ -69,6 +69,7 @@ class RuleDeclaration:
 
     runtime_group: str
     display_groups: tuple[str, ...]
+    category: Optional[str]
 
     if_sid: Optional[str] = None
     if_level: Optional[int] = None
@@ -97,6 +98,7 @@ class RuleCatalog:
         overwrite: bool,
         runtime_group: str,
         display_groups: list[str],
+        category: Optional[str],
         if_sid: Optional[str],
         if_level: Optional[int],
         if_group: Optional[str],
@@ -116,6 +118,7 @@ class RuleCatalog:
             overwrite=overwrite,
             runtime_group=runtime_group,
             display_groups=tuple(display_groups),
+            category=category,
             if_sid=if_sid,
             if_level=if_level,
             if_group=if_group,
