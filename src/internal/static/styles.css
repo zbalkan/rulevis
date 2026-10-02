@@ -531,6 +531,11 @@ button:hover {
     overflow: auto;
 }
 
+.conditions-scope-note {
+    margin: 16px 20px 0;
+    line-height: 1.5;
+}
+
 .conditions-placeholder {
     color: #aaa;
 }
