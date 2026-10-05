@@ -331,3 +331,33 @@ def test_never_candidate_witness_has_no_event():
         occurrence_path=(root, target),
         blocking_occurrence=None,
     )
+
+
+def test_classifier_distinguishes_impossible_path_from_empty_predicate():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(catalog, 100140, 5, if_sid="1")
+    add_rule(catalog, 100141, 6, if_sid="100140")
+
+    model, result = assess(
+        catalog,
+        1,
+        {
+            "1": 1,
+            "100140": 0,
+            "100141": 1,
+        },
+    )
+
+    findings = AssessmentClassifier(model, result).classify()
+    by_rule = {
+        finding.rule_id: finding
+        for finding in findings
+        if finding.rule_id in {"100140", "100141"}
+    }
+
+    assert by_rule["100140"].kind is FindingKind.NEVER_CANDIDATE
+    assert by_rule["100140"].region == 0
+    assert by_rule["100141"].kind is FindingKind.PATH_IMPOSSIBLE
+    assert by_rule["100141"].region == 1
+    assert by_rule["100141"].witness.event_index == 0

@@ -14,6 +14,7 @@ from internal.evaluation import EvaluationModel
 
 @dataclass(frozen=True)
 class OccurrenceFacts:
+    predicate: int
     candidate: int
     reached: int
     matched: int
@@ -33,6 +34,7 @@ class AssessmentResult:
 
 class FindingKind(str, Enum):
     NEVER_CANDIDATE = "never_candidate"
+    PATH_IMPOSSIBLE = "path_impossible"
     UNREACHABLE = "unreachable"
     FULLY_SHADOWED = "fully_shadowed"
     PARTIALLY_SHADOWED = "partially_shadowed"
@@ -136,12 +138,22 @@ class AssessmentClassifier:
             occurrence = self.model.occurrences[occurrence_id]
             facts = self.result.facts[occurrence_id]
 
-            if facts.candidate == 0:
+            if facts.predicate == 0:
                 findings.append(
                     self._finding(
                         occurrence_id,
                         FindingKind.NEVER_CANDIDATE,
                         0,
+                    )
+                )
+                continue
+
+            if facts.candidate == 0:
+                findings.append(
+                    self._finding(
+                        occurrence_id,
+                        FindingKind.PATH_IMPOSSIBLE,
+                        facts.predicate,
                     )
                 )
                 continue
@@ -307,6 +319,7 @@ class BitsetAssessor:
                 )
 
                 facts[occurrence_id] = OccurrenceFacts(
+                    predicate=predicate,
                     candidate=candidate,
                     reached=reached,
                     matched=matched,
