@@ -392,3 +392,27 @@ def test_ordinary_multi_sid_keeps_valid_attachments_when_one_sid_is_missing():
         (issue.code, issue.rule_id, issue.selector)
         for issue in model.issues
     }
+
+
+
+def test_if_level_uses_encoded_load_priority_like_wazuh():
+    catalog = RuleCatalog()
+    # Wazuh maps level 0 / accuracy 1 to 9900 during RuleNode loading,
+    # so it qualifies for if_level=5 even though its runtime level is 0.
+    add_rule(catalog, 1, 0, accuracy=1, category="zero")
+    # accuracy=0 leaves level 10 encoded as 10, below the 500 threshold.
+    add_rule(catalog, 2, 10, accuracy=0, category="low-priority")
+    add_rule(catalog, 3, 10, accuracy=1, category="normal")
+    add_rule(catalog, 100130, 7, if_level=5)
+
+    model = EvaluationBuilder(catalog).build()
+
+    parents = {
+        model.occurrences[occurrence_id].parent_id
+        for occurrence_id in model.occurrences_by_rule["100130"]
+    }
+    assert parents == {
+        model.occurrences_by_rule["1"][0],
+        model.occurrences_by_rule["3"][0],
+    }
+    assert model.occurrences_by_rule["2"][0] not in parents
