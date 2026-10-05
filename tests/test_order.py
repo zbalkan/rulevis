@@ -105,3 +105,17 @@ def test_category_order_insert_before_preserves_preorder():
     assert list(order) == [0, 2, 3, 1]
     assert order.rank(2) == 1
     assert order.first_with_category(2) == 2
+
+
+
+def test_priority_sequence_has_no_finite_empty_subtree_sentinel():
+    sequence = PrioritySequence()
+    low = 2**40
+    middle = low + 100
+    high = low + 200
+
+    sequence.insert(1, low)
+    sequence.insert(2, high)
+    sequence.insert(3, middle)
+
+    assert list(sequence) == [2, 3, 1]

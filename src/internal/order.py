@@ -35,18 +35,16 @@ def _size(node: Optional[_PriorityNode]) -> int:
     return node.size if node is not None else 0
 
 
-def _minimum(node: Optional[_PriorityNode]) -> int:
-    return node.min_priority if node is not None else 2**31 - 1
-
-
 def _recalculate(node: _PriorityNode) -> None:
     node.height = 1 + max(_height(node.left), _height(node.right))
     node.size = 1 + _size(node.left) + _size(node.right)
-    node.min_priority = min(
-        node.priority,
-        _minimum(node.left),
-        _minimum(node.right),
-    )
+
+    minimum = node.priority
+    if node.left is not None:
+        minimum = min(minimum, node.left.min_priority)
+    if node.right is not None:
+        minimum = min(minimum, node.right.min_priority)
+    node.min_priority = minimum
 
 
 def _rotate_left(node: _PriorityNode) -> _PriorityNode:
