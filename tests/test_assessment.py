@@ -2,6 +2,7 @@ from internal.assessment import (
     AssessmentClassifier,
     BitsetAssessor,
     FindingKind,
+    FindingWitness,
 )
 from internal.catalog import RuleCatalog
 from internal.domains import BitsetDomain
@@ -271,3 +272,62 @@ def test_classifier_marks_impossible_domain_predicate():
         for finding in findings
         if finding.rule_id == "100120"
     ] == [("100120", FindingKind.NEVER_CANDIDATE)]
+
+
+def test_shadowing_witness_identifies_blocker_and_path():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(catalog, 100130, 10, if_sid="1")
+    add_rule(catalog, 100131, 5, if_sid="1")
+
+    model, result = assess(
+        catalog,
+        2,
+        {
+            "1": 0b11,
+            "100130": 0b01,
+            "100131": 0b11,
+        },
+    )
+
+    blocker = model.occurrences_by_rule["100130"][0]
+    target = model.occurrences_by_rule["100131"][0]
+    root = model.occurrences_by_rule["1"][0]
+    finding = next(
+        finding
+        for finding in AssessmentClassifier(model, result).classify()
+        if finding.rule_id == "100131"
+    )
+
+    assert finding.kind is FindingKind.PARTIALLY_SHADOWED
+    assert finding.witness == FindingWitness(
+        event_index=0,
+        occurrence_path=(root, target),
+        blocking_occurrence=blocker,
+    )
+
+
+def test_never_candidate_witness_has_no_event():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(catalog, 100132, 5, if_sid="1")
+
+    model, result = assess(
+        catalog,
+        1,
+        {"1": 1, "100132": 0},
+    )
+
+    target = model.occurrences_by_rule["100132"][0]
+    root = model.occurrences_by_rule["1"][0]
+    finding = next(
+        finding
+        for finding in AssessmentClassifier(model, result).classify()
+        if finding.rule_id == "100132"
+    )
+
+    assert finding.witness == FindingWitness(
+        event_index=None,
+        occurrence_path=(root, target),
+        blocking_occurrence=None,
+    )

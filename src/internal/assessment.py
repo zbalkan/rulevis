@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 from enum import Enum
+from typing import Optional
 
 import networkx as nx
 
@@ -40,11 +41,19 @@ class FindingKind(str, Enum):
 
 
 @dataclass(frozen=True)
+class FindingWitness:
+    event_index: Optional[int]
+    occurrence_path: tuple[int, ...]
+    blocking_occurrence: Optional[int]
+
+
+@dataclass(frozen=True)
 class AssessmentFinding:
     rule_id: str
     occurrence_id: int
     kind: FindingKind
     region: int
+    witness: FindingWitness
 
 
 class AssessmentClassifier:
@@ -58,6 +67,68 @@ class AssessmentClassifier:
         self.model = model
         self.result = result
 
+    def _occurrence_path(self, occurrence_id: int) -> tuple[int, ...]:
+        path: list[int] = []
+        current: Optional[int] = occurrence_id
+        while current is not None:
+            path.append(current)
+            current = self.model.occurrences[current].parent_id
+        path.reverse()
+        return tuple(path)
+
+    def _blocking_occurrence(
+        self,
+        occurrence_id: int,
+        event_mask: int,
+    ) -> Optional[int]:
+        for path_occurrence in self._occurrence_path(occurrence_id):
+            parent_id = self.model.occurrences[
+                path_occurrence
+            ].parent_id
+            for sibling_id in self.model.children.get(parent_id, ()):
+                if sibling_id == path_occurrence:
+                    break
+                if self.result.termination.get(sibling_id, 0) & event_mask:
+                    return sibling_id
+        return None
+
+    def _witness(
+        self,
+        occurrence_id: int,
+        region: int,
+    ) -> FindingWitness:
+        if region:
+            event_mask = region & -region
+            event_index = event_mask.bit_length() - 1
+            blocker = self._blocking_occurrence(
+                occurrence_id,
+                event_mask,
+            )
+        else:
+            event_index = None
+            blocker = None
+
+        return FindingWitness(
+            event_index=event_index,
+            occurrence_path=self._occurrence_path(occurrence_id),
+            blocking_occurrence=blocker,
+        )
+
+    def _finding(
+        self,
+        occurrence_id: int,
+        kind: FindingKind,
+        region: int,
+    ) -> AssessmentFinding:
+        occurrence = self.model.occurrences[occurrence_id]
+        return AssessmentFinding(
+            rule_id=occurrence.rule_id,
+            occurrence_id=occurrence_id,
+            kind=kind,
+            region=region,
+            witness=self._witness(occurrence_id, region),
+        )
+
     def classify(self) -> tuple[AssessmentFinding, ...]:
         findings: list[AssessmentFinding] = []
 
@@ -67,8 +138,7 @@ class AssessmentClassifier:
 
             if facts.candidate == 0:
                 findings.append(
-                    AssessmentFinding(
-                        occurrence.rule_id,
+                    self._finding(
                         occurrence_id,
                         FindingKind.NEVER_CANDIDATE,
                         0,
@@ -78,8 +148,7 @@ class AssessmentClassifier:
 
             if facts.reached == 0:
                 findings.append(
-                    AssessmentFinding(
-                        occurrence.rule_id,
+                    self._finding(
                         occurrence_id,
                         FindingKind.UNREACHABLE,
                         facts.candidate,
@@ -87,8 +156,7 @@ class AssessmentClassifier:
                 )
             elif facts.matched == 0 and facts.shadowed:
                 findings.append(
-                    AssessmentFinding(
-                        occurrence.rule_id,
+                    self._finding(
                         occurrence_id,
                         FindingKind.FULLY_SHADOWED,
                         facts.shadowed,
@@ -96,8 +164,7 @@ class AssessmentClassifier:
                 )
             elif facts.shadowed:
                 findings.append(
-                    AssessmentFinding(
-                        occurrence.rule_id,
+                    self._finding(
                         occurrence_id,
                         FindingKind.PARTIALLY_SHADOWED,
                         facts.shadowed,
@@ -106,8 +173,7 @@ class AssessmentClassifier:
 
             if facts.dropped:
                 findings.append(
-                    AssessmentFinding(
-                        occurrence.rule_id,
+                    self._finding(
                         occurrence_id,
                         FindingKind.DROPPED,
                         facts.dropped,
@@ -120,8 +186,7 @@ class AssessmentClassifier:
                 and not facts.dropped
             ):
                 findings.append(
-                    AssessmentFinding(
-                        occurrence.rule_id,
+                    self._finding(
                         occurrence_id,
                         FindingKind.NEVER_SELECTED,
                         facts.matched,
