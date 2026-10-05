@@ -182,3 +182,45 @@ def test_overwrite_category_updates_preorder_index():
     parent = model.occurrences_by_rule["100070"][0]
     child = model.occurrences_by_rule["100071"][0]
     assert model.children[parent] == (child,)
+
+
+
+def test_omitted_category_attaches_to_syslog_root():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="syslog")
+    add_rule(catalog, 100080, 5)
+
+    model = EvaluationBuilder(catalog).build()
+
+    root = model.occurrences_by_rule["1"][0]
+    child = model.occurrences_by_rule["100080"][0]
+    assert model.children[root] == (child,)
+    assert model.rules["100080"].category == "syslog"
+
+
+def test_invalid_rule_id_is_reported_without_crashing():
+    catalog = RuleCatalog()
+    add_rule(catalog, "not-a-number", 5)
+
+    model = EvaluationBuilder(catalog).build()
+
+    assert "not-a-number" not in model.rules
+    assert [
+        (issue.code, issue.rule_id, issue.selector)
+        for issue in model.issues
+    ] == [
+        ("INVALID_RULE_ID", "not-a-number", "not-a-number")
+    ]
+
+
+def test_valid_rule_id_is_canonicalized_before_evaluation():
+    catalog = RuleCatalog()
+    add_rule(catalog, "000001", 0, category="syslog")
+    add_rule(catalog, 100081, 5, if_sid="1")
+
+    model = EvaluationBuilder(catalog).build()
+
+    assert "1" in model.rules
+    root = model.occurrences_by_rule["1"][0]
+    child = model.occurrences_by_rule["100081"][0]
+    assert model.children[root] == (child,)

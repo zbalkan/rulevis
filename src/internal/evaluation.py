@@ -6,7 +6,11 @@ from typing import Optional
 
 import networkx as nx
 
-from internal.catalog import RuleCatalog, RuleDeclaration
+from internal.catalog import (
+    RuleCatalog,
+    RuleDeclaration,
+    normalize_rule_id,
+)
 from internal.group_index import GroupMembershipIndex
 from internal.order import CategoryOrder, PrioritySequence
 
@@ -368,6 +372,17 @@ class EvaluationBuilder:
         return attached
 
     def _process(self, declaration: RuleDeclaration) -> None:
+        normalized_rule_id = normalize_rule_id(declaration.rule_id)
+        if normalized_rule_id is None:
+            self.issues.append(
+                LoadIssue(
+                    "INVALID_RULE_ID",
+                    declaration.rule_id,
+                    declaration.rule_id,
+                )
+            )
+            return
+
         existing = self.rules.get(declaration.rule_id)
 
         if existing is not None and not declaration.overwrite:
@@ -397,7 +412,7 @@ class EvaluationBuilder:
         )
         self._register_state(state)
 
-        if int(declaration.rule_id) < 10:
+        if int(normalized_rule_id) < 10:
             self._new_occurrence(state.rule_id, None)
             return
 

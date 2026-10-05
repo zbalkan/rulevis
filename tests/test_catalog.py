@@ -1,6 +1,8 @@
 import pytest
 
 from internal.catalog import (
+    DEFAULT_CATEGORY,
+    normalize_rule_id,
     os_word_match,
     wazuh_load_priority,
     wazuh_runtime_level,
@@ -130,3 +132,70 @@ def test_catalog_concatenates_wazuh_selector_values(tmp_path):
 
     assert declaration.if_group == "auth|audit"
     assert declaration.if_sid == "100001, 100002"
+
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("1", "1"),
+        ("000001", "1"),
+        ("999999", "999999"),
+        ("1000000", None),
+        ("abc", None),
+        ("-1", None),
+        ("", None),
+    ],
+)
+def test_rule_id_normalization_matches_wazuh_constraints(value, expected):
+    assert normalize_rule_id(value) == expected
+
+
+def test_catalog_defaults_omitted_category_to_syslog(tmp_path):
+    rules = tmp_path / "rules.xml"
+    rules.write_text(
+        """
+<group name="root,">
+  <rule id="100300" level="5">
+    <description>No explicit category</description>
+  </rule>
+</group>
+""".strip(),
+        encoding="utf-8",
+    )
+
+    generator = GraphGenerator(
+        [str(tmp_path)],
+        str(tmp_path / "graph.pickle"),
+    )
+    generator.build_graph_from_xml()
+
+    declaration = generator.catalog.declarations[0]
+    assert declaration.category == DEFAULT_CATEGORY
+
+
+def test_catalog_accumulates_nested_runtime_groups(tmp_path):
+    rules = tmp_path / "rules.xml"
+    rules.write_text(
+        """
+<group name="outer,">
+  <group name="inner,">
+    <rule id="100301" level="5">
+      <group>local,</group>
+      <description>Nested rule</description>
+    </rule>
+  </group>
+</group>
+""".strip(),
+        encoding="utf-8",
+    )
+
+    generator = GraphGenerator(
+        [str(tmp_path)],
+        str(tmp_path / "graph.pickle"),
+    )
+    generator.build_graph_from_xml()
+
+    declaration = generator.catalog.declarations[0]
+    assert declaration.runtime_group == "outer,inner,local,"
+    assert declaration.display_groups == ("outer", "inner", "local")

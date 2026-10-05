@@ -317,6 +317,7 @@ class GraphGenerator:
                 runtime_group_value += child.text.replace("\n", "")
 
         attrs = [(child.tag, child.text) for child in element]
+        category = self._concat_child_text(element, "category")
         display_groups = self.extract_rule_groups(
             inherited_groups,
             attrs,
@@ -331,11 +332,7 @@ class GraphGenerator:
             overwrite=element.get("overwrite", "").lower() == "yes",
             runtime_group=runtime_group_value,
             display_groups=display_groups,
-            category=(
-                self._concat_child_text(element, "category")
-                if self._concat_child_text(element, "category")
-                else None
-            ),
+            category=category if category else None,
             if_sid=self._concat_child_text(element, "if_sid"),
             if_level=self._last_int_child(element, "if_level"),
             if_group=self._concat_child_text(element, "if_group"),
@@ -445,7 +442,7 @@ class GraphGenerator:
                     new_inherited_groups,
                     xml_file,
                     regex_values,
-                    group_attribute,
+                    runtime_group + group_attribute,
                 )
 
     def extract_mitre_ids(

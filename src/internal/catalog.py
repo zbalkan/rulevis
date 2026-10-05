@@ -1,7 +1,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Final, Optional
+
+DEFAULT_CATEGORY: Final[str] = "syslog"
+MAX_RULE_ID_DIGITS: Final[int] = 6
+
+
+def normalize_rule_id(value: str) -> Optional[str]:
+    """Return Wazuh's canonical numeric rule ID, or None if invalid."""
+    if (
+        not value
+        or not value.isascii()
+        or not value.isdigit()
+        or len(value) > MAX_RULE_ID_DIGITS
+    ):
+        return None
+    return str(int(value))
 
 
 def wazuh_load_priority(level: int, accuracy: int = 1) -> int:
@@ -69,7 +84,7 @@ class RuleDeclaration:
 
     runtime_group: str
     display_groups: tuple[str, ...]
-    category: Optional[str]
+    category: str
 
     if_sid: Optional[str] = None
     if_level: Optional[int] = None
@@ -107,9 +122,15 @@ class RuleCatalog:
         conditions: list[dict[str, object]],
         temporal_conditions: list[dict[str, object]],
     ) -> RuleDeclaration:
+        normalized_rule_id = normalize_rule_id(rule_id)
+
         declaration = RuleDeclaration(
             sequence=len(self.declarations),
-            rule_id=rule_id,
+            rule_id=(
+                normalized_rule_id
+                if normalized_rule_id is not None
+                else rule_id
+            ),
             file=file,
             source_level=source_level,
             load_priority=wazuh_load_priority(source_level, accuracy),
@@ -118,7 +139,11 @@ class RuleCatalog:
             overwrite=overwrite,
             runtime_group=runtime_group,
             display_groups=tuple(display_groups),
-            category=category,
+            category=(
+                DEFAULT_CATEGORY
+                if category is None
+                else category
+            ),
             if_sid=if_sid,
             if_level=if_level,
             if_group=if_group,
