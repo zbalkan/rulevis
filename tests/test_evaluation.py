@@ -489,3 +489,87 @@ def test_if_group_pipe_alternatives_match_each_group():
         for occurrence_id in model.occurrences_by_rule["100145"]
     }
     assert parent_rules == {"100143", "100144"}
+
+
+
+def assert_evaluation_model_invariants(builder, model):
+    occurrence_ids = set(model.occurrences)
+    assert set(model.graph.nodes) == occurrence_ids
+
+    indexed_occurrences = set()
+    for rule_id, rule_occurrences in model.occurrences_by_rule.items():
+        assert rule_id in model.rules
+        assert len(rule_occurrences) == len(set(rule_occurrences))
+        for occurrence_id in rule_occurrences:
+            assert occurrence_id in model.occurrences
+            assert model.occurrences[occurrence_id].rule_id == rule_id
+            indexed_occurrences.add(occurrence_id)
+
+    assert indexed_occurrences == occurrence_ids
+
+    sequenced_occurrences = set()
+    for parent_id, children in model.children.items():
+        assert len(children) == len(set(children))
+        if parent_id is not None:
+            assert parent_id in model.occurrences
+
+        for occurrence_id in children:
+            occurrence = model.occurrences[occurrence_id]
+            assert occurrence.parent_id == parent_id
+            sequenced_occurrences.add(occurrence_id)
+
+            if parent_id is None:
+                assert model.graph.in_degree(occurrence_id) == 0
+            else:
+                assert model.graph.has_edge(parent_id, occurrence_id)
+
+    assert sequenced_occurrences == occurrence_ids
+
+    expected_tokens = set()
+    for occurrence_id, occurrence in model.occurrences.items():
+        assert occurrence.rule_id in model.rules
+        enter_token = builder.enter_token_by_occurrence[occurrence_id]
+        exit_token = builder.exit_token_by_occurrence[occurrence_id]
+        expected_tokens.update((enter_token, exit_token))
+        assert (
+            builder.occurrence_by_enter_token[enter_token]
+            == occurrence_id
+        )
+
+    assert set(builder.order) == expected_tokens
+    assert len(builder.order) == 2 * len(model.occurrences)
+
+
+def test_evaluation_model_indexes_remain_consistent_after_mixed_loads():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="syslog")
+    add_rule(catalog, 2, 8, category="other")
+    add_rule(
+        catalog,
+        100150,
+        5,
+        runtime_group="source,",
+        if_sid="1",
+    )
+    add_rule(catalog, 100151, 6, if_group="source")
+    add_rule(catalog, 100152, 7, if_level=5)
+    add_rule(
+        catalog,
+        100151,
+        9,
+        runtime_group="updated,",
+        overwrite=True,
+    )
+    add_rule(
+        catalog,
+        100153,
+        5,
+        if_sid="1,999999",
+        if_matched_sid=1,
+    )
+
+    builder = EvaluationBuilder(catalog)
+    model = builder.build()
+
+    assert "100153" not in model.rules
+    assert_evaluation_model_invariants(builder, model)
