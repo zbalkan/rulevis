@@ -273,11 +273,13 @@ class EvaluationBuilder:
 
     @staticmethod
     def _sid_values(value: str) -> list[str]:
-        return [
-            sid
-            for sid in re.split(r"[,\s]+", value.strip())
-            if sid
-        ]
+        values: list[str] = []
+        for sid in re.split(r"[,\s]+", value.strip()):
+            if not sid:
+                continue
+            normalized = normalize_rule_id(sid)
+            values.append(normalized if normalized is not None else sid)
+        return values
 
     def _sid_parent_occurrences(self, rule_id: str) -> list[int]:
         """Return SID matches in Wazuh's current recursive tree order."""

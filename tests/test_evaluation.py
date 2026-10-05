@@ -598,3 +598,15 @@ def test_rejected_rule_is_removed_from_group_membership_index():
         (issue.code, issue.rule_id)
         for issue in model.issues
     }
+
+
+def test_if_sid_canonicalizes_zero_padded_reference():
+    catalog = RuleCatalog()
+    add_rule(catalog, "000001", 0, category="test")
+    add_rule(catalog, 100170, 5, if_sid="000001")
+
+    model = EvaluationBuilder(catalog).build()
+
+    root = model.occurrences_by_rule["1"][0]
+    child = model.occurrences_by_rule["100170"][0]
+    assert model.children[root] == (child,)
