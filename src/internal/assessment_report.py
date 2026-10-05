@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+from pathlib import Path
+from typing import Union
 
 from internal.assessment import (
     AssessmentFinding,
@@ -116,4 +119,66 @@ def build_assessment_report(
         event_count=domain.event_count,
         rules=tuple(rules),
         issues=model.issues,
+    )
+
+
+def assessment_report_to_dict(report: AssessmentReport) -> dict[str, object]:
+    """Convert a report to a stable JSON-compatible representation."""
+    return {
+        "schema_version": report.schema_version,
+        "event_count": report.event_count,
+        "rules": [
+            {
+                "rule_id": rule.rule_id,
+                "occurrence_count": rule.occurrence_count,
+                "candidate_events": rule.candidate_events,
+                "reached_events": rule.reached_events,
+                "matched_events": rule.matched_events,
+                "selected_events": rule.selected_events,
+                "dropped_events": rule.dropped_events,
+                "shadowed_events": rule.shadowed_events,
+                "findings": [
+                    {
+                        "kind": finding.kind.value,
+                        "occurrence_id": finding.occurrence_id,
+                        "affected_events": finding.affected_events,
+                        "witness": {
+                            "event_index": finding.witness.event_index,
+                            "occurrence_path": list(
+                                finding.witness.occurrence_path
+                            ),
+                            "blocking_occurrence": (
+                                finding.witness.blocking_occurrence
+                            ),
+                        },
+                    }
+                    for finding in rule.findings
+                ],
+            }
+            for rule in report.rules
+        ],
+        "issues": [
+            {
+                "code": issue.code,
+                "rule_id": issue.rule_id,
+                "selector": issue.selector,
+            }
+            for issue in report.issues
+        ],
+    }
+
+
+def write_assessment_report(
+    report: AssessmentReport,
+    path: Union[str, Path],
+) -> None:
+    """Write deterministic, versioned assessment JSON."""
+    Path(path).write_text(
+        json.dumps(
+            assessment_report_to_dict(report),
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
     )
