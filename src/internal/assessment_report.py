@@ -68,7 +68,7 @@ def build_assessment_report(
             FindingSummary(
                 kind=finding.kind,
                 occurrence_id=finding.occurrence_id,
-                affected_events=finding.region.bit_count(),
+                affected_events=domain.cardinality(finding.region),
                 witness=finding.witness,
             )
         )
@@ -80,36 +80,48 @@ def build_assessment_report(
             RuleAssessment(
                 rule_id=rule_id,
                 occurrence_count=len(occurrence_ids),
-                candidate_events=_union_regions(
-                    occurrence_ids,
-                    result,
-                    "candidate",
-                ).bit_count(),
-                reached_events=_union_regions(
-                    occurrence_ids,
-                    result,
-                    "reached",
-                ).bit_count(),
-                matched_events=_union_regions(
-                    occurrence_ids,
-                    result,
-                    "matched",
-                ).bit_count(),
-                selected_events=_union_regions(
-                    occurrence_ids,
-                    result,
-                    "selected",
-                ).bit_count(),
-                dropped_events=_union_regions(
-                    occurrence_ids,
-                    result,
-                    "dropped",
-                ).bit_count(),
-                shadowed_events=_union_regions(
-                    occurrence_ids,
-                    result,
-                    "shadowed",
-                ).bit_count(),
+                candidate_events=domain.cardinality(
+                    _union_regions(
+                        occurrence_ids,
+                        result,
+                        "candidate",
+                    )
+                ),
+                reached_events=domain.cardinality(
+                    _union_regions(
+                        occurrence_ids,
+                        result,
+                        "reached",
+                    )
+                ),
+                matched_events=domain.cardinality(
+                    _union_regions(
+                        occurrence_ids,
+                        result,
+                        "matched",
+                    )
+                ),
+                selected_events=domain.cardinality(
+                    _union_regions(
+                        occurrence_ids,
+                        result,
+                        "selected",
+                    )
+                ),
+                dropped_events=domain.cardinality(
+                    _union_regions(
+                        occurrence_ids,
+                        result,
+                        "dropped",
+                    )
+                ),
+                shadowed_events=domain.cardinality(
+                    _union_regions(
+                        occurrence_ids,
+                        result,
+                        "shadowed",
+                    )
+                ),
                 findings=tuple(findings_by_rule.get(rule_id, ())),
             )
         )

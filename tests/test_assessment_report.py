@@ -276,3 +276,11 @@ def test_end_to_end_report_handles_deep_chain():
     deepest = _rule(report, parent)
     assert deepest.selected_events == 1
     assert deepest.occurrence_count == 1
+
+
+def test_bitset_domain_cardinality_is_python_39_compatible():
+    domain = BitsetDomain(4)
+
+    assert domain.cardinality(0b1011) == 3
+    assert domain.cardinality(0b11011) == 3
+    assert domain.cardinality(0) == 0

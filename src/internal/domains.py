@@ -33,3 +33,7 @@ class BitsetDomain:
 
     def subset(self, left: int, right: int) -> bool:
         return self.difference(left, right) == 0
+
+    def cardinality(self, value: int) -> int:
+        """Return the number of events in a region on Python 3.9+."""
+        return bin(self.normalize(value)).count("1")
