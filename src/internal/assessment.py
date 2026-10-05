@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
+from enum import Enum
 
 import networkx as nx
 
@@ -27,6 +28,107 @@ class AssessmentResult:
     termination: dict[int, int]
     selected_by_rule: dict[str, int]
     dropped_by_rule: dict[str, int]
+
+
+class FindingKind(str, Enum):
+    NEVER_CANDIDATE = "never_candidate"
+    UNREACHABLE = "unreachable"
+    FULLY_SHADOWED = "fully_shadowed"
+    PARTIALLY_SHADOWED = "partially_shadowed"
+    DROPPED = "dropped"
+    NEVER_SELECTED = "never_selected"
+
+
+@dataclass(frozen=True)
+class AssessmentFinding:
+    rule_id: str
+    occurrence_id: int
+    kind: FindingKind
+    region: int
+
+
+class AssessmentClassifier:
+    """Interpret exact occurrence facts without recomputing evaluation."""
+
+    def __init__(
+        self,
+        model: EvaluationModel,
+        result: AssessmentResult,
+    ) -> None:
+        self.model = model
+        self.result = result
+
+    def classify(self) -> tuple[AssessmentFinding, ...]:
+        findings: list[AssessmentFinding] = []
+
+        for occurrence_id in sorted(self.result.facts):
+            occurrence = self.model.occurrences[occurrence_id]
+            facts = self.result.facts[occurrence_id]
+
+            if facts.candidate == 0:
+                findings.append(
+                    AssessmentFinding(
+                        occurrence.rule_id,
+                        occurrence_id,
+                        FindingKind.NEVER_CANDIDATE,
+                        0,
+                    )
+                )
+                continue
+
+            if facts.reached == 0:
+                findings.append(
+                    AssessmentFinding(
+                        occurrence.rule_id,
+                        occurrence_id,
+                        FindingKind.UNREACHABLE,
+                        facts.candidate,
+                    )
+                )
+            elif facts.matched == 0 and facts.shadowed:
+                findings.append(
+                    AssessmentFinding(
+                        occurrence.rule_id,
+                        occurrence_id,
+                        FindingKind.FULLY_SHADOWED,
+                        facts.shadowed,
+                    )
+                )
+            elif facts.shadowed:
+                findings.append(
+                    AssessmentFinding(
+                        occurrence.rule_id,
+                        occurrence_id,
+                        FindingKind.PARTIALLY_SHADOWED,
+                        facts.shadowed,
+                    )
+                )
+
+            if facts.dropped:
+                findings.append(
+                    AssessmentFinding(
+                        occurrence.rule_id,
+                        occurrence_id,
+                        FindingKind.DROPPED,
+                        facts.dropped,
+                    )
+                )
+
+            if (
+                facts.matched
+                and not facts.selected
+                and not facts.dropped
+            ):
+                findings.append(
+                    AssessmentFinding(
+                        occurrence.rule_id,
+                        occurrence_id,
+                        FindingKind.NEVER_SELECTED,
+                        facts.matched,
+                    )
+                )
+
+        return tuple(findings)
 
 
 class BitsetAssessor:

@@ -1,4 +1,8 @@
-from internal.assessment import BitsetAssessor
+from internal.assessment import (
+    AssessmentClassifier,
+    BitsetAssessor,
+    FindingKind,
+)
 from internal.catalog import RuleCatalog
 from internal.domains import BitsetDomain
 from internal.evaluation import EvaluationBuilder
@@ -191,3 +195,79 @@ def test_deep_chain_does_not_depend_on_python_recursion():
 
     deepest = model.occurrences_by_rule[parent][0]
     assert result.facts[deepest].selected == 1
+
+
+def test_classifier_distinguishes_shadowing_and_drops():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(catalog, 100100, 10, if_sid="1")
+    add_rule(catalog, 100101, 5, if_sid="1")
+    add_rule(catalog, 100102, 0, if_sid="1")
+
+    model, result = assess(
+        catalog,
+        4,
+        {
+            "1": 0b1111,
+            "100100": 0b0011,
+            "100101": 0b0111,
+            "100102": 0b1000,
+        },
+    )
+
+    findings = AssessmentClassifier(model, result).classify()
+    by_rule = {}
+    for finding in findings:
+        by_rule.setdefault(finding.rule_id, []).append(finding.kind)
+
+    assert by_rule["100101"] == [FindingKind.PARTIALLY_SHADOWED]
+    assert by_rule["100102"] == [FindingKind.DROPPED]
+
+
+def test_classifier_marks_fully_consumed_sibling_unreachable():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(catalog, 100110, 10, if_sid="1")
+    add_rule(catalog, 100111, 5, if_sid="1")
+
+    model, result = assess(
+        catalog,
+        2,
+        {
+            "1": 0b11,
+            "100110": 0b11,
+            "100111": 0b11,
+        },
+    )
+
+    findings = AssessmentClassifier(model, result).classify()
+    target = [
+        finding
+        for finding in findings
+        if finding.rule_id == "100111"
+    ]
+
+    assert [finding.kind for finding in target] == [
+        FindingKind.UNREACHABLE
+    ]
+    assert target[0].region == 0b11
+
+
+def test_classifier_marks_impossible_domain_predicate():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(catalog, 100120, 5, if_sid="1")
+
+    model, result = assess(
+        catalog,
+        2,
+        {"1": 0b11, "100120": 0},
+    )
+
+    findings = AssessmentClassifier(model, result).classify()
+
+    assert [
+        (finding.rule_id, finding.kind)
+        for finding in findings
+        if finding.rule_id == "100120"
+    ] == [("100120", FindingKind.NEVER_CANDIDATE)]
