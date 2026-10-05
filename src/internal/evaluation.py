@@ -82,7 +82,6 @@ class EvaluationBuilder:
         selectors = {
             parents.if_group
             for declaration in catalog.declarations
-            if not declaration.overwrite
             for parents in [self._effective_parents(declaration)]
             if (
                 parents.if_sid is None

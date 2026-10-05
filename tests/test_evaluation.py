@@ -224,3 +224,68 @@ def test_valid_rule_id_is_canonicalized_before_evaluation():
     root = model.occurrences_by_rule["1"][0]
     child = model.occurrences_by_rule["100081"][0]
     assert model.children[root] == (child,)
+
+
+
+def test_missing_overwrite_if_group_is_processed_as_new_rule():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(
+        catalog,
+        100090,
+        5,
+        runtime_group="source_group,",
+        if_sid="1",
+    )
+    add_rule(
+        catalog,
+        100091,
+        7,
+        overwrite=True,
+        if_group="source_group",
+    )
+
+    model = EvaluationBuilder(catalog).build()
+
+    parent = model.occurrences_by_rule["100090"][0]
+    child = model.occurrences_by_rule["100091"][0]
+    assert model.children[parent] == (child,)
+    assert (
+        "OVERWRITE_RULE_NOT_FOUND",
+        "100091",
+    ) in {
+        (issue.code, issue.rule_id)
+        for issue in model.issues
+    }
+
+
+def test_missing_overwrite_if_matched_group_uses_synthesized_parent():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(
+        catalog,
+        100092,
+        5,
+        runtime_group="source_group,",
+        if_sid="1",
+    )
+    add_rule(
+        catalog,
+        100093,
+        7,
+        overwrite=True,
+        if_matched_group="source_group",
+    )
+
+    model = EvaluationBuilder(catalog).build()
+
+    parent = model.occurrences_by_rule["100092"][0]
+    child = model.occurrences_by_rule["100093"][0]
+    assert model.children[parent] == (child,)
+    assert (
+        "OVERWRITE_RULE_NOT_FOUND",
+        "100093",
+    ) in {
+        (issue.code, issue.rule_id)
+        for issue in model.issues
+    }
