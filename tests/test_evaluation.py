@@ -416,3 +416,76 @@ def test_if_level_uses_encoded_load_priority_like_wazuh():
         model.occurrences_by_rule["3"][0],
     }
     assert model.occurrences_by_rule["2"][0] not in parents
+
+
+
+def test_if_group_is_one_os_word_match_expression_not_a_token_list():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(
+        catalog,
+        100140,
+        5,
+        runtime_group="alpha,",
+        if_sid="1",
+    )
+    add_rule(
+        catalog,
+        100141,
+        5,
+        runtime_group="beta,",
+        if_sid="1",
+    )
+    add_rule(
+        catalog,
+        100142,
+        7,
+        if_group="alpha,beta",
+    )
+
+    model = EvaluationBuilder(catalog).build()
+
+    assert "100142" not in model.rules
+    assert (
+        "GROUP_NOT_FOUND",
+        "100142",
+        "alpha,beta",
+    ) in {
+        (issue.code, issue.rule_id, issue.selector)
+        for issue in model.issues
+    }
+
+
+def test_if_group_pipe_alternatives_match_each_group():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(
+        catalog,
+        100143,
+        5,
+        runtime_group="alpha,",
+        if_sid="1",
+    )
+    add_rule(
+        catalog,
+        100144,
+        5,
+        runtime_group="beta,",
+        if_sid="1",
+    )
+    add_rule(
+        catalog,
+        100145,
+        7,
+        if_group="alpha|beta",
+    )
+
+    model = EvaluationBuilder(catalog).build()
+
+    parent_rules = {
+        model.occurrences[
+            model.occurrences[occurrence_id].parent_id
+        ].rule_id
+        for occurrence_id in model.occurrences_by_rule["100145"]
+    }
+    assert parent_rules == {"100143", "100144"}
