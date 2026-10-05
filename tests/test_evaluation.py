@@ -610,3 +610,53 @@ def test_if_sid_canonicalizes_zero_padded_reference():
     root = model.occurrences_by_rule["1"][0]
     child = model.occurrences_by_rule["100170"][0]
     assert model.children[root] == (child,)
+
+
+def test_if_level_occurrences_follow_runtime_preorder():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 5, category="first")
+    add_rule(catalog, 2, 10, category="second")
+    add_rule(catalog, 100180, 7, if_level=1)
+
+    model = EvaluationBuilder(catalog).build()
+
+    root_first = model.occurrences_by_rule["1"][0]
+    root_second = model.occurrences_by_rule["2"][0]
+    actual_parents = [
+        model.occurrences[occurrence_id].parent_id
+        for occurrence_id in model.occurrences_by_rule["100180"]
+    ]
+
+    assert actual_parents == [root_second, root_first]
+
+
+def test_if_group_occurrences_follow_runtime_preorder_not_registration():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 5, category="first")
+    add_rule(catalog, 2, 10, category="second")
+    add_rule(
+        catalog,
+        100181,
+        6,
+        runtime_group="shared,",
+        if_sid="1",
+    )
+    add_rule(
+        catalog,
+        100182,
+        6,
+        runtime_group="shared,",
+        if_sid="2",
+    )
+    add_rule(catalog, 100183, 7, if_group="shared")
+
+    model = EvaluationBuilder(catalog).build()
+
+    source_first = model.occurrences_by_rule["100181"][0]
+    source_second = model.occurrences_by_rule["100182"][0]
+    actual_parents = [
+        model.occurrences[occurrence_id].parent_id
+        for occurrence_id in model.occurrences_by_rule["100183"]
+    ]
+
+    assert actual_parents == [source_second, source_first]

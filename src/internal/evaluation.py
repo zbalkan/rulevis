@@ -89,7 +89,6 @@ class EvaluationBuilder:
             )
         }
         self.group_index = GroupMembershipIndex(selectors)
-        self.rules_by_priority: dict[int, set[str]] = {}
 
     @staticmethod
     def _effective_parents(
@@ -144,26 +143,21 @@ class EvaluationBuilder:
                 bit,
             )
 
-    def _priority_add(self, rule_id: str, priority: int) -> None:
-        self.rules_by_priority.setdefault(priority, set()).add(rule_id)
-
-    def _priority_remove(self, rule_id: str, priority: int) -> None:
-        rules = self.rules_by_priority.get(priority)
-        if rules is None:
-            return
-        rules.discard(rule_id)
-        if not rules:
-            del self.rules_by_priority[priority]
-
     def _register_state(self, state: RuleState) -> None:
         self.rules[state.rule_id] = state
         self.group_index.update(state.rule_id, state.runtime_group)
-        self._priority_add(state.rule_id, state.load_priority)
 
     def _unregister_state(self, state: RuleState) -> None:
         self.rules.pop(state.rule_id, None)
         self.group_index.discard(state.rule_id)
-        self._priority_remove(state.rule_id, state.load_priority)
+
+    def _occurrences_in_preorder(self) -> list[int]:
+        """Snapshot runtime occurrences in current RuleNode preorder."""
+        return [
+            self.occurrence_by_enter_token[token]
+            for token in self.order
+            if token in self.occurrence_by_enter_token
+        ]
 
     def _new_occurrence(
         self,
@@ -244,13 +238,6 @@ class EvaluationBuilder:
         declaration: RuleDeclaration,
     ) -> None:
         old_priority = state.load_priority
-        if old_priority != declaration.load_priority:
-            self._priority_remove(state.rule_id, old_priority)
-            self._priority_add(
-                state.rule_id,
-                declaration.load_priority,
-            )
-
         state.load_priority = declaration.load_priority
         state.runtime_group = declaration.runtime_group
         self._set_category(state, declaration.category)
@@ -360,19 +347,21 @@ class EvaluationBuilder:
             return False
 
         threshold = level * 100
-        parent_rules: set[str] = set()
-
-        for priority, rule_ids in self.rules_by_priority.items():
-            if priority >= threshold:
-                parent_rules.update(rule_ids)
-
-        parent_rules.discard(state.rule_id)
+        parent_ids = [
+            occurrence_id
+            for occurrence_id in self._occurrences_in_preorder()
+            if (
+                self.occurrences[occurrence_id].rule_id != state.rule_id
+                and self.rules[
+                    self.occurrences[occurrence_id].rule_id
+                ].load_priority >= threshold
+            )
+        ]
 
         attached = False
-        for rule_id in parent_rules:
-            for parent_id in self.occurrences_by_rule.get(rule_id, ()):
-                self._new_occurrence(state.rule_id, parent_id)
-                attached = True
+        for parent_id in parent_ids:
+            self._new_occurrence(state.rule_id, parent_id)
+            attached = True
 
         if not attached:
             self.issues.append(
@@ -390,17 +379,20 @@ class EvaluationBuilder:
         state: RuleState,
         selector: str,
     ) -> bool:
-        parent_rules = (
-            rule_id
-            for rule_id in self.group_index.matching_rules(selector)
-            if rule_id != state.rule_id
+        parent_rules = set(
+            self.group_index.matching_rules(selector)
         )
+        parent_rules.discard(state.rule_id)
+        parent_ids = [
+            occurrence_id
+            for occurrence_id in self._occurrences_in_preorder()
+            if self.occurrences[occurrence_id].rule_id in parent_rules
+        ]
 
         attached = False
-        for rule_id in parent_rules:
-            for parent_id in self.occurrences_by_rule.get(rule_id, ()):
-                self._new_occurrence(state.rule_id, parent_id)
-                attached = True
+        for parent_id in parent_ids:
+            self._new_occurrence(state.rule_id, parent_id)
+            attached = True
 
         if not attached:
             self.issues.append(
