@@ -132,7 +132,7 @@ class GroupMembershipIndex:
 
     def __init__(self, selectors: Iterable[str]) -> None:
         self._matcher = GroupSelectorIndex(selectors)
-        self._members: dict[str, set[str]] = {}
+        self._members: dict[str, dict[str, None]] = {}
         self._selectors_by_rule: dict[str, set[str]] = {}
 
     def update(self, rule_id: str, runtime_group: str) -> None:
@@ -142,12 +142,12 @@ class GroupMembershipIndex:
         for selector in old - new:
             members = self._members.get(selector)
             if members is not None:
-                members.discard(rule_id)
+                members.pop(rule_id, None)
                 if not members:
                     del self._members[selector]
 
         for selector in new - old:
-            self._members.setdefault(selector, set()).add(rule_id)
+            self._members.setdefault(selector, {})[rule_id] = None
 
         self._selectors_by_rule[rule_id] = new
 
@@ -160,5 +160,5 @@ class GroupMembershipIndex:
                 if not members:
                     del self._members[selector]
 
-    def matching_rules(self, selector: str) -> frozenset[str]:
-        return frozenset(self._members.get(selector, ()))
+    def matching_rules(self, selector: str) -> tuple[str, ...]:
+        return tuple(self._members.get(selector, ()))

@@ -354,8 +354,11 @@ class EvaluationBuilder:
         state: RuleState,
         selector: str,
     ) -> bool:
-        parent_rules = set(self.group_index.matching_rules(selector))
-        parent_rules.discard(state.rule_id)
+        parent_rules = (
+            rule_id
+            for rule_id in self.group_index.matching_rules(selector)
+            if rule_id != state.rule_id
+        )
 
         attached = False
         for rule_id in parent_rules:
