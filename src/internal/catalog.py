@@ -36,7 +36,7 @@ def wazuh_runtime_level(load_priority: int) -> int:
     return load_priority
 
 
-def _ascii_fold(data: bytes) -> bytes:
+def ascii_fold(data: bytes) -> bytes:
     """Mirror the ASCII case folding used by Wazuh's charmap."""
     return bytes(
         byte + 32 if 65 <= byte <= 90 else byte
@@ -49,7 +49,7 @@ def os_word_match(pattern: str, value: str) -> bool:
     if not pattern:
         return False
 
-    raw_value = _ascii_fold(value.encode("utf-8"))
+    raw_value = ascii_fold(value.encode("utf-8"))
 
     for alternative in pattern.encode("utf-8").split(b"|"):
         if not alternative:
@@ -57,7 +57,7 @@ def os_word_match(pattern: str, value: str) -> bool:
 
         anchored = alternative.startswith(b"^")
         candidate = alternative[1:] if anchored else alternative
-        candidate = _ascii_fold(candidate)
+        candidate = ascii_fold(candidate)
 
         if anchored:
             if raw_value.startswith(candidate):

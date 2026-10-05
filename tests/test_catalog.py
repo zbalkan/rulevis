@@ -2,6 +2,7 @@ import pytest
 
 from internal.catalog import (
     DEFAULT_CATEGORY,
+    ascii_fold,
     normalize_rule_id,
     os_word_match,
     wazuh_load_priority,
@@ -199,3 +200,8 @@ def test_catalog_accumulates_nested_runtime_groups(tmp_path):
     declaration = generator.catalog.declarations[0]
     assert declaration.runtime_group == "outer,inner,local,"
     assert declaration.display_groups == ("outer", "inner", "local")
+
+
+
+def test_ascii_fold_only_changes_ascii_uppercase_bytes():
+    assert ascii_fold(b"AbC-\xc3\x84") == b"abc-\xc3\x84"

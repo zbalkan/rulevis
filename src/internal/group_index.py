@@ -3,12 +3,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Iterable
 
-
-def _ascii_fold(data: bytes) -> bytes:
-    return bytes(
-        byte + 32 if 65 <= byte <= 90 else byte
-        for byte in data
-    )
+from internal.catalog import ascii_fold
 
 
 class GroupSelectorIndex:
@@ -36,12 +31,12 @@ class GroupSelectorIndex:
 
                 if alternative.startswith(b"^"):
                     self._add_prefix(
-                        _ascii_fold(alternative[1:]),
+                        ascii_fold(alternative[1:]),
                         selector,
                     )
                 else:
                     self._add_substring(
-                        _ascii_fold(alternative),
+                        ascii_fold(alternative),
                         selector,
                     )
 
@@ -105,7 +100,7 @@ class GroupSelectorIndex:
                 )
 
     def match(self, runtime_group: str) -> set[str]:
-        data = _ascii_fold(runtime_group.encode("utf-8"))
+        data = ascii_fold(runtime_group.encode("utf-8"))
         matches = set(self._prefix_output[0])
 
         prefix_state = 0
