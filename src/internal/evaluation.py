@@ -316,8 +316,11 @@ class EvaluationBuilder:
         declaration: RuleDeclaration,
         selector: str,
     ) -> bool:
-        attached = False
+        planned: list[tuple[str, list[int]]] = []
 
+        # Resolve every required parent before mutating the occurrence tree.
+        # if_matched_sid failures reject the rule, so staging prevents
+        # partially created RuleNodes from surviving that rejection.
         for sid in self._sid_values(selector):
             parent_ids = self._sid_parent_occurrences(sid)
             if not parent_ids:
@@ -328,6 +331,10 @@ class EvaluationBuilder:
                     return False
                 continue
 
+            planned.append((sid, parent_ids))
+
+        attached = False
+        for _, parent_ids in planned:
             for parent_id in parent_ids:
                 parent_rule_id = self.occurrences[parent_id].rule_id
                 self._set_category(

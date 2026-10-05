@@ -337,3 +337,58 @@ def test_if_sid_stops_after_first_direct_match_in_one_sibling_list():
     children = model.occurrences_by_rule["100111"]
     assert len(children) == 1
     assert model.occurrences[children[0]].parent_id == repeated[0]
+
+
+
+def test_failed_temporal_sid_attachment_leaves_no_runtime_occurrences():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(
+        catalog,
+        100120,
+        5,
+        if_sid="1,999999",
+        if_matched_sid=1,
+    )
+    add_rule(catalog, 100121, 6, if_sid="100120")
+
+    builder = EvaluationBuilder(catalog)
+    model = builder.build()
+
+    root = model.occurrences_by_rule["1"][0]
+    assert "100120" not in model.rules
+    assert "100120" not in model.occurrences_by_rule
+    assert "100121" not in model.rules
+    assert set(model.graph.nodes) == {root}
+    assert list(builder.order) == [
+        builder.enter_token_by_occurrence[root],
+        builder.exit_token_by_occurrence[root],
+    ]
+    assert (
+        "SID_NOT_FOUND",
+        "100120",
+        "999999",
+    ) in {
+        (issue.code, issue.rule_id, issue.selector)
+        for issue in model.issues
+    }
+
+
+def test_ordinary_multi_sid_keeps_valid_attachments_when_one_sid_is_missing():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(catalog, 100122, 5, if_sid="1,999999")
+
+    model = EvaluationBuilder(catalog).build()
+
+    root = model.occurrences_by_rule["1"][0]
+    child = model.occurrences_by_rule["100122"][0]
+    assert model.children[root] == (child,)
+    assert (
+        "SID_NOT_FOUND",
+        "100122",
+        "999999",
+    ) in {
+        (issue.code, issue.rule_id, issue.selector)
+        for issue in model.issues
+    }
