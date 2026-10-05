@@ -107,9 +107,12 @@ regions to continue to later siblings, matching Wazuh's gate-like behavior.
 Classification is occurrence-first. Logical-rule reports aggregate occurrence
 counts only after the exact runtime analysis has completed.
 
-- `never_candidate`: the rule predicate has no events in the supplied domain.
-- `unreachable`: the occurrence has candidate events, but no event reaches
-  that point in its sibling list.
+- `never_candidate`: the rule's standalone predicate has no events in the
+  supplied domain.
+- `path_impossible`: the standalone predicate has events, but none survive
+  the conjunction of predicates along this runtime occurrence path.
+- `unreachable`: the occurrence has path-qualified candidate events, but no
+  event reaches that point in its sibling list.
 - `fully_shadowed`: events reach the sibling list, but all candidate events
   were consumed before this occurrence.
 - `partially_shadowed`: some candidate events are consumed earlier while
@@ -119,9 +122,11 @@ counts only after the exact runtime analysis has completed.
   selected and is not classified as a level-0 drop. This includes `noalert`
   gates and regions fully consumed by descendants.
 
-A finding carries a deterministic representative event, the occurrence path,
-and the earlier blocking occurrence when one can be identified. The witness is
-evidence for the finding; it is not a second evaluation algorithm.
+A finding carries the occurrence path and, when its affected region is
+non-empty, a deterministic representative event. Findings with an empty region,
+such as `never_candidate`, use `event_index = null`. An earlier blocking
+occurrence is included when one can be identified. The witness is evidence for
+the finding; it is not a second evaluation algorithm.
 
 ## Report contract
 
