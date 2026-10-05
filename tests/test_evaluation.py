@@ -289,3 +289,51 @@ def test_missing_overwrite_if_matched_group_uses_synthesized_parent():
         (issue.code, issue.rule_id)
         for issue in model.issues
     }
+
+
+
+def test_if_sid_attaches_to_each_occurrence_reached_by_wazuh_preorder():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 5, category="first")
+    add_rule(catalog, 2, 10, category="second")
+    add_rule(catalog, 100100, 6, if_level=1)
+    add_rule(catalog, 100101, 7, if_sid="100100")
+
+    model = EvaluationBuilder(catalog).build()
+
+    root_first = model.occurrences_by_rule["1"][0]
+    root_second = model.occurrences_by_rule["2"][0]
+    parents = {
+        model.occurrences[occurrence_id].parent_id: occurrence_id
+        for occurrence_id in model.occurrences_by_rule["100100"]
+    }
+
+    # Root 2 was loaded later but its higher priority places it first in
+    # Wazuh's current tree. The SID search must therefore visit that
+    # occurrence first and still continue into the other root subtree.
+    expected_parents = [
+        parents[root_second],
+        parents[root_first],
+    ]
+    actual_parents = [
+        model.occurrences[occurrence_id].parent_id
+        for occurrence_id in model.occurrences_by_rule["100101"]
+    ]
+
+    assert actual_parents == expected_parents
+
+
+def test_if_sid_stops_after_first_direct_match_in_one_sibling_list():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(catalog, 100110, 5, if_sid="1,1")
+    add_rule(catalog, 100111, 7, if_sid="100110")
+
+    model = EvaluationBuilder(catalog).build()
+
+    repeated = model.occurrences_by_rule["100110"]
+    assert len(repeated) == 2
+
+    children = model.occurrences_by_rule["100111"]
+    assert len(children) == 1
+    assert model.occurrences[children[0]].parent_id == repeated[0]

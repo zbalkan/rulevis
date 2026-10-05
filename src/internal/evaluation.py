@@ -66,7 +66,6 @@ class EvaluationBuilder:
         self.rules: dict[str, RuleState] = {}
         self.occurrences: dict[int, Occurrence] = {}
         self.occurrences_by_rule: dict[str, list[int]] = {}
-        self.first_occurrence_by_rule: dict[str, int] = {}
         self.sequences: dict[Optional[int], PrioritySequence] = {
             None: PrioritySequence()
         }
@@ -228,10 +227,6 @@ class EvaluationBuilder:
         self.occurrences_by_rule.setdefault(rule_id, []).append(
             occurrence_id
         )
-        self.first_occurrence_by_rule.setdefault(
-            rule_id,
-            occurrence_id,
-        )
         self.sequences.setdefault(
             occurrence_id,
             PrioritySequence(),
@@ -284,6 +279,37 @@ class EvaluationBuilder:
             if sid
         ]
 
+    def _sid_parent_occurrences(self, rule_id: str) -> list[int]:
+        """Return SID matches in Wazuh's current recursive tree order."""
+        candidates = self.occurrences_by_rule.get(rule_id, ())
+        ranked = sorted(
+            (
+                self.order.rank(
+                    self.enter_token_by_occurrence[occurrence_id]
+                ),
+                occurrence_id,
+            )
+            for occurrence_id in candidates
+        )
+
+        matches: list[int] = []
+        suppressed_until = -1
+
+        for enter_rank, occurrence_id in ranked:
+            if enter_rank < suppressed_until:
+                continue
+
+            matches.append(occurrence_id)
+            parent_id = self.parent_by_occurrence[occurrence_id]
+            if parent_id is None:
+                suppressed_until = len(self.order)
+            else:
+                suppressed_until = self.order.rank(
+                    self.exit_token_by_occurrence[parent_id]
+                )
+
+        return matches
+
     def _attach_if_sid(
         self,
         state: RuleState,
@@ -293,8 +319,8 @@ class EvaluationBuilder:
         attached = False
 
         for sid in self._sid_values(selector):
-            parent_id = self.first_occurrence_by_rule.get(sid)
-            if parent_id is None:
+            parent_ids = self._sid_parent_occurrences(sid)
+            if not parent_ids:
                 self.issues.append(
                     LoadIssue("SID_NOT_FOUND", state.rule_id, sid)
                 )
@@ -302,13 +328,14 @@ class EvaluationBuilder:
                     return False
                 continue
 
-            parent_rule_id = self.occurrences[parent_id].rule_id
-            self._set_category(
-                state,
-                self.rules[parent_rule_id].category,
-            )
-            self._new_occurrence(state.rule_id, parent_id)
-            attached = True
+            for parent_id in parent_ids:
+                parent_rule_id = self.occurrences[parent_id].rule_id
+                self._set_category(
+                    state,
+                    self.rules[parent_rule_id].category,
+                )
+                self._new_occurrence(state.rule_id, parent_id)
+                attached = True
 
         return attached
 
