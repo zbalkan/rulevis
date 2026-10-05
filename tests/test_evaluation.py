@@ -660,3 +660,36 @@ def test_if_group_occurrences_follow_runtime_preorder_not_registration():
     ]
 
     assert actual_parents == [source_second, source_first]
+
+
+def test_if_group_does_not_scan_unmatched_occurrences():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    for offset in range(20):
+        add_rule(
+            catalog,
+            100300 + offset,
+            5,
+            runtime_group=f"unrelated_{offset},",
+            if_sid="1",
+        )
+    add_rule(
+        catalog,
+        100350,
+        5,
+        runtime_group="shared,",
+        if_sid="1",
+    )
+    add_rule(catalog, 100351, 7, if_group="shared")
+
+    builder = EvaluationBuilder(catalog)
+
+    def fail_full_preorder_scan():
+        raise AssertionError("if_group must not scan every occurrence")
+
+    builder._occurrences_in_preorder = fail_full_preorder_scan
+    model = builder.build()
+
+    parent = model.occurrences_by_rule["100350"][0]
+    child = model.occurrences_by_rule["100351"][0]
+    assert model.occurrences[child].parent_id == parent

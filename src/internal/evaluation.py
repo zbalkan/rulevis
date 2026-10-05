@@ -379,15 +379,24 @@ class EvaluationBuilder:
         state: RuleState,
         selector: str,
     ) -> bool:
-        parent_rules = set(
-            self.group_index.matching_rules(selector)
+        parent_rules = (
+            rule_id
+            for rule_id in self.group_index.matching_rules(selector)
+            if rule_id != state.rule_id
         )
-        parent_rules.discard(state.rule_id)
-        parent_ids = [
-            occurrence_id
-            for occurrence_id in self._occurrences_in_preorder()
-            if self.occurrences[occurrence_id].rule_id in parent_rules
-        ]
+        parent_ids = sorted(
+            (
+                occurrence_id
+                for rule_id in parent_rules
+                for occurrence_id in self.occurrences_by_rule.get(
+                    rule_id,
+                    (),
+                )
+            ),
+            key=lambda occurrence_id: self.order.rank(
+                self.enter_token_by_occurrence[occurrence_id]
+            ),
+        )
 
         attached = False
         for parent_id in parent_ids:
