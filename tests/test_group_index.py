@@ -86,3 +86,16 @@ def test_group_membership_update_keeps_unaffected_member_order():
         "100003",
         "100002",
     )
+
+
+def test_group_membership_discard_removes_ordered_members():
+    index = GroupMembershipIndex(["shared"])
+
+    index.update("100001", "shared,")
+    index.update("100002", "shared,")
+
+    index.discard("100001")
+    assert index.matching_rules("shared") == ("100002",)
+
+    index.discard("100002")
+    assert index.matching_rules("shared") == ()

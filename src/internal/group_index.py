@@ -151,7 +151,7 @@ class GroupMembershipIndex:
         for selector in old:
             members = self._members.get(selector)
             if members is not None:
-                members.discard(rule_id)
+                members.pop(rule_id, None)
                 if not members:
                     del self._members[selector]
 

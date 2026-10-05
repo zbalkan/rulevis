@@ -573,3 +573,28 @@ def test_evaluation_model_indexes_remain_consistent_after_mixed_loads():
 
     assert "100153" not in model.rules
     assert_evaluation_model_invariants(builder, model)
+
+
+def test_rejected_rule_is_removed_from_group_membership_index():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(
+        catalog,
+        100160,
+        5,
+        runtime_group="shared,",
+        category="missing-category",
+    )
+    add_rule(catalog, 100161, 6, if_group="shared")
+
+    model = EvaluationBuilder(catalog).build()
+
+    assert "100160" not in model.rules
+    assert "100161" not in model.rules
+    assert (
+        "CATEGORY_NOT_FOUND",
+        "100160",
+    ) in {
+        (issue.code, issue.rule_id)
+        for issue in model.issues
+    }
