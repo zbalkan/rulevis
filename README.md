@@ -133,6 +133,25 @@ The project is composed of four main Python modules and a JavaScript frontend:
 4. **`visualizer.py`:** Serves the Flask UI and APIs for graph navigation, condition analysis, statistics, and heatmap data.
 5. **`graph.js`:** Implements the D3 force simulation, Canvas graph rendering, side panels, heatmap interaction, and condition-analysis modal.
 
+### Experimental Source-Faithful Assessment
+
+The experimental assessment pipeline is deliberately separate from the visualization graph and UI. It preserves Wazuh rule declarations in load order, reconstructs Wazuh 4.14.10 runtime rule occurrences, evaluates an explicitly supplied finite event domain with exact bitsets, classifies the resulting reachability/shadowing/drop behavior, and can serialize a stable JSON report.
+
+The pipeline is:
+
+```text
+Rule XML
+  -> RuleCatalog
+  -> EvaluationBuilder
+  -> runtime occurrence DAG
+  -> BitsetAssessor
+  -> AssessmentClassifier
+  -> AssessmentReport
+  -> deterministic JSON
+```
+
+This is not yet a symbolic compiler for arbitrary Wazuh predicates, and it is not connected to the web UI. See [Source-Faithful Assessment](docs/source-faithful-assessment.md) for the semantics, finding definitions, complexity model, benchmark command, and current limitations.
+
 Here’s a **ready-to-paste README subsection** that explains `rulevis` logging clearly and professionally for your users. It assumes the per-user setup you’ve implemented.
 
 ---
