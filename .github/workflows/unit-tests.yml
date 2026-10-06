@@ -8,7 +8,68 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.paths.outputs.python }}
+      javascript: ${{ steps.paths.outputs.javascript }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Detect relevant changes
+        id: paths
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            base="$PR_BASE_SHA"
+            head="$PR_HEAD_SHA"
+          else
+            base="$BEFORE_SHA"
+            head="$GITHUB_SHA"
+            if [[ "$base" =~ ^0+$ ]]; then
+              base="$(git rev-parse "$GITHUB_SHA^" 2>/dev/null || true)"
+            fi
+          fi
+
+          if [[ -n "$base" ]]; then
+            changed="$(git diff --name-only "$base" "$head")"
+          else
+            changed="$(git show --pretty='' --name-only "$head")"
+          fi
+
+          printf '%s\n' "$changed"
+
+          python=false
+          javascript=false
+
+          while IFS= read -r path; do
+            case "$path" in
+              *.py|pyproject.toml|requirements.txt|.github/workflows/unit-tests.yml)
+                python=true
+                ;;
+            esac
+
+            case "$path" in
+              src/internal/static/*.js)
+                javascript=true
+                ;;
+            esac
+          done <<< "$changed"
+
+          echo "python=$python" >> "$GITHUB_OUTPUT"
+          echo "javascript=$javascript" >> "$GITHUB_OUTPUT"
+
   pytest:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -22,3 +83,15 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install -e ".[test]"
       - run: python -m pytest -q
+
+  javascript-syntax:
+    needs: changes
+    if: needs.changes.outputs.javascript == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check JavaScript syntax
+        shell: bash
+        run: |
+          find src/internal/static -type f -name '*.js' -print0 \
+            | xargs -0 -n1 node --check
