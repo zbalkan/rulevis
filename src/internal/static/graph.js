@@ -244,6 +244,9 @@ class HeatmapModal {
         this.zoomBehavior = null;
         this.layout = null;
         this.lastWheelPointer = null;
+        this.usedIdCache = new Map();
+        this.hoveredBlockId = null;
+        this.tooltipSeq = 0;
     }
     show() {
         this.modal.classList.add("visible");
@@ -259,8 +262,7 @@ class HeatmapModal {
         this.isOpen = false;
     }
     pickBlockSize(k) {
-        if (k >= 8) return 1;
-        if (k >= 4) return 10;
+        if (k >= 4) return 20;
         if (k >= 2) return 50;
         if (k >= 1) return 100;
         if (k >= 0.5) return 250;
@@ -268,7 +270,7 @@ class HeatmapModal {
     }
     pickThresholds(blockSize) {
         switch (blockSize) {
-            case 10: return [1, 2, 6, 8];
+            case 20: return [1, 4, 12, 16];
             case 50: return [1, 10, 30, 40];
             case 100: return [1, 20, 60, 80];
             case 250: return [1, 50, 150, 200];
@@ -289,7 +291,27 @@ class HeatmapModal {
         loader.innerHTML = '<div class="spinner"></div>';
         const textOverlay = document.createElement("div");
         textOverlay.id = "heatmapOverlay";
-        container.append(svg, loader, textOverlay);
+
+        const tooltip = document.createElement("div");
+        tooltip.id = "heatmapTooltip";
+        Object.assign(tooltip.style, {
+            position: "absolute",
+            display: "none",
+            pointerEvents: "none",
+            zIndex: "12",
+            maxWidth: "360px",
+            padding: "7px 9px",
+            border: "1px solid #666",
+            borderRadius: "4px",
+            background: "rgba(20, 20, 20, 0.96)",
+            color: "#eee",
+            font: "12px monospace",
+            lineHeight: "1.4",
+            whiteSpace: "pre-line",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.35)",
+        });
+
+        container.append(svg, loader, textOverlay, tooltip);
         this.content.appendChild(container);
     }
     setupZoom() {
@@ -297,7 +319,7 @@ class HeatmapModal {
         const svg = d3.select("#heatmapSvg");
         const viewport = d3.select("#heatmapViewport");
         const zoom = d3.zoom()
-            .scaleExtent([0.1, 10])
+            .scaleExtent([0.1, 4])
             .on("zoom", (event) => {
                 this.currentK = event.transform.k;
                 viewport.attr("transform", event.transform.toString());
@@ -365,6 +387,82 @@ class HeatmapModal {
             .scale(current.k);
         svg.call(this.zoomBehavior.transform, corrected);
     }
+    positionTooltip(event) {
+        const tooltip = document.getElementById("heatmapTooltip");
+        const container = document.getElementById("heatmapContainer");
+        if (!tooltip || !container) return;
+
+        const [x, y] = d3.pointer(event, container);
+        tooltip.style.left = `${x + 14}px`;
+        tooltip.style.top = `${y + 14}px`;
+    }
+    hideTooltip() {
+        const tooltip = document.getElementById("heatmapTooltip");
+        this.hoveredBlockId = null;
+        this.tooltipSeq += 1;
+        if (tooltip) tooltip.style.display = "none";
+    }
+    showTooltip(event, block, blockSize) {
+        const tooltip = document.getElementById("heatmapTooltip");
+        if (!tooltip) return;
+
+        this.hoveredBlockId = block.id;
+        const seq = ++this.tooltipSeq;
+        this.positionTooltip(event);
+        tooltip.style.display = "block";
+
+        const baseText = blockSize === 20
+            ? `Rule Range: ${block.id}\nUsed IDs: ${block.count || 0}`
+            : `Rule Range: ${block.id}\nUsed IDs: ${block.count || 0}`;
+
+        if (blockSize !== 20 || !block.count) {
+            tooltip.textContent = blockSize === 20
+                ? `${baseText}\nIDs: none`
+                : baseText;
+            return;
+        }
+
+        const cached = this.usedIdCache.get(block.id);
+        if (cached) {
+            tooltip.textContent = `${baseText}\nIDs: ${cached.join(", ")}`;
+            return;
+        }
+
+        tooltip.textContent = `${baseText}\nIDs: loading...`;
+        const [startText, endText] = String(block.id).split("-");
+        const start = Number(startText);
+        const end = Number(endText);
+        if (!Number.isFinite(start) || !Number.isFinite(end)) return;
+
+        const ids = [];
+        for (let id = start; id <= end; id += 1) {
+            ids.push(String(id));
+        }
+
+        fetchJSON(
+            `/api/nodes?ids=${encodeURIComponent(ids.join(","))}`
+        ).then(data => {
+            const usedIds = (data.nodes || [])
+                .map(node => node.id)
+                .filter(id => id !== "0")
+                .sort((left, right) => Number(left) - Number(right));
+            this.usedIdCache.set(block.id, usedIds);
+
+            if (
+                seq === this.tooltipSeq &&
+                this.hoveredBlockId === block.id
+            ) {
+                tooltip.textContent = `${baseText}\nIDs: ${usedIds.length ? usedIds.join(", ") : "none"}`;
+            }
+        }).catch(() => {
+            if (
+                seq === this.tooltipSeq &&
+                this.hoveredBlockId === block.id
+            ) {
+                tooltip.textContent = `${baseText}\nIDs: unavailable`;
+            }
+        });
+    }
     render(blockSize, anchor = null) {
         const container = document.getElementById("heatmapContainer");
         const svg = d3.select("#heatmapSvg");
@@ -385,7 +483,24 @@ class HeatmapModal {
             const scale = d3.scaleThreshold().domain(thresholds).range(range);
             const colorFn = blockSize === 1 ? d => (d.count > 0 ? "#FF0000" : "#444444") : d => scale(d.count || 0);
             const temp = viewport.append("g").attr("class", "temp-heatmap");
-            temp.selectAll("rect").data(blocks, d => d.id).enter().append("rect").attr("width", cellSize - 2).attr("height", cellSize - 2).attr("x", (d, i) => (i % cols) * cellSize).attr("y", (d, i) => Math.floor(i / cols) * cellSize).attr("fill", d => colorFn(d)).append("title").text(d => blockSize === 1 ? `Rule ID: ${d.id}\n${d.count > 0 ? "Used" : "Unused"}` : `Rule Range: ${d.id}\nUsed IDs: ${d.count || 0}`);
+            temp.selectAll("rect")
+                .data(blocks, d => d.id)
+                .enter()
+                .append("rect")
+                .attr("width", cellSize - 2)
+                .attr("height", cellSize - 2)
+                .attr("x", (d, i) => (i % cols) * cellSize)
+                .attr("y", (d, i) => Math.floor(i / cols) * cellSize)
+                .attr("fill", d => colorFn(d))
+                .on("mouseenter", (event, d) => {
+                    this.showTooltip(event, d, blockSize);
+                })
+                .on("mousemove", event => {
+                    this.positionTooltip(event);
+                })
+                .on("mouseleave", () => {
+                    this.hideTooltip();
+                });
             viewport.selectAll("g.heatmap").remove();
             temp.attr("class", "heatmap");
             this.currentBlockSize = blockSize;
@@ -405,7 +520,10 @@ class HeatmapModal {
             this.hideLoader();
             const overlay = document.getElementById("heatmapOverlay");
             if (overlay) {
-                overlay.innerHTML = `Each block represents ${this.currentBlockSize} rules. <strong>(Press Esc to close)</strong>`;
+                const detail = this.currentBlockSize === 20
+                    ? " Maximum zoom; hover a block to list used rule IDs."
+                    : "";
+                overlay.innerHTML = `Each block represents ${this.currentBlockSize} rules.${detail} <strong>(Press Esc to close)</strong>`;
             }
         }).catch(err => {
             if (seq !== this.requestSeq) return;
