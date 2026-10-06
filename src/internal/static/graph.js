@@ -241,6 +241,9 @@ class HeatmapModal {
         this.currentBlockSize = 100;
         this.currentK = 1;
         this.zoomInitialized = false;
+        this.zoomBehavior = null;
+        this.layout = null;
+        this.lastWheelPointer = null;
     }
     show() {
         this.modal.classList.add("visible");
@@ -293,18 +296,76 @@ class HeatmapModal {
         if (this.zoomInitialized) return;
         const svg = d3.select("#heatmapSvg");
         const viewport = d3.select("#heatmapViewport");
-        const zoom = d3.zoom().scaleExtent([0.1, 10]).on("zoom", (event) => {
-            this.currentK = event.transform.k;
-            viewport.attr("transform", event.transform.toString());
-            const newBlockSize = this.pickBlockSize(this.currentK);
-            if (newBlockSize !== this.currentBlockSize) {
-                this.render(newBlockSize);
-            }
-        });
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 10])
+            .on("zoom", (event) => {
+                this.currentK = event.transform.k;
+                viewport.attr("transform", event.transform.toString());
+                if (event.sourceEvent) {
+                    this.lastWheelPointer = event.sourceEvent.type === "wheel"
+                        ? d3.pointer(event.sourceEvent, svg.node())
+                        : null;
+                }
+            })
+            .on("end", (event) => {
+                const newBlockSize = this.pickBlockSize(this.currentK);
+                if (newBlockSize === this.currentBlockSize) {
+                    this.lastWheelPointer = null;
+                    return;
+                }
+
+                const pointer = event.sourceEvent?.type === "wheel"
+                    ? d3.pointer(event.sourceEvent, svg.node())
+                    : this.lastWheelPointer;
+                const anchor = pointer
+                    ? this.createZoomAnchor(event.transform, pointer)
+                    : null;
+                this.lastWheelPointer = null;
+                this.render(newBlockSize, anchor);
+            });
+        this.zoomBehavior = zoom;
         svg.call(zoom);
         this.zoomInitialized = true;
     }
-    render(blockSize) {
+    createZoomAnchor(transform, pointer) {
+        if (!this.layout) return null;
+        const { blockSize, blockCount, cellSize, cols } = this.layout;
+        const [x, y] = transform.invert(pointer);
+        const col = Math.floor(x / cellSize);
+        const row = Math.floor(y / cellSize);
+        const index = row * cols + col;
+        if (col < 0 || row < 0 || col >= cols || index >= blockCount) {
+            return null;
+        }
+
+        return {
+            ruleId: index * blockSize + Math.floor((blockSize - 1) / 2),
+            pointer,
+            relativeX: x / cellSize - col,
+            relativeY: y / cellSize - row,
+        };
+    }
+    applyZoomAnchor(anchor, blockSize, blockCount, cols, cellSize) {
+        if (!anchor || !this.zoomBehavior || blockCount === 0) return;
+        const index = Math.min(
+            blockCount - 1,
+            Math.floor(anchor.ruleId / blockSize)
+        );
+        const col = index % cols;
+        const row = Math.floor(index / cols);
+        const x = (col + anchor.relativeX) * cellSize;
+        const y = (row + anchor.relativeY) * cellSize;
+        const svg = d3.select("#heatmapSvg");
+        const current = d3.zoomTransform(svg.node());
+        const corrected = d3.zoomIdentity
+            .translate(
+                anchor.pointer[0] - current.k * x,
+                anchor.pointer[1] - current.k * y
+            )
+            .scale(current.k);
+        svg.call(this.zoomBehavior.transform, corrected);
+    }
+    render(blockSize, anchor = null) {
         const container = document.getElementById("heatmapContainer");
         const svg = d3.select("#heatmapSvg");
         const viewport = d3.select("#heatmapViewport");
@@ -327,8 +388,21 @@ class HeatmapModal {
             temp.selectAll("rect").data(blocks, d => d.id).enter().append("rect").attr("width", cellSize - 2).attr("height", cellSize - 2).attr("x", (d, i) => (i % cols) * cellSize).attr("y", (d, i) => Math.floor(i / cols) * cellSize).attr("fill", d => colorFn(d)).append("title").text(d => blockSize === 1 ? `Rule ID: ${d.id}\n${d.count > 0 ? "Used" : "Unused"}` : `Rule Range: ${d.id}\nUsed IDs: ${d.count || 0}`);
             viewport.selectAll("g.heatmap").remove();
             temp.attr("class", "heatmap");
-            this.hideLoader();
             this.currentBlockSize = blockSize;
+            this.layout = {
+                blockSize,
+                blockCount: blocks.length,
+                cellSize,
+                cols,
+            };
+            this.applyZoomAnchor(
+                anchor,
+                blockSize,
+                blocks.length,
+                cols,
+                cellSize
+            );
+            this.hideLoader();
             const overlay = document.getElementById("heatmapOverlay");
             if (overlay) {
                 overlay.innerHTML = `Each block represents ${this.currentBlockSize} rules. <strong>(Press Esc to close)</strong>`;
