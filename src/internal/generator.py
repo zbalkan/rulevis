@@ -8,6 +8,8 @@ from typing import Final, Optional
 
 import networkx as nx
 
+from internal.catalog import RuleCatalog
+
 ENCODING: Final[str] = "utf-8"
 
 REGEX_BLOCK: re.Pattern[str] = re.compile(
@@ -74,6 +76,7 @@ class GraphGenerator:
         self.group_membership: dict[str, list[str]] = defaultdict(list)
         self.G: nx.MultiDiGraph = nx.MultiDiGraph()
         self.graph_file: str = graph_file
+        self.catalog: RuleCatalog = RuleCatalog()
         self.overwrite_rules: list[
             tuple[ET.Element, str, dict[str, str], list[str]]
         ] = []
@@ -252,14 +255,122 @@ class GraphGenerator:
 
         return conditions
 
+    def _concat_child_text(
+        self,
+        element: ET.Element,
+        tag: str,
+    ) -> Optional[str]:
+        values = [
+            child.text or ""
+            for child in element
+            if isinstance(child.tag, str) and child.tag.lower() == tag
+        ]
+        return "".join(values) if values else None
+
+    def _last_int_child(
+        self,
+        element: ET.Element,
+        tag: str,
+    ) -> Optional[int]:
+        values = [
+            child.text
+            for child in element
+            if (
+                isinstance(child.tag, str)
+                and child.tag.lower() == tag
+                and child.text is not None
+            )
+        ]
+        if not values:
+            return None
+        try:
+            return int(values[-1])
+        except ValueError:
+            return None
+
+    def _record_catalog_declaration(
+        self,
+        element: ET.Element,
+        inherited_groups: list[str],
+        runtime_group: str,
+        xml_file: str,
+        regex_values: dict[str, str],
+    ) -> None:
+        rule_id = element.get("id")
+        level = element.get("level")
+        if rule_id is None or level is None:
+            return
+
+        try:
+            source_level = int(level)
+            accuracy = int(element.get("accuracy", "1"))
+        except ValueError:
+            return
+
+        runtime_group_value = runtime_group
+        for child in element:
+            if (
+                isinstance(child.tag, str)
+                and child.tag.lower() == "group"
+                and child.text
+            ):
+                runtime_group_value += child.text.replace("\n", "")
+
+        attrs = [(child.tag, child.text) for child in element]
+        category = self._concat_child_text(element, "category")
+        display_groups = self.extract_rule_groups(
+            inherited_groups,
+            attrs,
+        )
+
+        self.catalog.append(
+            rule_id=rule_id,
+            file=os.path.basename(xml_file),
+            source_level=source_level,
+            accuracy=accuracy,
+            noalert=element.get("noalert", "0") == "1",
+            overwrite=element.get("overwrite", "").lower() == "yes",
+            runtime_group=runtime_group_value,
+            display_groups=display_groups,
+            category=category if category else None,
+            if_sid=self._concat_child_text(element, "if_sid"),
+            if_level=self._last_int_child(element, "if_level"),
+            if_group=self._concat_child_text(element, "if_group"),
+            if_matched_sid=self._last_int_child(
+                element,
+                "if_matched_sid",
+            ),
+            if_matched_group=self._concat_child_text(
+                element,
+                "if_matched_group",
+            ),
+            conditions=self.extract_atomic_conditions(
+                element,
+                regex_values,
+            ),
+            temporal_conditions=self.extract_temporal_conditions(
+                element,
+                regex_values,
+            ),
+        )
+
     def parse_groups_and_rules(
         self,
         element: ET.Element,
         inherited_groups: list[str],
         xml_file: str,
         regex_values: dict[str, str],
+        runtime_group: str = "",
     ) -> None:
         if element.tag == 'rule':
+            self._record_catalog_declaration(
+                element,
+                inherited_groups,
+                runtime_group,
+                xml_file,
+                regex_values,
+            )
+
             if element.get("overwrite", "").lower() == "yes":
                 self.overwrite_rules.append(
                     (
@@ -331,6 +442,7 @@ class GraphGenerator:
                     new_inherited_groups,
                     xml_file,
                     regex_values,
+                    runtime_group + group_attribute,
                 )
 
     def extract_mitre_ids(
