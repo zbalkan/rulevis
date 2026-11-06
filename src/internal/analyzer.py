@@ -69,9 +69,8 @@ class Analyzer:
             raise ValueError("max_cycles must be positive")
         # Exclude self-loop edges, not their vertices: a vertex may also
         # participate in a genuine cycle with other rules.
-        cycle_graph = nx.subgraph_view(
-            self.G, filter_edge=lambda source, target, key: source != target
-        )
+        cycle_graph = nx.DiGraph(self.G)
+        cycle_graph.remove_edges_from(nx.selfloop_edges(cycle_graph))
         eligible_cycles = (
             cycle for cycle in simple_cycles(cycle_graph)
             if len(cycle) > 1
