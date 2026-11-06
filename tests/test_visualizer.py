@@ -483,3 +483,37 @@ def test_conditions_api_marks_subsumed_field_constraint(tmp_path):
     assert rows[0]["resolution_status"] == "subsumed"
     assert rows[0]["resolution_note"] == "Subsumed by rule 100002"
     assert "resolution_status" not in rows[1]
+
+
+def test_group_parent_details_identify_scan_order_candidates(tmp_path):
+    paths = write_app_files(tmp_path)
+    graph_path, stats_path, heatmap_path = paths
+    with graph_path.open("rb") as stream:
+        graph = pickle.load(stream)
+
+    graph.add_edge(
+        "100001", "100002", relation_type="if_group",
+        selector="parent", load_order_candidate=False,
+    )
+    with graph_path.open("wb") as stream:
+        pickle.dump(graph, stream)
+
+    client = create_app(
+        str(graph_path), str(stats_path), str(heatmap_path)
+    ).test_client()
+    response = client.get(
+        "/api/nodes?id=100002&neighbors=both&include=details"
+    )
+
+    assert response.status_code == 200
+    parents = response.get_json()["parents"]
+    assert any(
+        p["relation_type"] == "if_group"
+        and p["load_order_candidate"] is False
+        for p in parents
+    )
+    assert any(
+        p["relation_type"] == "if_sid"
+        and "load_order_candidate" not in p
+        for p in parents
+    )
