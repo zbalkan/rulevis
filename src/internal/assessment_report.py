@@ -194,3 +194,39 @@ def write_assessment_report(
         + "\n",
         encoding="utf-8",
     )
+
+
+@dataclass(frozen=True)
+class ResourceReport:
+    """Structural Wazuh RuleNode estimate, without event-domain evaluation."""
+
+    total_occurrences: int
+    estimated_node_bytes: int
+    occurrences_by_rule: dict[str, int]
+
+
+def build_resource_report(
+    model: EvaluationModel, *, node_size: int = 32
+) -> ResourceReport:
+    """Count runtime occurrences rather than logical rules or graph edges."""
+    if node_size <= 0:
+        raise ValueError("node_size must be positive")
+    occurrences = {
+        rule_id: len(items)
+        for rule_id, items in model.occurrences_by_rule.items()
+    }
+    total = len(model.occurrences)
+    return ResourceReport(
+        total_occurrences=total,
+        estimated_node_bytes=total * node_size,
+        occurrences_by_rule=occurrences,
+    )
+
+
+def resource_report_to_dict(report: ResourceReport) -> dict[str, object]:
+    """Serialize deterministic structural resource diagnostics."""
+    return {
+        "total_occurrences": report.total_occurrences,
+        "estimated_node_bytes": report.estimated_node_bytes,
+        "occurrences_by_rule": dict(sorted(report.occurrences_by_rule.items())),
+    }
