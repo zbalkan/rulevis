@@ -8,7 +8,7 @@ from typing import Final, Optional
 
 import networkx as nx
 
-from internal.catalog import RuleCatalog
+from internal.catalog import RuleCatalog, os_word_match
 
 ENCODING: Final[str] = "utf-8"
 
@@ -71,9 +71,14 @@ ATOMIC_PARENT_TAGS: Final[frozenset[str]] = frozenset({
 
 
 class GraphGenerator:
-    def __init__(self, paths: list[str], graph_file: str) -> None:
+    def __init__(
+        self, paths: list[str], graph_file: str,
+        rule_files: Optional[list[str]] = None,
+    ) -> None:
         self.paths = paths
+        self.rule_files = rule_files
         self.group_membership: dict[str, list[str]] = defaultdict(list)
+        self.runtime_group_by_rule: dict[str, str] = {}
         self.G: nx.MultiDiGraph = nx.MultiDiGraph()
         self.graph_file: str = graph_file
         self.catalog: RuleCatalog = RuleCatalog()
@@ -87,6 +92,9 @@ class GraphGenerator:
         self.rule_load_index: dict[str, int] = {}
 
     def get_all_xml_files(self) -> list[str]:
+        if self.rule_files is not None:
+            return self._validated_rule_files()
+
         xml_files: list[str] = []
         for path in self.paths:
             for root, dirs, files in os.walk(path):
@@ -100,6 +108,15 @@ class GraphGenerator:
         logging.info(f'Found {len(xml_files)} XML files in the given paths')
         logging.info('Processing all files...')
         return xml_files
+
+    def _validated_rule_files(self) -> list[str]:
+        """Use exact file order supplied by an external Wazuh manifest."""
+        result = []
+        for path in self.rule_files or ():
+            if not os.path.isfile(path):
+                raise FileNotFoundError(path)
+            result.append(os.path.abspath(path))
+        return result
 
     def add_edge_with_type(
         self,
@@ -149,14 +166,11 @@ class GraphGenerator:
                     )
 
         if if_group:
-            for group in re.split(r'[,\s]+', if_group.strip()):
-                if not group:
-                    continue
-                for parent_rule in self.group_membership.get(group, []):
-                    if self._group_parent_precedes(parent_rule, rule_id):
-                        self.add_edge_with_type(
-                            parent_rule, rule_id, 'if_group', selector=group
-                        )
+            for parent_rule in self._matching_group_rules(if_group):
+                if self._group_parent_precedes(parent_rule, rule_id):
+                    self.add_edge_with_type(
+                        parent_rule, rule_id, 'if_group', selector=if_group
+                    )
 
         if if_matched_group:
             for group in re.split(r'[,\s]+', if_matched_group.strip()):
@@ -169,6 +183,14 @@ class GraphGenerator:
                         'if_matched_group',
                         selector=group,
                     )
+
+    def _matching_group_rules(self, selector: str):
+        """Use the same selector semantics for every visual group edge."""
+        return (
+            rule_id
+            for rule_id, groups in self.runtime_group_by_rule.items()
+            if os_word_match(selector, groups)
+        )
 
     def _group_parent_precedes(self, parent: str, child: str) -> bool:
         """Only already declared rules can be runtime group parents."""
@@ -330,6 +352,7 @@ class GraphGenerator:
             attrs,
         )
 
+        self.runtime_group_by_rule[rule_id] = runtime_group_value
         self.catalog.append(
             rule_id=rule_id,
             file=os.path.basename(xml_file),
