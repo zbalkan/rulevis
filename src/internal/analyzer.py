@@ -3,6 +3,7 @@ import pickle
 import json
 import os
 from itertools import islice
+import networkx as nx
 from networkx import MultiDiGraph, descendants, ancestors, nodes_with_selfloops, simple_cycles
 
 
@@ -66,10 +67,10 @@ class Analyzer:
         logging.info("Detecting multi-node cycles...")
         if max_cycles < 1:
             raise ValueError("max_cycles must be positive")
-        # Prune before enumeration: post-filtering would still enumerate
-        # potentially factorially many cycles through excluded vertices.
-        cycle_graph = self.G.subgraph(
-            set(self.G.nodes) - self_loop_nodes
+        # Exclude self-loop edges, not their vertices: a vertex may also
+        # participate in a genuine cycle with other rules.
+        cycle_graph = nx.subgraph_view(
+            self.G, filter_edge=lambda source, target, key: source != target
         )
         eligible_cycles = (
             cycle for cycle in simple_cycles(cycle_graph)
