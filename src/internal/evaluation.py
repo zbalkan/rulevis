@@ -177,15 +177,18 @@ class EvaluationBuilder:
             if token in self.occurrence_by_enter_token
         ]
 
+    def _ensure_occurrence_budget(self, rule_id: str) -> None:
+        if self._next_occurrence >= self.max_occurrences:
+            raise OccurrenceBudgetExceeded(
+                rule_id, self.max_occurrences, self._next_occurrence
+            )
+
     def _new_occurrence(
         self,
         rule_id: str,
         parent_id: Optional[int],
     ) -> int:
-        if self._next_occurrence >= self.max_occurrences:
-            raise OccurrenceBudgetExceeded(
-                rule_id, self.max_occurrences, self._next_occurrence
-            )
+        self._ensure_occurrence_budget(rule_id)
         occurrence_id = self._next_occurrence
         self._next_occurrence += 1
 
