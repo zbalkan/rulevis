@@ -57,10 +57,38 @@ class _EffectiveParents:
     if_group: Optional[str]
 
 
+class RuleTreeLimitExceeded(RuntimeError):
+    """Wazuh would reject another rule occurrence with error 5108."""
+
+    def __init__(
+        self, rule_id: str, node_count: int,
+        rule_node_count: int, limit: int
+    ) -> None:
+        self.rule_id = rule_id
+        self.node_count = node_count
+        self.rule_node_count = rule_node_count
+        self.limit = limit
+        super().__init__(
+            f"Rule {rule_id} exceeds Wazuh rule-tree node limit "
+            f"({node_count} nodes, {rule_node_count} added, limit {limit})"
+        )
+
+
 class EvaluationBuilder:
     """Replay the Wazuh 4.14.10 RuleNode construction semantics."""
 
-    def __init__(self, catalog: RuleCatalog) -> None:
+    def __init__(
+        self, catalog: RuleCatalog, *,
+        node_warning: int = 0, node_limit: int = 0
+    ) -> None:
+        if node_warning < 0 or node_limit < 0:
+            raise ValueError("thresholds must be nonnegative")
+        if node_warning and node_limit and node_warning >= node_limit:
+            raise ValueError("node warning must be less than node limit")
+        self.node_warning = node_warning
+        self.node_limit = node_limit
+        self.warning_rule_id: Optional[str] = None
+        self._rule_node_count = 0
         self.catalog = catalog
         self.graph = nx.DiGraph()
         self.rules: dict[str, RuleState] = {}
@@ -164,8 +192,20 @@ class EvaluationBuilder:
         rule_id: str,
         parent_id: Optional[int],
     ) -> int:
+        if self.node_limit and self._next_occurrence >= self.node_limit:
+            raise RuleTreeLimitExceeded(
+                rule_id, self._next_occurrence,
+                self._rule_node_count, self.node_limit
+            )
         occurrence_id = self._next_occurrence
         self._next_occurrence += 1
+        self._rule_node_count += 1
+        if (
+            self.node_warning
+            and self.warning_rule_id is None
+            and self._next_occurrence > self.node_warning
+        ):
+            self.warning_rule_id = rule_id
 
         state = self.rules[rule_id]
         sequence = self.sequences.setdefault(
@@ -411,6 +451,7 @@ class EvaluationBuilder:
         return attached
 
     def _process(self, declaration: RuleDeclaration) -> None:
+        self._rule_node_count = 0
         normalized_rule_id = normalize_rule_id(declaration.rule_id)
         if normalized_rule_id is None:
             self.issues.append(
