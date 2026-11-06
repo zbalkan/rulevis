@@ -286,12 +286,12 @@ def enumerate_paths(
             return
 
         for edge in _parent_edges(graph, node_id, allowed_relations):
-            if len(paths) >= max_paths or steps >= max_steps:
-                paths.truncated = True
-                break
             parent_id = str(edge["source"])
             if parent_id in visited:
                 continue
+            if len(paths) >= max_paths or steps >= max_steps:
+                paths.truncated = True
+                break
 
             walk(
                 parent_id,
