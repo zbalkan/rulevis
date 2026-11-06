@@ -71,8 +71,12 @@ ATOMIC_PARENT_TAGS: Final[frozenset[str]] = frozenset({
 
 
 class GraphGenerator:
-    def __init__(self, paths: list[str], graph_file: str) -> None:
+    def __init__(
+        self, paths: list[str], graph_file: str,
+        rule_files: Optional[list[str]] = None,
+    ) -> None:
         self.paths = paths
+        self.rule_files = rule_files
         self.group_membership: dict[str, list[str]] = defaultdict(list)
         self.G: nx.MultiDiGraph = nx.MultiDiGraph()
         self.graph_file: str = graph_file
@@ -86,6 +90,12 @@ class GraphGenerator:
         ] = {}
 
     def get_all_xml_files(self) -> list[str]:
+        if self.rule_files is not None:
+            missing = [path for path in self.rule_files if not os.path.isfile(path)]
+            if missing:
+                raise FileNotFoundError(missing[0])
+            return [os.path.abspath(path) for path in self.rule_files]
+
         xml_files: list[str] = []
         for path in self.paths:
             for root, dirs, files in os.walk(path):
