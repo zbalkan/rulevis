@@ -110,3 +110,29 @@ def test_main_parses_comma_separated_paths(monkeypatch):
         "paths": ["/rules/one", "/rules/two"],
         "ran": True,
     }
+
+
+def test_main_accepts_ordered_rules_manifest(tmp_path, monkeypatch):
+    manifest = tmp_path / "rules.txt"
+    manifest.write_text("z-parent.xml\\na-child.xml\\n", encoding="utf-8")
+    captured = {}
+
+    class FakeRulevis:
+        def __init__(self, paths, rule_files=None):
+            captured["paths"] = paths
+            captured["rule_files"] = rule_files
+
+        def run(self):
+            captured["ran"] = True
+
+    monkeypatch.setattr(rulevis, "Rulevis", FakeRulevis)
+    monkeypatch.setattr(sys, "argv", [
+        "rulevis", "--path", str(tmp_path), "--rules-manifest", str(manifest)
+    ])
+    rulevis.main()
+
+    assert captured["rule_files"] == [
+        str(tmp_path / "z-parent.xml"),
+        str(tmp_path / "a-child.xml"),
+    ]
+    assert captured["ran"] is True
