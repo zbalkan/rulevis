@@ -74,6 +74,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # setup-python has no Python 3.9 build for the Ubuntu 26.04 image.
+        # Keep only this legacy interpreter on Ubuntu 24.04.
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         os: [ubuntu-latest]
         include:
