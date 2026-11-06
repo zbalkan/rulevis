@@ -34,7 +34,7 @@ def test_exact_limit_is_accepted():
     assert len(model.occurrences) == 4
 
 
-def test_recursive_group_growth_fails_mid_rule_as_in_wazuh():
+def make_loop_catalog():
     catalog = RuleCatalog()
     for rule_id, parent in [
         ("1", None), ("100101", "loop"), ("100102", "loop"),
@@ -50,7 +50,24 @@ def test_recursive_group_growth_fails_mid_rule_as_in_wazuh():
             if_matched_group=None, conditions=[],
             temporal_conditions=[],
         )
+    return catalog
 
+
+def test_upstream_wazuh_unlimited_tree_contains_sixteen_nodes():
+    model = EvaluationBuilder(make_loop_catalog()).build()
+    assert len(model.occurrences) == 16
+
+
+def test_upstream_wazuh_limit_eight_rejects_before_first_node():
+    with pytest.raises(RuleTreeLimitExceeded) as caught:
+        EvaluationBuilder(make_loop_catalog(), node_limit=8).build()
+    assert caught.value.rule_id == "100104"
+    assert caught.value.node_count == 8
+    assert caught.value.rule_node_count == 0
+
+
+def test_recursive_group_growth_fails_mid_rule_as_in_wazuh():
+    catalog = make_loop_catalog()
     builder = EvaluationBuilder(catalog, node_warning=8, node_limit=10)
     with pytest.raises(RuleTreeLimitExceeded) as caught:
         builder.build()
