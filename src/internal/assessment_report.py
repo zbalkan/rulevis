@@ -202,6 +202,7 @@ class ResourceReport:
 
     total_occurrences: int
     estimated_node_bytes: int
+    node_size: int
     occurrences_by_rule: dict[str, int]
 
 
@@ -219,6 +220,7 @@ def build_resource_report(
     return ResourceReport(
         total_occurrences=total,
         estimated_node_bytes=total * node_size,
+        node_size=node_size,
         occurrences_by_rule=occurrences,
     )
 
@@ -228,5 +230,6 @@ def resource_report_to_dict(report: ResourceReport) -> dict[str, object]:
     return {
         "total_occurrences": report.total_occurrences,
         "estimated_node_bytes": report.estimated_node_bytes,
+        "node_size": report.node_size,
         "occurrences_by_rule": dict(sorted(report.occurrences_by_rule.items())),
     }
