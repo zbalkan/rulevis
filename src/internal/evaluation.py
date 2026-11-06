@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import heapq
 import re
 from dataclasses import dataclass, field
 from typing import Optional
@@ -409,7 +410,12 @@ class EvaluationBuilder:
             for rule_id in self.group_index.matching_rules(selector)
             if rule_id != state.rule_id
         )
-        parent_ids = sorted(
+        # Snapshot at most the remaining budget plus one parent. This
+        # preserves the existing partial-insertion behavior at the boundary
+        # without materializing and sorting every group candidate.
+        candidate_limit = self.max_occurrences - self._next_occurrence + 1
+        parent_ids = heapq.nsmallest(
+            candidate_limit,
             (
                 occurrence_id
                 for rule_id in parent_rules
