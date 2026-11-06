@@ -2,6 +2,7 @@ import logging
 import pickle
 import json
 import os
+from itertools import islice
 from networkx import MultiDiGraph, descendants, ancestors, nodes_with_selfloops, simple_cycles
 
 
@@ -29,7 +30,7 @@ class Analyzer:
         with open(self.graph_path, "rb") as f:
             return pickle.load(f)
 
-    def calculate_statistics(self) -> dict:
+    def calculate_statistics(self, max_cycles: int = 100) -> dict:
         """
         Calculates all the required statistics for the graph, ensuring no
         duplicate cycles are reported.
@@ -63,7 +64,11 @@ class Analyzer:
 
         # 2. Find all other simple cycles.
         logging.info("Detecting multi-node cycles...")
-        all_simple_cycles = list(simple_cycles(self.G))
+        if max_cycles < 1:
+            raise ValueError("max_cycles must be positive")
+        cycle_sample = list(islice(simple_cycles(self.G), max_cycles + 1))
+        cycles_truncated = len(cycle_sample) > max_cycles
+        all_simple_cycles = cycle_sample[:max_cycles]
 
         # 3. Filter out any multi-node cycles that contain a node we've already
         #    identified as having a self-loop. This prevents double-reporting.
@@ -93,7 +98,8 @@ class Analyzer:
                                for n in isolated_rules],
             "self_loops": [{"id": n}
                            for n in self_loop_nodes],
-            "cycles": multi_node_cycles
+            "cycles": multi_node_cycles,
+            "cycles_truncated": cycles_truncated
         }
 
         return stats
