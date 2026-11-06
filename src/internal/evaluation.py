@@ -187,17 +187,14 @@ class EvaluationBuilder:
             if token in self.occurrence_by_enter_token
         ]
 
-    def _new_occurrence(
-        self,
-        rule_id: str,
-        parent_id: Optional[int],
-    ) -> int:
+    def _admit_rule_node(self, rule_id: str) -> None:
+        """Enforce the PR #40182 boundary before constructing an occurrence."""
         if self.node_limit and self._next_occurrence >= self.node_limit:
             raise RuleTreeLimitExceeded(
                 rule_id, self._next_occurrence,
                 self._rule_node_count, self.node_limit
             )
-        occurrence_id = self._next_occurrence
+
         self._next_occurrence += 1
         self._rule_node_count += 1
         if (
@@ -206,6 +203,14 @@ class EvaluationBuilder:
             and self._next_occurrence > self.node_warning
         ):
             self.warning_rule_id = rule_id
+
+    def _new_occurrence(
+        self,
+        rule_id: str,
+        parent_id: Optional[int],
+    ) -> int:
+        self._admit_rule_node(rule_id)
+        occurrence_id = self._next_occurrence - 1
 
         state = self.rules[rule_id]
         sequence = self.sequences.setdefault(
