@@ -178,13 +178,11 @@ class GraphGenerator:
         self, rule_id: str, selector: str
     ) -> None:
         """Record available group parents before inserting this rule."""
-        parents = []
-        parents.extend(
+        self.group_parent_snapshots[rule_id] = tuple(
             (parent, selector)
             for parent in self._matching_group_rules(selector)
             if parent != rule_id and parent in self.rule_load_index
         )
-        self.group_parent_snapshots[rule_id] = tuple(parents)
 
     def _matching_group_rules(self, selector: str):
         """Match the actual runtime group string, including pipe alternatives."""
@@ -207,11 +205,6 @@ class GraphGenerator:
         for group in groups:
             if rule_id not in self.group_membership[group]:
                 self.group_membership[group].append(rule_id)
-
-    def _group_parent_precedes(self, parent: str, child: str) -> bool:
-        """Only already declared rules can be runtime group parents."""
-        order = self.rule_load_index
-        return parent in order and child in order and order[parent] < order[child]
 
     def is_temporal_rule(self, element: ET.Element) -> bool:
         return any(
