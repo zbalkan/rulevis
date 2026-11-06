@@ -8,7 +8,7 @@ from typing import Final, Optional
 
 import networkx as nx
 
-from internal.catalog import RuleCatalog
+from internal.catalog import RuleCatalog, os_word_match
 
 ENCODING: Final[str] = "utf-8"
 
@@ -74,6 +74,7 @@ class GraphGenerator:
     def __init__(self, paths: list[str], graph_file: str) -> None:
         self.paths = paths
         self.group_membership: dict[str, list[str]] = defaultdict(list)
+        self.runtime_group_by_rule: dict[str, str] = {}
         self.G: nx.MultiDiGraph = nx.MultiDiGraph()
         self.graph_file: str = graph_file
         self.catalog: RuleCatalog = RuleCatalog()
@@ -148,12 +149,10 @@ class GraphGenerator:
                     )
 
         if if_group:
-            for group in re.split(r'[,\s]+', if_group.strip()):
-                if not group:
-                    continue
-                for parent_rule in self.group_membership.get(group, []):
+            for parent_rule, runtime_group in self.runtime_group_by_rule.items():
+                if os_word_match(if_group, runtime_group):
                     self.add_edge_with_type(
-                        parent_rule, rule_id, 'if_group', selector=group
+                        parent_rule, rule_id, 'if_group', selector=if_group
                     )
 
         if if_matched_group:
@@ -323,6 +322,7 @@ class GraphGenerator:
             attrs,
         )
 
+        self.runtime_group_by_rule[rule_id] = runtime_group_value
         self.catalog.append(
             rule_id=rule_id,
             file=os.path.basename(xml_file),
