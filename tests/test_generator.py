@@ -275,6 +275,7 @@ def test_if_group_edge_keeps_selector(tmp_path):
         {
             "relation_type": "if_group",
             "selector": "parent_group",
+            "load_order_candidate": True,
         }
     ]
 
@@ -425,7 +426,13 @@ def test_overwrite_updates_group_membership_before_relationship_resolution(
     generator.build_graph_from_xml()
 
     assert generator.G.nodes["100500"]["groups"] == ["new_group"]
-    assert generator.G.get_edge_data("100500", "100501") is None
+    old_edge = generator.G.get_edge_data("100500", "100501")
+    assert old_edge is not None
+    assert any(
+        edge["relation_type"] == "if_group"
+        and edge["load_order_candidate"] is False
+        for edge in old_edge.values()
+    )
 
     edge_data = generator.G.get_edge_data("100500", "100502")
     assert edge_data is not None
@@ -433,6 +440,7 @@ def test_overwrite_updates_group_membership_before_relationship_resolution(
         {
             "relation_type": "if_group",
             "selector": "new_group",
+            "load_order_candidate": True,
         }
     ]
 
