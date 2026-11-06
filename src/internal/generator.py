@@ -172,13 +172,8 @@ class GraphGenerator:
 
     def _group_parent_precedes(self, parent: str, child: str) -> bool:
         """Only already declared rules can be runtime group parents."""
-        parent_order = self.rule_load_index.get(parent)
-        child_order = self.rule_load_index.get(child)
-        return (
-            parent_order is not None
-            and child_order is not None
-            and parent_order < child_order
-        )
+        order = self.rule_load_index
+        return parent in order and child in order and order[parent] < order[child]
 
     def is_temporal_rule(self, element: ET.Element) -> bool:
         return any(
@@ -434,6 +429,8 @@ class GraphGenerator:
                 # Relationship resolution is deferred until every rule and
                 # group membership has been loaded. This prevents if_group
                 # edges from depending on XML/file traversal order.
+                # Preserve first insertion order; overwrites do not add
+                # new runtime occurrences or reposition existing nodes.
                 self.rule_load_index[rule_id] = len(self.rule_load_index)
                 self.rule_relationships[rule_id] = (
                     if_sid,
