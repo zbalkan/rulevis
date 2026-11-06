@@ -65,3 +65,28 @@ def test_group_attachment_does_not_sort_all_candidate_occurrences(monkeypatch):
     monkeypatch.setattr(evaluation, "sorted", forbid_full_sort, raising=False)
     model = EvaluationBuilder(catalog, max_occurrences=4).build()
     assert len(model.occurrences) == 4
+
+
+def test_if_level_does_not_build_unbounded_preorder_list(monkeypatch):
+    catalog = RuleCatalog()
+    for rule_id, if_level in [
+        ("1", None), ("100100", 3), ("100101", 3),
+    ]:
+        catalog.append(
+            rule_id=rule_id, file="test.xml",
+            source_level=0 if if_level is None else 3,
+            accuracy=1, noalert=False, overwrite=False,
+            runtime_group="test,", display_groups=[], category="syslog",
+            if_sid=None, if_level=if_level, if_group=None,
+            if_matched_sid=None, if_matched_group=None,
+            conditions=[], temporal_conditions=[],
+        )
+
+    def forbidden_snapshot(self):
+        raise AssertionError("if_level must not snapshot the entire tree")
+
+    monkeypatch.setattr(
+        EvaluationBuilder, "_occurrences_in_preorder", forbidden_snapshot
+    )
+    model = EvaluationBuilder(catalog, max_occurrences=4).build()
+    assert len(model.occurrences) == 4
