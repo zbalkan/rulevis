@@ -57,10 +57,28 @@ class _EffectiveParents:
     if_group: Optional[str]
 
 
+class OccurrenceBudgetExceeded(RuntimeError):
+    """The RuleVis-specific occurrence budget prevented another allocation."""
+
+    def __init__(self, rule_id: str, limit: int, node_count: int) -> None:
+        self.rule_id = rule_id
+        self.limit = limit
+        self.node_count = node_count
+        super().__init__(
+            f"Rule {rule_id} exceeds RuleVis occurrence budget "
+            f"of {limit} (allocated: {node_count})"
+        )
+
+
 class EvaluationBuilder:
     """Replay the Wazuh 4.14.10 RuleNode construction semantics."""
 
-    def __init__(self, catalog: RuleCatalog) -> None:
+    def __init__(
+        self, catalog: RuleCatalog, *, max_occurrences: int = 100_000
+    ) -> None:
+        if max_occurrences < 1:
+            raise ValueError("max_occurrences must be positive")
+        self.max_occurrences = max_occurrences
         self.catalog = catalog
         self.graph = nx.DiGraph()
         self.rules: dict[str, RuleState] = {}
@@ -164,6 +182,10 @@ class EvaluationBuilder:
         rule_id: str,
         parent_id: Optional[int],
     ) -> int:
+        if self._next_occurrence >= self.max_occurrences:
+            raise OccurrenceBudgetExceeded(
+                rule_id, self.max_occurrences, self._next_occurrence
+            )
         occurrence_id = self._next_occurrence
         self._next_occurrence += 1
 
