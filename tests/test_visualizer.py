@@ -483,3 +483,20 @@ def test_conditions_api_marks_subsumed_field_constraint(tmp_path):
     assert rows[0]["resolution_status"] == "subsumed"
     assert rows[0]["resolution_note"] == "Subsumed by rule 100002"
     assert "resolution_status" not in rows[1]
+
+
+def test_conditions_api_surfaces_truncation(tmp_path, monkeypatch):
+    from internal.conditions import PathResults
+
+    paths = PathResults()
+    paths.truncated = True
+    monkeypatch.setattr(
+        "internal.visualizer.resolve_atomic_paths",
+        lambda graph, target_id: paths,
+    )
+    app_files = write_app_files(tmp_path)
+    client = create_app(*(str(path) for path in app_files)).test_client()
+    response = client.get("/api/conditions?id=100002")
+
+    assert response.status_code == 200
+    assert response.get_json()["paths_truncated"] is True
