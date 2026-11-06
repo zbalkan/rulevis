@@ -66,6 +66,8 @@ class Analyzer:
         logging.info("Detecting multi-node cycles...")
         if max_cycles < 1:
             raise ValueError("max_cycles must be positive")
+        # Prune before enumeration: post-filtering would still enumerate
+        # potentially factorially many cycles through excluded vertices.
         cycle_graph = self.G.subgraph(
             set(self.G.nodes) - self_loop_nodes
         )
