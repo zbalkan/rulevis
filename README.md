@@ -170,6 +170,10 @@ Here’s a **ready-to-paste README subsection** that explains `rulevis` logging 
 
 The log file records informational messages, warnings, and errors emitted during execution. You can safely delete it; a new one will be created automatically on the next run.
 
+## Group relationship interpretation
+
+RuleVis displays declared `if_group` dependencies even when their parents would not have been available at the point the child was encountered in RuleVis's file scan. The rule details label those relationships **not a candidate in scanned load order**. Other `if_group` links are *candidates*, not verified runtime attachments. The scan uses sorted XML files and may differ from the manager's configured rule-loading order. Source-faithful runtime occurrence reconstruction remains a separate experimental subsystem.
+
 ## Notes
 
 Wazuh documents `<if_level>` as a condition that can create a parent-child relationship. RuleVis deliberately does not model `if_level`. As a result, graph ancestry and resolved condition paths cover the relationship types represented by RuleVis (`if_sid`, `if_group`, `if_matched_sid`, and `if_matched_group`), not every relationship type supported by Wazuh.
