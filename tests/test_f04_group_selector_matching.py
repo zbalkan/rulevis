@@ -36,3 +36,46 @@ def test_group_selector_comma_is_not_an_alternative_operator(tmp_path):
     generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pickle"))
     generator.build_graph_from_xml()
     assert not generator.G.has_edge("100100", "100101")
+
+
+def test_if_group_attachment_is_preserved_across_group_overwrite(tmp_path):
+    source = tmp_path / "rules.xml"
+    source.write_text(
+        '<group name="authentication_failed,">'
+        '<rule id="100100" level="3"><description>Parent</description></rule>'
+        '</group>'
+        '<group name="children,"><rule id="100101" level="4">'
+        '<if_group>authentication</if_group><description>Before</description>'
+        '</rule></group>'
+        '<group name="beta,"><rule id="100100" level="3" overwrite="yes">'
+        '<description>Overwritten</description></rule></group>'
+        '<group name="children,"><rule id="100102" level="4">'
+        '<if_group>authentication</if_group><description>After</description>'
+        '</rule></group>', encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pickle"))
+    generator.build_graph_from_xml()
+
+    assert generator.G.has_edge("100100", "100101")
+    assert not generator.G.has_edge("100100", "100102")
+
+
+def test_temporal_if_matched_group_keeps_declarative_links(tmp_path):
+    source = tmp_path / "temporal.xml"
+    source.write_text(
+        '<group name="temporal,"><rule id="100201" level="4">'
+        '<if_matched_group>auth</if_matched_group>'
+        '<description>Temporal dependent</description></rule></group>'
+        '<group name="auth,"><rule id="100200" level="3">'
+        '<description>Historical source</description></rule></group>',
+        encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pickle"))
+    generator.build_graph_from_xml()
+
+    edges = generator.G.get_edge_data("100200", "100201")
+    assert edges is not None
+    assert any(
+        edge["relation_type"] == "if_matched_group"
+        for edge in edges.values()
+    )

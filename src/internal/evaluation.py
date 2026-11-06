@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import heapq
 import re
+from itertools import islice
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -417,16 +419,25 @@ class EvaluationBuilder:
             return False
 
         threshold = level * 100
-        parent_ids = [
+        # A bounded snapshot prevents the full preorder list from being
+        # materialized before the allocation budget can reject a rule.
+        candidate_limit = self.max_occurrences - self._next_occurrence + 1
+        candidates = (
+            self.occurrence_by_enter_token[token]
+            for token in self.order
+            if token in self.occurrence_by_enter_token
+        )
+        eligible = (
             occurrence_id
-            for occurrence_id in self._occurrences_in_preorder()
+            for occurrence_id in candidates
             if (
                 self.occurrences[occurrence_id].rule_id != state.rule_id
                 and self.rules[
                     self.occurrences[occurrence_id].rule_id
                 ].load_priority >= threshold
             )
-        ]
+        )
+        parent_ids = list(islice(eligible, candidate_limit))
 
         attached = False
         for parent_id in parent_ids:
@@ -454,7 +465,12 @@ class EvaluationBuilder:
             for rule_id in self.group_index.matching_rules(selector)
             if rule_id != state.rule_id
         )
-        parent_ids = sorted(
+        # Snapshot at most the remaining budget plus one parent. This
+        # preserves the existing partial-insertion behavior at the boundary
+        # without materializing and sorting every group candidate.
+        candidate_limit = self.max_occurrences - self._next_occurrence + 1
+        parent_ids = heapq.nsmallest(
+            candidate_limit,
             (
                 occurrence_id
                 for rule_id in parent_rules
