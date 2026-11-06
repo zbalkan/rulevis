@@ -48,3 +48,26 @@ def test_self_loop_nodes_are_excluded_before_cycle_enumeration(monkeypatch):
 
     assert result["self_loops"] == [{"id": "A"}]
     assert result["cycles"] == [["B", "C", "B"]] or result["cycles"] == [["C", "B", "C"]]
+
+
+def test_self_loop_and_multi_node_cycle_both_survive():
+    graph = nx.MultiDiGraph()
+    graph.add_edges_from([("A", "A"), ("A", "B"), ("B", "A")])
+    analyzer = object.__new__(Analyzer)
+    analyzer.G = graph
+    result = analyzer.calculate_statistics(max_cycles=10)
+
+    assert result["self_loops"] == [{"id": "A"}]
+    assert any(set(cycle[:-1]) == {"A", "B"} for cycle in result["cycles"])
+    assert result["cycles_truncated"] is False
+
+
+def test_path_depth_budget_reports_incomplete_results():
+    graph = nx.MultiDiGraph()
+    graph.add_edges_from(
+        [("0", "A"), ("A", "B"), ("B", "C"), ("C", "D")],
+        relation_type="if_sid",
+    )
+    paths = enumerate_paths(graph, "D", max_depth=3)
+    assert not paths
+    assert paths.truncated is True
