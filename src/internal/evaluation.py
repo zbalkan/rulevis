@@ -57,6 +57,19 @@ class _EffectiveParents:
     if_group: Optional[str]
 
 
+class OccurrenceBudgetExceeded(RuntimeError):
+    """The RuleVis-specific occurrence budget prevented another allocation."""
+
+    def __init__(self, rule_id: str, limit: int, node_count: int) -> None:
+        self.rule_id = rule_id
+        self.limit = limit
+        self.node_count = node_count
+        super().__init__(
+            f"Rule {rule_id} exceeds RuleVis occurrence budget "
+            f"of {limit} (allocated: {node_count})"
+        )
+
+
 class RuleTreeLimitExceeded(RuntimeError):
     """Wazuh would reject another rule occurrence with error 5108."""
 
@@ -79,12 +92,17 @@ class EvaluationBuilder:
 
     def __init__(
         self, catalog: RuleCatalog, *,
-        node_warning: int = 0, node_limit: int = 0
+        max_occurrences: int = 100_000,
+        node_warning: int = 0,
+        node_limit: int = 0,
     ) -> None:
+        if max_occurrences < 1:
+            raise ValueError("max_occurrences must be positive")
         if node_warning < 0 or node_limit < 0:
             raise ValueError("thresholds must be nonnegative")
         if node_warning and node_limit and node_warning >= node_limit:
             raise ValueError("node warning must be less than node limit")
+        self.max_occurrences = max_occurrences
         self.node_warning = node_warning
         self.node_limit = node_limit
         self.warning_rule_id: Optional[str] = None
@@ -187,6 +205,12 @@ class EvaluationBuilder:
             if token in self.occurrence_by_enter_token
         ]
 
+    def _ensure_occurrence_budget(self, rule_id: str) -> None:
+        if self._next_occurrence >= self.max_occurrences:
+            raise OccurrenceBudgetExceeded(
+                rule_id, self.max_occurrences, self._next_occurrence
+            )
+
     def _admit_rule_node(self, rule_id: str) -> None:
         """Enforce the PR #40182 boundary before constructing an occurrence."""
         if self.node_limit and self._next_occurrence >= self.node_limit:
@@ -209,6 +233,7 @@ class EvaluationBuilder:
         rule_id: str,
         parent_id: Optional[int],
     ) -> int:
+        self._ensure_occurrence_budget(rule_id)
         self._admit_rule_node(rule_id)
         occurrence_id = self._next_occurrence - 1
 
