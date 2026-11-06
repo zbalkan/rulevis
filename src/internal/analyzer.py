@@ -66,16 +66,13 @@ class Analyzer:
         logging.info("Detecting multi-node cycles...")
         if max_cycles < 1:
             raise ValueError("max_cycles must be positive")
-        cycle_sample = list(islice(simple_cycles(self.G), max_cycles + 1))
+        eligible_cycles = (
+            cycle for cycle in simple_cycles(self.G)
+            if len(cycle) > 1 and not self_loop_nodes.intersection(cycle)
+        )
+        cycle_sample = list(islice(eligible_cycles, max_cycles + 1))
         cycles_truncated = len(cycle_sample) > max_cycles
-        all_simple_cycles = cycle_sample[:max_cycles]
-
-        # 3. Filter out any multi-node cycles that contain a node we've already
-        #    identified as having a self-loop. This prevents double-reporting.
-        multi_node_cycles = [
-            cycle for cycle in all_simple_cycles
-            if not self_loop_nodes.intersection(cycle)
-        ]
+        multi_node_cycles = cycle_sample[:max_cycles]
 
         logging.info(f"Found {len(multi_node_cycles)} distinct multi-node cycles.")
         if multi_node_cycles:
