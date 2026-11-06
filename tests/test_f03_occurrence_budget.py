@@ -90,3 +90,14 @@ def test_if_level_does_not_build_unbounded_preorder_list(monkeypatch):
     )
     model = EvaluationBuilder(catalog, max_occurrences=4).build()
     assert len(model.occurrences) == 4
+
+
+@pytest.mark.parametrize(
+    "invalid_budget",
+    [True, False, 2.0, 0.5, float("nan"), float("inf"), "3", None],
+)
+def test_occurrence_budget_rejects_non_integer_inputs(invalid_budget):
+    with pytest.raises(ValueError, match="positive integer"):
+        EvaluationBuilder(
+            catalog_with_children(1), max_occurrences=invalid_budget
+        )
