@@ -149,11 +149,10 @@ class GraphGenerator:
                     )
 
         if if_group:
-            for parent_rule, runtime_group in self.runtime_group_by_rule.items():
-                if os_word_match(if_group, runtime_group):
-                    self.add_edge_with_type(
-                        parent_rule, rule_id, 'if_group', selector=if_group
-                    )
+            for parent_rule in self._matching_group_rules(if_group):
+                self.add_edge_with_type(
+                    parent_rule, rule_id, 'if_group', selector=if_group
+                )
 
         if if_matched_group:
             for group in re.split(r'[,\s]+', if_matched_group.strip()):
@@ -166,6 +165,14 @@ class GraphGenerator:
                         'if_matched_group',
                         selector=group,
                     )
+
+    def _matching_group_rules(self, selector: str):
+        """Use the same selector semantics for every visual group edge."""
+        return (
+            rule_id
+            for rule_id, groups in self.runtime_group_by_rule.items()
+            if os_word_match(selector, groups)
+        )
 
     def is_temporal_rule(self, element: ET.Element) -> bool:
         return any(
