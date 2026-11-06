@@ -78,8 +78,12 @@ class EvaluationBuilder:
     def __init__(
         self, catalog: RuleCatalog, *, max_occurrences: int = 100_000
     ) -> None:
-        if max_occurrences < 1:
-            raise ValueError("max_occurrences must be positive")
+        if (
+            isinstance(max_occurrences, bool)
+            or not isinstance(max_occurrences, int)
+            or max_occurrences < 1
+        ):
+            raise ValueError("max_occurrences must be a positive integer")
         self.max_occurrences = max_occurrences
         self.catalog = catalog
         self.graph = nx.DiGraph()
