@@ -758,6 +758,7 @@ class ConditionsModal {
                 </section>
                 <section class="conditions-section">
                     <h3>Resolved Paths</h3>
+                    ${conditions.paths_truncated ? "<p>Path analysis was truncated at the safety budget. Results are incomplete.</p>" : ""}
                     ${this.renderPaths(
                         conditions.paths,
                         temporal
