@@ -8,7 +8,7 @@ import sys
 import tempfile
 import webbrowser
 from threading import Timer
-from typing import Final
+from typing import Final, Optional
 
 from internal.analyzer import Analyzer
 from internal.generator import GraphGenerator
@@ -47,7 +47,9 @@ class CustomFileHandler(logging.FileHandler):
 
 class Rulevis():
 
-    def __init__(self, paths: list[str]) -> None:
+    def __init__(
+        self, paths: list[str], rule_files: Optional[list[str]] = None
+    ) -> None:
         self.graph_path: str = tempfile.NamedTemporaryFile(delete=False).name
         logging.info(f"Temporary graph file created at {self.graph_path}")
 
@@ -59,6 +61,7 @@ class Rulevis():
 
         self.__validate_paths(paths)
         self.__paths: list[str] = paths
+        self.__rule_files = rule_files
 
     def __del__(self) -> None:
         try:
@@ -102,7 +105,11 @@ class Rulevis():
 
     def __generate_graph(self) -> None:
         logging.info("Generating rule graph...")
-        generator = GraphGenerator(paths=self.__paths, graph_file=self.graph_path)
+        generator = GraphGenerator(
+            paths=self.__paths,
+            graph_file=self.graph_path,
+            rule_files=self.__rule_files,
+        )
         generator.build_graph_from_xml()
         generator.save_graph()
         logging.info("Graph generation complete.")
@@ -137,11 +144,26 @@ def main() -> None:
     parser.add_argument("--path", "-p", dest="path", required=True, type=str,
                         help="Path to the Wazuh rule directories. Comma-separated multiple paths are accepted.")
 
+    parser.add_argument(
+        "--rules-manifest",
+        help="Text file containing rules XML file paths in manager load order.",
+    )
+
     args: argparse.Namespace = parser.parse_args()
     paths: list[str] = [p for p in str(args.path).split(',') if p != '']
     logging.info(f"Paths: {paths}")
 
-    rulevis = Rulevis(paths)
+    if args.rules_manifest:
+        base = os.path.dirname(os.path.abspath(args.rules_manifest))
+        with open(args.rules_manifest, encoding=ENCODING) as stream:
+            rule_files = [
+                os.path.abspath(os.path.join(base, line.strip()))
+                for line in stream
+                if line.strip() and not line.lstrip().startswith("#")
+            ]
+        rulevis = Rulevis(paths, rule_files=rule_files)
+    else:
+        rulevis = Rulevis(paths)
     rulevis.run()
 
 
