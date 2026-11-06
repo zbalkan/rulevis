@@ -66,9 +66,12 @@ class Analyzer:
         logging.info("Detecting multi-node cycles...")
         if max_cycles < 1:
             raise ValueError("max_cycles must be positive")
+        cycle_graph = self.G.subgraph(
+            set(self.G.nodes) - self_loop_nodes
+        )
         eligible_cycles = (
-            cycle for cycle in simple_cycles(self.G)
-            if len(cycle) > 1 and not self_loop_nodes.intersection(cycle)
+            cycle for cycle in simple_cycles(cycle_graph)
+            if len(cycle) > 1
         )
         cycle_sample = list(islice(eligible_cycles, max_cycles + 1))
         cycles_truncated = len(cycle_sample) > max_cycles
