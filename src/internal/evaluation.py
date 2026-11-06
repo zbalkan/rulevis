@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import heapq
 import re
+from itertools import islice
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -57,10 +59,32 @@ class _EffectiveParents:
     if_group: Optional[str]
 
 
+class OccurrenceBudgetExceeded(RuntimeError):
+    """The RuleVis-specific occurrence budget prevented another allocation."""
+
+    def __init__(self, rule_id: str, limit: int, node_count: int) -> None:
+        self.rule_id = rule_id
+        self.limit = limit
+        self.node_count = node_count
+        super().__init__(
+            f"Rule {rule_id} exceeds RuleVis occurrence budget "
+            f"of {limit} (allocated: {node_count})"
+        )
+
+
 class EvaluationBuilder:
     """Replay the Wazuh 4.14.10 RuleNode construction semantics."""
 
-    def __init__(self, catalog: RuleCatalog) -> None:
+    def __init__(
+        self, catalog: RuleCatalog, *, max_occurrences: int = 100_000
+    ) -> None:
+        if (
+            isinstance(max_occurrences, bool)
+            or not isinstance(max_occurrences, int)
+            or max_occurrences < 1
+        ):
+            raise ValueError("max_occurrences must be a positive integer")
+        self.max_occurrences = max_occurrences
         self.catalog = catalog
         self.graph = nx.DiGraph()
         self.rules: dict[str, RuleState] = {}
@@ -159,11 +183,18 @@ class EvaluationBuilder:
             if token in self.occurrence_by_enter_token
         ]
 
+    def _ensure_occurrence_budget(self, rule_id: str) -> None:
+        if self._next_occurrence >= self.max_occurrences:
+            raise OccurrenceBudgetExceeded(
+                rule_id, self.max_occurrences, self._next_occurrence
+            )
+
     def _new_occurrence(
         self,
         rule_id: str,
         parent_id: Optional[int],
     ) -> int:
+        self._ensure_occurrence_budget(rule_id)
         occurrence_id = self._next_occurrence
         self._next_occurrence += 1
 
@@ -347,16 +378,25 @@ class EvaluationBuilder:
             return False
 
         threshold = level * 100
-        parent_ids = [
+        # A bounded snapshot prevents the full preorder list from being
+        # materialized before the allocation budget can reject a rule.
+        candidate_limit = self.max_occurrences - self._next_occurrence + 1
+        candidates = (
+            self.occurrence_by_enter_token[token]
+            for token in self.order
+            if token in self.occurrence_by_enter_token
+        )
+        eligible = (
             occurrence_id
-            for occurrence_id in self._occurrences_in_preorder()
+            for occurrence_id in candidates
             if (
                 self.occurrences[occurrence_id].rule_id != state.rule_id
                 and self.rules[
                     self.occurrences[occurrence_id].rule_id
                 ].load_priority >= threshold
             )
-        ]
+        )
+        parent_ids = list(islice(eligible, candidate_limit))
 
         attached = False
         for parent_id in parent_ids:
@@ -384,7 +424,12 @@ class EvaluationBuilder:
             for rule_id in self.group_index.matching_rules(selector)
             if rule_id != state.rule_id
         )
-        parent_ids = sorted(
+        # Snapshot at most the remaining budget plus one parent. This
+        # preserves the existing partial-insertion behavior at the boundary
+        # without materializing and sorting every group candidate.
+        candidate_limit = self.max_occurrences - self._next_occurrence + 1
+        parent_ids = heapq.nsmallest(
+            candidate_limit,
             (
                 occurrence_id
                 for rule_id in parent_rules
