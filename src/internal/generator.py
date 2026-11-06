@@ -91,10 +91,7 @@ class GraphGenerator:
 
     def get_all_xml_files(self) -> list[str]:
         if self.rule_files is not None:
-            missing = [path for path in self.rule_files if not os.path.isfile(path)]
-            if missing:
-                raise FileNotFoundError(missing[0])
-            return [os.path.abspath(path) for path in self.rule_files]
+            return self._validated_rule_files()
 
         xml_files: list[str] = []
         for path in self.paths:
@@ -109,6 +106,15 @@ class GraphGenerator:
         logging.info(f'Found {len(xml_files)} XML files in the given paths')
         logging.info('Processing all files...')
         return xml_files
+
+    def _validated_rule_files(self) -> list[str]:
+        """Use exact file order supplied by an external Wazuh manifest."""
+        result = []
+        for path in self.rule_files or ():
+            if not os.path.isfile(path):
+                raise FileNotFoundError(path)
+            result.append(os.path.abspath(path))
+        return result
 
     def add_edge_with_type(
         self,
