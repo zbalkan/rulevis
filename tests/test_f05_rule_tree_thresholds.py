@@ -32,3 +32,30 @@ def test_limit_refuses_node_after_allowed_boundary():
 def test_exact_limit_is_accepted():
     model = EvaluationBuilder(make_catalog(), node_limit=4).build()
     assert len(model.occurrences) == 4
+
+
+def test_recursive_group_growth_fails_mid_rule_as_in_wazuh():
+    catalog = RuleCatalog()
+    for rule_id, parent in [
+        ("1", None), ("100101", "loop"), ("100102", "loop"),
+        ("100103", "loop"), ("100104", "loop"),
+    ]:
+        catalog.append(
+            rule_id=rule_id, file="loop.xml",
+            source_level=0 if parent is None else 3,
+            accuracy=1, noalert=False, overwrite=False,
+            runtime_group="loop,", display_groups=[],
+            category="syslog", if_sid=None, if_level=None,
+            if_group=parent, if_matched_sid=None,
+            if_matched_group=None, conditions=[],
+            temporal_conditions=[],
+        )
+
+    builder = EvaluationBuilder(catalog, node_warning=8, node_limit=10)
+    with pytest.raises(RuleTreeLimitExceeded) as caught:
+        builder.build()
+
+    assert caught.value.rule_id == "100104"
+    assert caught.value.node_count == 10
+    assert caught.value.rule_node_count == 2
+    assert builder.warning_rule_id == "100104"
