@@ -36,8 +36,6 @@ class Analyzer:
         Calculates all the required statistics for the graph, ensuring no
         duplicate cycles are reported.
         """
-        real_nodes = [n for n in self.G.nodes() if n != '0']
-
         # --- Calculate Top 5 Lists ---
         real_nodes = [n for n in self.G.nodes() if n != '0']
         out_degrees = dict(self.G.out_degree(real_nodes))
