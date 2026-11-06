@@ -381,6 +381,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
             "condition_type": condition_type,
             "clock_temporal": clock_temporal,
             "paths": paths,
+            "paths_truncated": bool(getattr(paths, "truncated", False)),
         })
 
     @app.route("/api/stats", methods=["GET"])

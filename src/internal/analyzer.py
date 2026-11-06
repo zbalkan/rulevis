@@ -2,6 +2,8 @@ import logging
 import pickle
 import json
 import os
+from itertools import islice
+import networkx as nx
 from networkx import MultiDiGraph, descendants, ancestors, nodes_with_selfloops, simple_cycles
 
 
@@ -29,13 +31,11 @@ class Analyzer:
         with open(self.graph_path, "rb") as f:
             return pickle.load(f)
 
-    def calculate_statistics(self) -> dict:
+    def calculate_statistics(self, max_cycles: int = 100) -> dict:
         """
         Calculates all the required statistics for the graph, ensuring no
         duplicate cycles are reported.
         """
-        real_nodes = [n for n in self.G.nodes() if n != '0']
-
         # --- Calculate Top 5 Lists ---
         real_nodes = [n for n in self.G.nodes() if n != '0']
         out_degrees = dict(self.G.out_degree(real_nodes))
@@ -63,14 +63,19 @@ class Analyzer:
 
         # 2. Find all other simple cycles.
         logging.info("Detecting multi-node cycles...")
-        all_simple_cycles = list(simple_cycles(self.G))
-
-        # 3. Filter out any multi-node cycles that contain a node we've already
-        #    identified as having a self-loop. This prevents double-reporting.
-        multi_node_cycles = [
-            cycle for cycle in all_simple_cycles
-            if not self_loop_nodes.intersection(cycle)
-        ]
+        if max_cycles < 1:
+            raise ValueError("max_cycles must be positive")
+        # Exclude self-loop edges, not their vertices: a vertex may also
+        # participate in a genuine cycle with other rules.
+        cycle_graph = nx.DiGraph(self.G)
+        cycle_graph.remove_edges_from(nx.selfloop_edges(cycle_graph))
+        eligible_cycles = (
+            cycle for cycle in simple_cycles(cycle_graph)
+            if len(cycle) > 1
+        )
+        cycle_sample = list(islice(eligible_cycles, max_cycles + 1))
+        cycles_truncated = len(cycle_sample) > max_cycles
+        multi_node_cycles = cycle_sample[:max_cycles]
 
         logging.info(f"Found {len(multi_node_cycles)} distinct multi-node cycles.")
         if multi_node_cycles:
@@ -93,7 +98,8 @@ class Analyzer:
                                for n in isolated_rules],
             "self_loops": [{"id": n}
                            for n in self_loop_nodes],
-            "cycles": multi_node_cycles
+            "cycles": multi_node_cycles,
+            "cycles_truncated": cycles_truncated
         }
 
         return stats
