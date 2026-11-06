@@ -28,11 +28,10 @@ def test_group_edges_preserve_declarations_and_flag_load_order(tmp_path):
 
     assert graph.has_edge("1", "100100")
     assert graph.has_edge("100100", "100101")
-    assert graph.has_edge("100100", "100100")
-    assert graph.has_edge("100101", "100101")
+    assert not graph.has_edge("100100", "100100")
+    assert not graph.has_edge("100101", "100101")
     assert graph.has_edge("100101", "100100")
     assert _group_candidate(graph, "1", "100100") is True
-    assert _group_candidate(graph, "100100", "100100") is False
     assert _group_candidate(graph, "100101", "100100") is False
     assert _group_candidate(graph, "100100", "100101") is True
 

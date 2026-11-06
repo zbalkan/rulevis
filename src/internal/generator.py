@@ -163,6 +163,8 @@ class GraphGenerator:
         if if_group:
             candidates = set(self.group_parent_snapshots.get(rule_id, ()))
             for parent_rule, selector in self._declared_group_rules(if_group):
+                if parent_rule == rule_id:
+                    continue
                 self.add_edge_with_type(
                     parent_rule, rule_id, "if_group", selector=selector,
                     load_order_candidate=(parent_rule, selector) in candidates,
