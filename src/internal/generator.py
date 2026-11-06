@@ -203,11 +203,6 @@ class GraphGenerator:
             if rule_id not in self.group_membership[group]:
                 self.group_membership[group].append(rule_id)
 
-    def _group_parent_precedes(self, parent: str, child: str) -> bool:
-        """Only already declared rules can be runtime group parents."""
-        order = self.rule_load_index
-        return parent in order and child in order and order[parent] < order[child]
-
     def is_temporal_rule(self, element: ET.Element) -> bool:
         return any(
             element.get(attribute) is not None
