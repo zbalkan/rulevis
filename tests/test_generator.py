@@ -120,7 +120,7 @@ def test_build_graph_collects_atomic_conditions_and_metadata(tmp_path):
     ]
 
 
-def test_if_group_does_not_attach_to_future_rule(tmp_path, monkeypatch):
+def test_if_group_future_declaration_is_visible_but_unavailable(tmp_path, monkeypatch):
     child = tmp_path / "00-child.xml"
     parent = tmp_path / "99-parent.xml"
 
@@ -155,8 +155,14 @@ def test_if_group_does_not_attach_to_future_rule(tmp_path, monkeypatch):
     )
     generator.build_graph_from_xml()
 
-    # The parent is loaded after the child, so Wazuh cannot attach it.
-    assert generator.G.get_edge_data("100019", "100020") is None
+    # Keep the declared relation, but do not claim a runtime attachment.
+    edges = generator.G.get_edge_data("100019", "100020")
+    assert edges is not None
+    assert any(
+        edge["relation_type"] == "if_group"
+        and edge["load_order_candidate"] is False
+        for edge in edges.values()
+    )
 
 
 def test_overwrite_replaces_local_conditions_but_keeps_parent(tmp_path, monkeypatch):
