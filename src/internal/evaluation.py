@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import heapq
 import re
+from itertools import islice
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -373,16 +374,27 @@ class EvaluationBuilder:
             return False
 
         threshold = level * 100
-        parent_ids = [
-            occurrence_id
-            for occurrence_id in self._occurrences_in_preorder()
-            if (
-                self.occurrences[occurrence_id].rule_id != state.rule_id
-                and self.rules[
-                    self.occurrences[occurrence_id].rule_id
-                ].load_priority >= threshold
-            )
-        ]
+        # A bounded snapshot prevents the full preorder list from being
+        # materialized before the allocation budget can reject a rule.
+        candidate_limit = self.max_occurrences - self._next_occurrence + 1
+        candidates = (
+            self.occurrence_by_enter_token[token]
+            for token in self.order
+            if token in self.occurrence_by_enter_token
+        )
+        parent_ids = list(islice(
+            (
+                occurrence_id
+                for occurrence_id in candidates
+                if (
+                    self.occurrences[occurrence_id].rule_id != state.rule_id
+                    and self.rules[
+                        self.occurrences[occurrence_id].rule_id
+                    ].load_priority >= threshold
+                )
+            ),
+            candidate_limit,
+        ))
 
         attached = False
         for parent_id in parent_ids:
