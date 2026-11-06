@@ -29,7 +29,7 @@ def test_path_enumeration_stops_after_explicit_budget():
     assert paths.truncated is True
 
 
-def test_self_loop_nodes_are_excluded_before_cycle_enumeration(monkeypatch):
+def test_self_loop_edges_are_excluded_before_cycle_enumeration(monkeypatch):
     graph = nx.MultiDiGraph()
     graph.add_edges_from([
         ("A", "A"), ("A", "B"), ("B", "A"),
@@ -40,14 +40,16 @@ def test_self_loop_nodes_are_excluded_before_cycle_enumeration(monkeypatch):
     original = nx.simple_cycles
 
     def guarded_cycles(candidate):
-        assert "A" not in candidate.nodes
+        assert "A" in candidate.nodes
+        assert not candidate.has_edge("A", "A")
         return original(candidate)
 
     monkeypatch.setattr("internal.analyzer.simple_cycles", guarded_cycles)
     result = analyzer.calculate_statistics(max_cycles=2)
 
     assert result["self_loops"] == [{"id": "A"}]
-    assert result["cycles"] == [["B", "C", "B"]] or result["cycles"] == [["C", "B", "C"]]
+    assert any(set(cycle[:-1]) == {"A", "B"} for cycle in result["cycles"])
+    assert any(set(cycle[:-1]) == {"B", "C"} for cycle in result["cycles"])
 
 
 def test_self_loop_and_multi_node_cycle_both_survive():
