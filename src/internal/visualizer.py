@@ -176,6 +176,10 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                         "relation_type", "unknown"
                     ),
                     "selector": edge_data.get("selector"),
+                    **(
+                        {"load_order_candidate": edge_data["load_order_candidate"]}
+                        if "load_order_candidate" in edge_data else {}
+                    ),
                 }
                 for parent_id, _, _, edge_data in G.in_edges(
                     node_id, keys=True, data=True
@@ -188,6 +192,10 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                         "relation_type", "unknown"
                     ),
                     "selector": edge_data.get("selector"),
+                    **(
+                        {"load_order_candidate": edge_data["load_order_candidate"]}
+                        if "load_order_candidate" in edge_data else {}
+                    ),
                 }
                 for _, child_id, _, edge_data in G.out_edges(
                     node_id, keys=True, data=True
