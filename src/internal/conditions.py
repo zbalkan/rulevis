@@ -238,17 +238,33 @@ def _parent_edges(
     return edges
 
 
+class PathResults(list):
+    """Path list that indicates when the exploration budget was exceeded."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.truncated = False
+
+
 def enumerate_paths(
     graph: MultiDiGraph,
     target_id: str,
     allowed_relations: Iterable[str] = ATOMIC_RELATION_TYPES,
     root_id: str = "0",
-) -> list[dict[str, Any]]:
-    """Return every simple root-to-target path using allowed edge types."""
-    if target_id not in graph or root_id not in graph:
-        return []
+    *,
+    max_paths: int = 256,
+    max_steps: int = 100_000,
+    max_depth: int = 256,
+) -> PathResults:
+    """Enumerate a bounded sample of simple root-to-target paths."""
+    if min(max_paths, max_steps, max_depth) < 1:
+        raise ValueError("path budgets must be positive")
 
-    paths: list[dict[str, Any]] = []
+    paths = PathResults()
+    if target_id not in graph or root_id not in graph:
+        return paths
+
+    steps = 0
 
     def walk(
         node_id: str,
@@ -256,6 +272,12 @@ def enumerate_paths(
         reverse_edges: list[dict[str, Any]],
         visited: set[str],
     ) -> None:
+        nonlocal steps
+        steps += 1
+        if steps > max_steps or len(reverse_nodes) > max_depth:
+            paths.truncated = True
+            return
+
         if node_id == root_id:
             paths.append({
                 "nodes": list(reversed(reverse_nodes)),
@@ -263,9 +285,10 @@ def enumerate_paths(
             })
             return
 
-        for edge in _parent_edges(
-            graph, node_id, allowed_relations
-        ):
+        for edge in _parent_edges(graph, node_id, allowed_relations):
+            if len(paths) >= max_paths or steps >= max_steps:
+                paths.truncated = True
+                break
             parent_id = str(edge["source"])
             if parent_id in visited:
                 continue
