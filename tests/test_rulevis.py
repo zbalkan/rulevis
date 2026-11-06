@@ -114,7 +114,7 @@ def test_main_parses_comma_separated_paths(monkeypatch):
 
 def test_main_accepts_ordered_rules_manifest(tmp_path, monkeypatch):
     manifest = tmp_path / "rules.txt"
-    manifest.write_text("z-parent.xml\\na-child.xml\\n", encoding="utf-8")
+    manifest.write_text("z-parent.xml\na-child.xml\n", encoding="utf-8")
     captured = {}
 
     class FakeRulevis:
