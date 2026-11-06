@@ -382,21 +382,17 @@ class EvaluationBuilder:
             for token in self.order
             if token in self.occurrence_by_enter_token
         )
-        parent_ids = list(
-            islice(
-                (
-                    occurrence_id
-                    for occurrence_id in candidates
-                if (
-                    self.occurrences[occurrence_id].rule_id != state.rule_id
-                    and self.rules[
-                        self.occurrences[occurrence_id].rule_id
-                    ].load_priority >= threshold
-                )
-                ),
-                candidate_limit,
+        eligible = (
+            occurrence_id
+            for occurrence_id in candidates
+            if (
+                self.occurrences[occurrence_id].rule_id != state.rule_id
+                and self.rules[
+                    self.occurrences[occurrence_id].rule_id
+                ].load_priority >= threshold
             )
         )
+        parent_ids = list(islice(eligible, candidate_limit))
 
         attached = False
         for parent_id in parent_ids:
