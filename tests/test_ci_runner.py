@@ -1,5 +1,6 @@
 """The Python 3.9 CI job must use an image with an available interpreter."""
 from pathlib import Path
+import re
 
 
 def test_python39_runs_on_compatible_ubuntu_image():
@@ -9,4 +10,4 @@ def test_python39_runs_on_compatible_ubuntu_image():
     ).read_text(encoding="utf-8")
 
     assert "runs-on: ${{ matrix.os }}" in workflow
-    assert 'python-version: "3.9"\n          os: ubuntu-24.04' in workflow
+    assert re.search(r'- python-version: "3.9"\s+os: ubuntu-24.04', workflow)
