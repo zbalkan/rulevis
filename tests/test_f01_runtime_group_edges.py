@@ -1,8 +1,17 @@
-"""The visual group graph must not invent future or self runtime parents."""
+"""Declare group relationships separately from scan-order eligibility."""
 from internal.generator import GraphGenerator
 
 
-def test_group_edges_exclude_current_and_future_rules(tmp_path):
+def _group_candidate(graph, parent, child):
+    edges = graph.get_edge_data(parent, child) or {}
+    return next(
+        data["load_order_candidate"]
+        for data in edges.values()
+        if data["relation_type"] == "if_group"
+    )
+
+
+def test_group_edges_preserve_declarations_and_flag_load_order(tmp_path):
     source = tmp_path / "groups.xml"
     source.write_text(
         '<group name="loop,"><rule id="1" level="0">'
@@ -19,9 +28,13 @@ def test_group_edges_exclude_current_and_future_rules(tmp_path):
 
     assert graph.has_edge("1", "100100")
     assert graph.has_edge("100100", "100101")
-    assert not graph.has_edge("100100", "100100")
-    assert not graph.has_edge("100101", "100101")
-    assert not graph.has_edge("100101", "100100")
+    assert graph.has_edge("100100", "100100")
+    assert graph.has_edge("100101", "100101")
+    assert graph.has_edge("100101", "100100")
+    assert _group_candidate(graph, "1", "100100") is True
+    assert _group_candidate(graph, "100100", "100100") is False
+    assert _group_candidate(graph, "100101", "100100") is False
+    assert _group_candidate(graph, "100100", "100101") is True
 
 
 def test_existing_group_edges_survive_later_overwrite(tmp_path, monkeypatch):
@@ -57,4 +70,6 @@ def test_existing_group_edges_survive_later_overwrite(tmp_path, monkeypatch):
     generator.build_graph_from_xml()
 
     assert generator.G.has_edge("100100", "100101")
-    assert not generator.G.has_edge("100100", "100102")
+    assert generator.G.has_edge("100100", "100102")
+    assert _group_candidate(generator.G, "100100", "100101") is True
+    assert _group_candidate(generator.G, "100100", "100102") is False
