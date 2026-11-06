@@ -184,8 +184,13 @@ class StatsPanel {
                 return `<h4>Detected Cycles</h4><p style="color: #8f8;">No cycles detected. The graph is a DAG (Directed Acyclic Graph).</p>`;
             }
             
-            let listHtml = `<h4 style="color: #ff8a8a;">Detected Cycles (${allCycles.length} found)</h4>
+            const cycleCountLabel = stats.cycles_truncated ? "shown" : "found";
+            const truncationNotice = stats.cycles_truncated
+                ? '<p style="color: #ff8a8a; font-size: 0.9em;">Additional cycles omitted; this is a bounded sample.</p>'
+                : '';
+            let listHtml = `<h4 style="color: #ff8a8a;">Detected Cycles (${allCycles.length} ${cycleCountLabel})</h4>
                         <p style="color: #ff8a8a; font-size: 0.9em;">Warning: Cycles indicate circular dependencies.</p>
+                        ${truncationNotice}
                         <div class="cycle-container">`;
             
             allCycles.forEach((cycle, index) => {
@@ -758,6 +763,7 @@ class ConditionsModal {
                 </section>
                 <section class="conditions-section">
                     <h3>Resolved Paths</h3>
+                    ${conditions.paths_truncated ? "<p>Path analysis was truncated at the safety budget. Results are incomplete.</p>" : ""}
                     ${this.renderPaths(
                         conditions.paths,
                         temporal
