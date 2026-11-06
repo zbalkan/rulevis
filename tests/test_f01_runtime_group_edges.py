@@ -22,3 +22,39 @@ def test_group_edges_exclude_current_and_future_rules(tmp_path):
     assert not graph.has_edge("100100", "100100")
     assert not graph.has_edge("100101", "100101")
     assert not graph.has_edge("100101", "100100")
+
+
+def test_existing_group_edges_survive_later_overwrite(tmp_path, monkeypatch):
+    base = tmp_path / "01-base.xml"
+    child = tmp_path / "02-child.xml"
+    update = tmp_path / "03-overwrite.xml"
+    later = tmp_path / "04-later.xml"
+    base.write_text(
+        '<group name="alpha,"><rule id="100100" level="3">'
+        '<description>Parent</description></rule></group>',
+        encoding="utf-8",
+    )
+    child.write_text(
+        '<group name="children,"><rule id="100101" level="4">'
+        '<if_group>alpha</if_group><description>Child</description>'
+        '</rule></group>', encoding="utf-8",
+    )
+    update.write_text(
+        '<group name="beta,"><rule id="100100" level="3" overwrite="yes">'
+        '<description>Updated parent</description></rule></group>',
+        encoding="utf-8",
+    )
+    later.write_text(
+        '<group name="children,"><rule id="100102" level="4">'
+        '<if_group>alpha</if_group><description>Later child</description>'
+        '</rule></group>', encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pickle"))
+    monkeypatch.setattr(
+        generator, "get_all_xml_files",
+        lambda: [str(base), str(child), str(update), str(later)],
+    )
+    generator.build_graph_from_xml()
+
+    assert generator.G.has_edge("100100", "100101")
+    assert not generator.G.has_edge("100100", "100102")
