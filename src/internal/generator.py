@@ -85,6 +85,7 @@ class GraphGenerator:
             str,
             tuple[Optional[str], Optional[str], Optional[str], Optional[str]],
         ] = {}
+        self.rule_load_index: dict[str, int] = {}
 
     def get_all_xml_files(self) -> list[str]:
         xml_files: list[str] = []
@@ -150,9 +151,10 @@ class GraphGenerator:
 
         if if_group:
             for parent_rule in self._matching_group_rules(if_group):
-                self.add_edge_with_type(
-                    parent_rule, rule_id, 'if_group', selector=if_group
-                )
+                if self._group_parent_precedes(parent_rule, rule_id):
+                    self.add_edge_with_type(
+                        parent_rule, rule_id, 'if_group', selector=if_group
+                    )
 
         if if_matched_group:
             for group in re.split(r'[,\s]+', if_matched_group.strip()):
@@ -173,6 +175,11 @@ class GraphGenerator:
             for rule_id, groups in self.runtime_group_by_rule.items()
             if os_word_match(selector, groups)
         )
+
+    def _group_parent_precedes(self, parent: str, child: str) -> bool:
+        """Only already declared rules can be runtime group parents."""
+        order = self.rule_load_index
+        return parent in order and child in order and order[parent] < order[child]
 
     def is_temporal_rule(self, element: ET.Element) -> bool:
         return any(
@@ -429,6 +436,9 @@ class GraphGenerator:
                 # Relationship resolution is deferred until every rule and
                 # group membership has been loaded. This prevents if_group
                 # edges from depending on XML/file traversal order.
+                # Preserve first insertion order; overwrites do not add
+                # new runtime occurrences or reposition existing nodes.
+                self.rule_load_index[rule_id] = len(self.rule_load_index)
                 self.rule_relationships[rule_id] = (
                     if_sid,
                     if_matched_sid,

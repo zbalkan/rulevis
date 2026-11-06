@@ -120,7 +120,7 @@ def test_build_graph_collects_atomic_conditions_and_metadata(tmp_path):
     ]
 
 
-def test_if_group_resolution_is_independent_of_file_order(tmp_path, monkeypatch):
+def test_if_group_does_not_attach_to_future_rule(tmp_path, monkeypatch):
     child = tmp_path / "00-child.xml"
     parent = tmp_path / "99-parent.xml"
 
@@ -155,11 +155,8 @@ def test_if_group_resolution_is_independent_of_file_order(tmp_path, monkeypatch)
     )
     generator.build_graph_from_xml()
 
-    edge_data = generator.G.get_edge_data("100019", "100020")
-    assert edge_data is not None
-    assert {edge["relation_type"] for edge in edge_data.values()} == {
-        "if_group"
-    }
+    # The parent is loaded after the child, so Wazuh cannot attach it.
+    assert generator.G.get_edge_data("100019", "100020") is None
 
 
 def test_overwrite_replaces_local_conditions_but_keeps_parent(tmp_path, monkeypatch):
