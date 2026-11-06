@@ -73,3 +73,27 @@ def test_path_depth_budget_reports_incomplete_results():
     paths = enumerate_paths(graph, "D", max_depth=3)
     assert not paths
     assert paths.truncated is True
+
+
+def test_path_budget_does_not_count_visited_self_loop_as_missing_path():
+    graph = nx.MultiDiGraph()
+    graph.add_edges_from(
+        [("0", "A"), ("A", "A")], relation_type="if_sid"
+    )
+
+    paths = enumerate_paths(graph, "A", max_paths=1)
+
+    assert [path["nodes"] for path in paths] == [["0", "A"]]
+    assert paths.truncated is False
+
+
+def test_stats_panel_discloses_truncated_cycle_samples():
+    from pathlib import Path
+
+    javascript = (
+        Path(__file__).resolve().parents[1]
+        / "src/internal/static/graph.js"
+    ).read_text(encoding="utf-8")
+
+    assert "stats.cycles_truncated" in javascript
+    assert "Additional cycles omitted" in javascript
