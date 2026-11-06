@@ -74,6 +74,8 @@ class GraphGenerator:
     def __init__(self, paths: list[str], graph_file: str) -> None:
         self.paths = paths
         self.group_membership: dict[str, list[str]] = defaultdict(list)
+        # Preserve groups declared anywhere in the accepted source history.
+        self.declared_group_membership: dict[str, list[str]] = defaultdict(list)
         self.G: nx.MultiDiGraph = nx.MultiDiGraph()
         self.graph_file: str = graph_file
         self.catalog: RuleCatalog = RuleCatalog()
@@ -112,6 +114,7 @@ class GraphGenerator:
         target: str,
         relation_type: str,
         selector: Optional[str] = None,
+        load_order_candidate: Optional[bool] = None,
     ) -> None:
         if logging.getLogger().getEffectiveLevel() <= logging.DEBUG:
             logging.debug(
@@ -120,6 +123,8 @@ class GraphGenerator:
         edge_data = {"relation_type": relation_type}
         if selector is not None:
             edge_data["selector"] = selector
+        if load_order_candidate is not None:
+            edge_data["load_order_candidate"] = load_order_candidate
 
         existing_edges = self.G.get_edge_data(source, target) or {}
         if any(
@@ -154,11 +159,11 @@ class GraphGenerator:
                     )
 
         if if_group:
-            for parent_rule, selector in self.group_parent_snapshots.get(
-                rule_id, ()
-            ):
+            candidates = set(self.group_parent_snapshots.get(rule_id, ()))
+            for parent_rule, selector in self._declared_group_rules(if_group):
                 self.add_edge_with_type(
-                    parent_rule, rule_id, "if_group", selector=selector
+                    parent_rule, rule_id, "if_group", selector=selector,
+                    load_order_candidate=(parent_rule, selector) in candidates,
                 )
 
         if if_matched_group:
@@ -172,6 +177,14 @@ class GraphGenerator:
                         'if_matched_group',
                         selector=group,
                     )
+
+    def _declared_group_rules(self, selector: str):
+        """Return references from source declarations, independent of order."""
+        for group in re.split(r"[,\s]+", selector.strip()):
+            if not group:
+                continue
+            for parent in self.declared_group_membership.get(group, ()):
+                yield parent, group
 
     def _snapshot_group_parents(
         self, rule_id: str, selector: str
@@ -416,6 +429,11 @@ class GraphGenerator:
                     self._replace_visual_groups(
                         overwrite_id, overwrite_groups
                     )
+                    for group in overwrite_groups:
+                        if overwrite_id not in self.declared_group_membership[group]:
+                            self.declared_group_membership[group].append(
+                                overwrite_id
+                            )
                 self.overwrite_rules.append(
                     (
                         element,
@@ -464,6 +482,7 @@ class GraphGenerator:
                 )
                 for group in all_groups:
                     self.group_membership[group].append(rule_id)
+                    self.declared_group_membership[group].append(rule_id)
 
                 # Resolve non-group relationships after parsing; group parent
                 # candidates were captured before this rule was inserted.
