@@ -120,7 +120,7 @@ def test_build_graph_collects_atomic_conditions_and_metadata(tmp_path):
     ]
 
 
-def test_if_group_resolution_is_independent_of_file_order(tmp_path, monkeypatch):
+def test_if_group_future_declaration_is_visible_but_unavailable(tmp_path, monkeypatch):
     child = tmp_path / "00-child.xml"
     parent = tmp_path / "99-parent.xml"
 
@@ -155,11 +155,14 @@ def test_if_group_resolution_is_independent_of_file_order(tmp_path, monkeypatch)
     )
     generator.build_graph_from_xml()
 
-    edge_data = generator.G.get_edge_data("100019", "100020")
-    assert edge_data is not None
-    assert {edge["relation_type"] for edge in edge_data.values()} == {
-        "if_group"
-    }
+    # Keep the declared relation, but do not claim a runtime attachment.
+    edges = generator.G.get_edge_data("100019", "100020")
+    assert edges is not None
+    assert any(
+        edge["relation_type"] == "if_group"
+        and edge["load_order_candidate"] is False
+        for edge in edges.values()
+    )
 
 
 def test_overwrite_replaces_local_conditions_but_keeps_parent(tmp_path, monkeypatch):
@@ -272,6 +275,7 @@ def test_if_group_edge_keeps_selector(tmp_path):
         {
             "relation_type": "if_group",
             "selector": "parent_group",
+            "load_order_candidate": True,
         }
     ]
 
@@ -422,7 +426,13 @@ def test_overwrite_updates_group_membership_before_relationship_resolution(
     generator.build_graph_from_xml()
 
     assert generator.G.nodes["100500"]["groups"] == ["new_group"]
-    assert generator.G.get_edge_data("100500", "100501") is None
+    old_edge = generator.G.get_edge_data("100500", "100501")
+    assert old_edge is not None
+    assert any(
+        edge["relation_type"] == "if_group"
+        and edge["load_order_candidate"] is False
+        for edge in old_edge.values()
+    )
 
     edge_data = generator.G.get_edge_data("100500", "100502")
     assert edge_data is not None
@@ -430,6 +440,7 @@ def test_overwrite_updates_group_membership_before_relationship_resolution(
         {
             "relation_type": "if_group",
             "selector": "new_group",
+            "load_order_candidate": True,
         }
     ]
 
