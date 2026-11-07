@@ -82,8 +82,15 @@ class DetailsPanel {
                     onclick="window.visualizer.handleSearchById('${item.id}')">
                     <strong>${escapeHTML(item.relation_type)}:</strong>
                     ${escapeHTML(item.id)}
+                    ${item.load_order_candidate === false ? '<span title="Based on RuleVis file scanning, not a confirmed Wazuh load">(not a candidate in scanned load order)</span>' : ''}
                 </li>
             `).join('')}</ul>`;
+
+        const hasGroupOrderNotes = [...(details.parents || []), ...(details.children || [])]
+            .some(item => item.load_order_candidate !== undefined);
+        const groupOrderNote = hasGroupOrderNotes
+            ? '<p>Group load-order eligibility is estimated from scanned XML order; the configured Wazuh load order may differ.</p>'
+            : '';
 
         const ruleLevel = parseInt(details.level, 10);
         const generatesAlert = ruleLevel >= 3;
@@ -132,6 +139,7 @@ class DetailsPanel {
             <h4>Groups</h4>
             ${(details.groups && details.groups.length > 0) ? `<ul>${details.groups.map(g => `<li>${escapeHTML(g)}</li>`).join('')}</ul>` : '<p>No groups assigned.</p>'}
 
+            ${groupOrderNote}
             <div class="details-header"><h4>Parent Rules</h4>${parentExpandBtn}</div>
             ${renderList(details.parents)}
 
