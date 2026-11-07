@@ -469,20 +469,22 @@ def test_if_group_ignores_outer_selector_whitespace(
     )
     generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pickle"))
     generator.build_graph_from_xml()
-    actual = {
-        parent: next(
-            edge
-            for edge in generator.G.get_edge_data(parent, "100102").values()
-            if edge["relation_type"] == "if_group"
-        )
-        for parent in expected_parents
-    }
+    group_edges = [
+        (parent, edge)
+        for parent, _, edge in generator.G.in_edges("100102", data=True)
+        if edge["relation_type"] == "if_group"
+    ]
+    actual_parents = {parent for parent, _ in group_edges}
 
-    assert set(actual) == set(expected_parents)
-    assert all(edge["load_order_candidate"] is True for edge in actual.values())
+    assert actual_parents == set(expected_parents)
+    assert len(group_edges) == len(expected_parents)
+    assert all(
+        edge["load_order_candidate"] is True
+        for _, edge in group_edges
+    )
     assert all(
         edge["selector"] == selector.strip()
-        for edge in actual.values()
+        for _, edge in group_edges
     )
 
 
