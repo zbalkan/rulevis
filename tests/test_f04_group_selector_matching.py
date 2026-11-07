@@ -1,4 +1,6 @@
 """Visualization group edges follow Wazuh OS_WordMatch selector semantics."""
+import pytest
+
 from internal.generator import GraphGenerator
 
 
@@ -174,4 +176,266 @@ def test_early_overwrite_runtime_group_is_a_declared_reference(tmp_path):
         edge["relation_type"] == "if_group"
         and edge["load_order_candidate"] is True
         for edge in beta_edges.values()
+    )
+
+
+@pytest.mark.parametrize(
+    "selector,expected",
+    [
+        ("authentication", True),
+        ("AUTHENTICATION", True),
+        ("^authentication", True),
+        ("^AUTHENTICATION", True),
+        ("^missing|AUTHENTICATION", True),
+        ("missing|authentication", True),
+        ("auth|authentication", True),
+        ("^syslog", False),
+        ("^failed", False),
+        ("missing|audit", False),
+        ("auth,beta", False),
+        ("authenticated", False),
+        ("", False),
+        ("   ", False),
+        ("|", False),
+        ("||", False),
+    ],
+)
+def test_if_group_selector_positive_negative_and_empty_cases(
+    tmp_path, selector, expected
+):
+    source = tmp_path / "selectors.xml"
+    source.write_text(
+        '<group name="authentication_failed,">'
+        '<rule id="100610" level="3"><description>Parent</description>'
+        '</rule></group>'
+        '<group name="children,"><rule id="100611" level="4">'
+        f'<if_group>{selector}</if_group>'
+        '<description>Child</description></rule></group>',
+        encoding="utf-8",
+    )
+
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pickle"))
+    generator.build_graph_from_xml()
+    edges = [
+        edge
+        for edge in (
+            generator.G.get_edge_data("100610", "100611") or {}
+        ).values()
+        if edge["relation_type"] == "if_group"
+    ]
+
+    assert bool(edges) is expected
+    if expected:
+        assert len(edges) == 1
+        assert edges[0]["selector"] == selector
+        assert edges[0]["load_order_candidate"] is True
+
+
+def test_if_group_unicode_case_folding_only_folds_ascii(tmp_path):
+    (tmp_path / "unicode.xml").write_text(
+        '<group name="Äuth,">'
+        '<rule id="100612" level="3"><description>Parent</description>'
+        '</rule></group><group name="children,">'
+        '<rule id="100613" level="4"><if_group>ÄUTH</if_group>'
+        '<description>Matching child</description></rule>'
+        '<rule id="100614" level="4"><if_group>äuth</if_group>'
+        '<description>Nonmatching child</description></rule></group>',
+        encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pickle"))
+    generator.build_graph_from_xml()
+
+    assert generator.G.has_edge("100612", "100613")
+    assert not generator.G.has_edge("100612", "100614")
+
+
+def test_if_group_repeated_tags_form_one_selector(tmp_path):
+    (tmp_path / "repeated.xml").write_text(
+        '<group name="audit,"><rule id="100615" level="3">'
+        '<description>Parent</description></rule></group>'
+        '<group name="child,"><rule id="100616" level="4">'
+        '<if_group>missing</if_group><if_group>|audit</if_group>'
+        '<description>Child</description></rule></group>',
+        encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pickle"))
+    generator.build_graph_from_xml()
+    edges = generator.G.get_edge_data("100615", "100616")
+
+    assert edges is not None
+    assert len(edges) == 1
+    edge = next(iter(edges.values()))
+    assert edge["relation_type"] == "if_group"
+    assert edge["selector"] == "missing|audit"
+    assert edge["load_order_candidate"] is True
+
+
+def test_if_group_nested_and_local_runtime_groups(tmp_path):
+    (tmp_path / "nested.xml").write_text(
+        '<group name="outer,"><group name="inner,">'
+        '<rule id="100617" level="3"><group>local,</group>'
+        '<description>Parent</description></rule></group></group>'
+        '<group name="children,">'
+        '<rule id="100618" level="4"><if_group>outer|local</if_group>'
+        '<description>Child 1</description></rule>'
+        '<rule id="100619" level="4"><if_group>inner</if_group>'
+        '<description>Child 2</description></rule></group>',
+        encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pickle"))
+    generator.build_graph_from_xml()
+
+    for child in ("100618", "100619"):
+        edges = generator.G.get_edge_data("100617", child)
+        assert edges is not None
+        assert len(edges) == 1
+        edge = next(iter(edges.values()))
+        assert edge["relation_type"] == "if_group"
+        assert edge["load_order_candidate"] is True
+
+
+def test_multiple_overwrites_preserve_declared_history_and_load_snapshots(tmp_path):
+    (tmp_path / "history.xml").write_text(
+        '<group name="first,"><rule id="100620" level="3">'
+        '<description>Base</description></rule></group>'
+        '<group name="children,"><rule id="100621" level="4">'
+        '<if_group>first</if_group></rule></group>'
+        '<group name="second,"><rule id="100620" level="4" overwrite="yes">'
+        '<description>Overwrite 1</description></rule></group>'
+        '<group name="children,"><rule id="100622" level="4">'
+        '<if_group>first</if_group></rule>'
+        '<rule id="100623" level="4"><if_group>second</if_group>'
+        '</rule></group>'
+        '<group name="third,"><rule id="100620" level="5" overwrite="yes">'
+        '<description>Overwrite 2</description></rule></group>'
+        '<group name="children,"><rule id="100624" level="4">'
+        '<if_group>second</if_group></rule>'
+        '<rule id="100625" level="4"><if_group>third</if_group>'
+        '</rule></group>',
+        encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pickle"))
+    generator.build_graph_from_xml()
+
+    assert generator.G.nodes["100620"]["groups"] == ["third"]
+    expected = {
+        "100621": True,
+        "100622": False,
+        "100623": True,
+        "100624": False,
+        "100625": True,
+    }
+    for child, available in expected.items():
+        edges = generator.G.get_edge_data("100620", child)
+        assert edges is not None
+        group_edges = [
+            edge for edge in edges.values()
+            if edge["relation_type"] == "if_group"
+        ]
+        assert len(group_edges) == 1
+        assert group_edges[0]["load_order_candidate"] is available
+
+
+def test_orphan_overwrite_cannot_create_a_phantom_group_parent(tmp_path):
+    (tmp_path / "orphan.xml").write_text(
+        '<group name="phantom,"><rule id="100626" level="4" overwrite="yes">'
+        '<description>No base</description></rule></group>'
+        '<group name="children,"><rule id="100627" level="4">'
+        '<if_group>phantom</if_group></rule></group>',
+        encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pickle"))
+    generator.build_graph_from_xml()
+
+    assert "100626" not in generator.G
+    assert not generator.G.has_edge("100626", "100627")
+    assert "100626" not in generator.runtime_group_by_rule
+    assert "100626" not in generator.runtime_group_history
+
+
+def test_duplicate_rule_cannot_contribute_a_different_group(tmp_path):
+    (tmp_path / "duplicate.xml").write_text(
+        '<group name="original,"><rule id="100628" level="3">'
+        '<description>Accepted parent</description></rule></group>'
+        '<group name="duplicate,"><rule id="100628" level="3">'
+        '<description>Rejected duplicate</description></rule></group>'
+        '<group name="children,">'
+        '<rule id="100629" level="4"><if_group>duplicate</if_group>'
+        '<description>Not attached</description></rule>'
+        '<rule id="100630" level="4"><if_group>original</if_group>'
+        '<description>Attached</description></rule></group>',
+        encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pickle"))
+    generator.build_graph_from_xml()
+
+    assert not generator.G.has_edge("100628", "100629")
+    assert generator.G.has_edge("100628", "100630")
+    assert generator.runtime_group_history["100628"] == ["original,"]
+
+
+@pytest.mark.parametrize(
+    "attributes",
+    [
+        'level="3"',                      # missing ID
+        'id="not-numeric" level="3"',     # invalid ID
+        'id="1000000" level="3"',        # out-of-range ID
+        'id="-1" level="3"',             # negative ID
+        'id="100631"',                    # missing level
+        'id="100631" level="invalid"',  # invalid level
+        'id="100631" level="3" accuracy="invalid"',
+    ],
+)
+def test_invalid_parent_declarations_do_not_create_visual_group_edges(
+    tmp_path, attributes
+):
+    (tmp_path / "invalid.xml").write_text(
+        '<group name="invalid_group,">'
+        f'<rule {attributes}><description>Invalid parent</description>'
+        '</rule></group>'
+        '<group name="valid_group,"><rule id="100632" level="3">'
+        '<description>Valid parent</description></rule></group>'
+        '<group name="children,">'
+        '<rule id="100633" level="4"><if_group>invalid_group</if_group>'
+        '<description>Unattached child</description></rule>'
+        '<rule id="100634" level="4"><if_group>valid_group</if_group>'
+        '<description>Attached child</description></rule></group>',
+        encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pickle"))
+    generator.build_graph_from_xml()
+
+    assert not any(
+        edge["relation_type"] == "if_group"
+        for _, _, edge in generator.G.in_edges(
+            "100633", data=True
+        )
+    )
+    assert generator.G.has_edge("100632", "100634")
+    assert generator.G.nodes["100632"]["description"] == "Valid parent"
+
+
+def test_malformed_xml_file_does_not_prevent_valid_file_parsing(
+    tmp_path, caplog
+):
+    (tmp_path / "00-malformed.xml").write_text(
+        '<group name="bad,"><rule id="100635" level="3">',
+        encoding="utf-8",
+    )
+    (tmp_path / "10-valid.xml").write_text(
+        '<group name="good,"><rule id="100636" level="3">'
+        '<description>Good parent</description></rule></group>'
+        '<group name="children,"><rule id="100637" level="4">'
+        '<if_group>good</if_group></rule></group>',
+        encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pickle"))
+    generator.build_graph_from_xml()
+
+    assert "100635" not in generator.G
+    assert generator.G.has_edge("100636", "100637")
+    assert any(
+        "Error parsing" in record.getMessage()
+        and "00-malformed.xml" in record.getMessage()
+        for record in caplog.records
     )
