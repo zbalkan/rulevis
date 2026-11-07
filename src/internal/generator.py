@@ -82,7 +82,7 @@ class GraphGenerator:
         self.graph_file: str = graph_file
         self.catalog: RuleCatalog = RuleCatalog()
         self.overwrite_rules: list[
-            tuple[ET.Element, str, dict[str, str], list[str]]
+            tuple[ET.Element, str, dict[str, str], list[str], Optional[str]]
         ] = []
         self.rule_relationships: dict[
             str,
@@ -452,6 +452,7 @@ class GraphGenerator:
                         xml_file,
                         regex_values,
                         list(inherited_groups),
+                        declared_runtime_group,
                     )
                 )
                 return
@@ -610,6 +611,7 @@ class GraphGenerator:
             ow_file,
             regex_values,
             inherited_groups,
+            declared_runtime_group,
         ) in self.overwrite_rules:
             rule_id = element.get("id")
             if rule_id in self.G.nodes:
@@ -625,6 +627,16 @@ class GraphGenerator:
                     inherited_groups, attrs
                 )
                 self._replace_visual_groups(rule_id, effective_groups)
+                # Deferred overwrites may precede their base in scanned XML.
+                # Only accepted bases contribute declaration history.
+                if (
+                    declared_runtime_group is not None
+                    and declared_runtime_group
+                    not in self.runtime_group_history[rule_id]
+                ):
+                    self.runtime_group_history[rule_id].append(
+                        declared_runtime_group
+                    )
                 existing["mitre"] = self.extract_mitre_ids(element)
 
                 for attr in ("level", "maxsize"):
