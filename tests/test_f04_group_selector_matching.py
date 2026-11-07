@@ -405,6 +405,9 @@ def test_invalid_parent_declarations_do_not_create_visual_group_edges(
     generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pickle"))
     generator.build_graph_from_xml()
 
+    assert set(generator.G.nodes) == {
+        "0", "100632", "100633", "100634"
+    }
     assert not any(
         edge["relation_type"] == "if_group"
         for _, _, edge in generator.G.in_edges(
