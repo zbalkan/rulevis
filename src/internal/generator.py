@@ -610,6 +610,11 @@ class GraphGenerator:
                     inherited_groups, attrs
                 )
                 self._replace_visual_groups(rule_id, effective_groups)
+                # An overwrite may be parsed before its base. Only now can
+                # its declared groups be indexed against an existing node.
+                for group in effective_groups:
+                    if rule_id not in self.declared_group_membership[group]:
+                        self.declared_group_membership[group].append(rule_id)
                 existing["mitre"] = self.extract_mitre_ids(element)
 
                 for attr in ("level", "maxsize"):
