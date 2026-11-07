@@ -8,7 +8,7 @@ from typing import Final, Optional
 
 import networkx as nx
 
-from internal.catalog import RuleCatalog
+from internal.catalog import RuleCatalog, normalize_rule_id, os_word_match
 
 ENCODING: Final[str] = "utf-8"
 
@@ -74,13 +74,13 @@ class GraphGenerator:
     def __init__(self, paths: list[str], graph_file: str) -> None:
         self.paths = paths
         self.group_membership: dict[str, list[str]] = defaultdict(list)
-        # Preserve groups declared anywhere in the accepted source history.
-        self.declared_group_membership: dict[str, list[str]] = defaultdict(list)
+        self.runtime_group_by_rule: dict[str, str] = {}
+        self.runtime_group_history: dict[str, list[str]] = defaultdict(list)
         self.G: nx.MultiDiGraph = nx.MultiDiGraph()
         self.graph_file: str = graph_file
         self.catalog: RuleCatalog = RuleCatalog()
         self.overwrite_rules: list[
-            tuple[ET.Element, str, dict[str, str], list[str]]
+            tuple[ET.Element, str, dict[str, str], list[str], Optional[str]]
         ] = []
         self.rule_relationships: dict[
             str,
@@ -147,26 +147,32 @@ class GraphGenerator:
         if if_sid:
             for sid in re.split(r'[,\s]+', if_sid.strip()):
                 if sid:
+                    parent = normalize_rule_id(sid) or sid
                     self.add_edge_with_type(
-                        sid, rule_id, 'if_sid', selector=sid
+                        parent, rule_id, 'if_sid', selector=sid
                     )
 
         if if_matched_sid:
             for sid in re.split(r'[,\s]+', if_matched_sid.strip()):
                 if sid:
+                    parent = normalize_rule_id(sid) or sid
                     self.add_edge_with_type(
-                        sid, rule_id, 'if_matched_sid', selector=sid
+                        parent, rule_id, 'if_matched_sid', selector=sid
                     )
 
         if if_group:
-            candidates = set(self.group_parent_snapshots.get(rule_id, ()))
-            for parent_rule, selector in self._declared_group_rules(if_group):
-                if parent_rule == rule_id:
-                    continue
-                self.add_edge_with_type(
-                    parent_rule, rule_id, "if_group", selector=selector,
-                    load_order_candidate=(parent_rule, selector) in candidates,
+            selector = if_group.strip()
+            if selector:
+                candidates = set(
+                    self.group_parent_snapshots.get(rule_id, ())
                 )
+                for parent_rule, matched in self._declared_group_rules(selector):
+                    if parent_rule == rule_id:
+                        continue
+                    self.add_edge_with_type(
+                        parent_rule, rule_id, "if_group", selector=matched,
+                        load_order_candidate=(parent_rule, matched) in candidates,
+                    )
 
         if if_matched_group:
             for group in re.split(r'[,\s]+', if_matched_group.strip()):
@@ -181,27 +187,28 @@ class GraphGenerator:
                     )
 
     def _declared_group_rules(self, selector: str):
-        """Return references from source declarations, independent of order."""
-        for group in re.split(r"[,\s]+", selector.strip()):
-            if not group:
-                continue
-            for parent in self.declared_group_membership.get(group, ()):
-                yield parent, group
+        """Find declarations matching any accepted runtime group assignment."""
+        for parent, histories in self.runtime_group_history.items():
+            if any(os_word_match(selector, value) for value in histories):
+                yield parent, selector
 
     def _snapshot_group_parents(
         self, rule_id: str, selector: str
     ) -> None:
         """Record available group parents before inserting this rule."""
-        parents = []
-        for group in re.split(r"[,\s]+", selector.strip()):
-            if not group:
-                continue
-            parents.extend(
-                (parent, group)
-                for parent in self.group_membership.get(group, ())
-                if parent != rule_id and parent in self.rule_load_index
-            )
-        self.group_parent_snapshots[rule_id] = tuple(parents)
+        selector = selector.strip()
+        self.group_parent_snapshots[rule_id] = tuple(
+            (parent, selector)
+            for parent in self._matching_group_rules(selector)
+            if parent != rule_id and parent in self.rule_load_index
+        )
+
+    def _matching_group_rules(self, selector: str):
+        """Evaluate the Wazuh-style selector against active runtime groups."""
+        return (
+            rule_id for rule_id, groups in self.runtime_group_by_rule.items()
+            if os_word_match(selector, groups)
+        )
 
     def _replace_visual_groups(
         self, rule_id: str, groups: list[str]
@@ -345,7 +352,7 @@ class GraphGenerator:
         runtime_group: str,
         xml_file: str,
         regex_values: dict[str, str],
-    ) -> None:
+    ) -> Optional[str]:
         rule_id = element.get("id")
         level = element.get("level")
         if rule_id is None or level is None:
@@ -403,6 +410,7 @@ class GraphGenerator:
                 regex_values,
             ),
         )
+        return runtime_group_value
 
     def parse_groups_and_rules(
         self,
@@ -413,7 +421,7 @@ class GraphGenerator:
         runtime_group: str = "",
     ) -> None:
         if element.tag == 'rule':
-            self._record_catalog_declaration(
+            declared_runtime_group = self._record_catalog_declaration(
                 element,
                 inherited_groups,
                 runtime_group,
@@ -421,9 +429,27 @@ class GraphGenerator:
                 regex_values,
             )
 
+            # Keep invalid declarations in the catalog for assessment, but
+            # do not turn them into visual rule nodes or group parents.
+            raw_rule_id = element.get("id")
+            rule_id = normalize_rule_id(raw_rule_id or "")
+            if declared_runtime_group is None or rule_id is None:
+                logging.warning(
+                    "Skipping invalid visual rule in %s: id=%r, level=%r",
+                    xml_file, raw_rule_id, element.get("level"),
+                )
+                return
+
             if element.get("overwrite", "").lower() == "yes":
-                overwrite_id = element.get("id")
+                overwrite_id = rule_id
                 if overwrite_id in self.G.nodes:
+                    if declared_runtime_group is not None:
+                        self.runtime_group_by_rule[overwrite_id] = (
+                            declared_runtime_group
+                        )
+                        self.runtime_group_history[overwrite_id].append(
+                            declared_runtime_group
+                        )
                     overwrite_groups = self.extract_rule_groups(
                         inherited_groups,
                         [(child.tag, child.text) for child in element],
@@ -431,26 +457,21 @@ class GraphGenerator:
                     self._replace_visual_groups(
                         overwrite_id, overwrite_groups
                     )
-                    for group in overwrite_groups:
-                        if overwrite_id not in self.declared_group_membership[group]:
-                            self.declared_group_membership[group].append(
-                                overwrite_id
-                            )
                 self.overwrite_rules.append(
                     (
                         element,
                         xml_file,
                         regex_values,
                         list(inherited_groups),
+                        declared_runtime_group,
                     )
                 )
                 return
 
-            rule_id = element.get('id', '0')
             rule_level = element.get('level')
             if_sid = element.findtext('if_sid', None)
             if_matched_sid = element.findtext('if_matched_sid', None)
-            if_group = element.findtext('if_group', None)
+            if_group = self._concat_child_text(element, "if_group")
             if_matched_group = element.findtext('if_matched_group', None)
 
             attributes = [(i.tag, i.text) for i in element]
@@ -467,6 +488,11 @@ class GraphGenerator:
             else:
                 if if_group:
                     self._snapshot_group_parents(rule_id, if_group)
+                if declared_runtime_group is not None:
+                    self.runtime_group_by_rule[rule_id] = declared_runtime_group
+                    self.runtime_group_history[rule_id].append(
+                        declared_runtime_group
+                    )
                 self.G.add_node(
                     rule_id,
                     groups=all_groups,
@@ -484,7 +510,6 @@ class GraphGenerator:
                 )
                 for group in all_groups:
                     self.group_membership[group].append(rule_id)
-                    self.declared_group_membership[group].append(rule_id)
 
                 # Resolve non-group relationships after parsing; group parent
                 # candidates were captured before this rule was inserted.
@@ -595,8 +620,9 @@ class GraphGenerator:
             ow_file,
             regex_values,
             inherited_groups,
+            declared_runtime_group,
         ) in self.overwrite_rules:
-            rule_id = element.get("id")
+            rule_id = normalize_rule_id(element.get("id") or "")
             if rule_id in self.G.nodes:
                 existing = self.G.nodes[rule_id]
                 logging.info(f"Applying overwrite for rule {rule_id}")
@@ -610,11 +636,16 @@ class GraphGenerator:
                     inherited_groups, attrs
                 )
                 self._replace_visual_groups(rule_id, effective_groups)
-                # An overwrite may be parsed before its base. Only now can
-                # its declared groups be indexed against an existing node.
-                for group in effective_groups:
-                    if rule_id not in self.declared_group_membership[group]:
-                        self.declared_group_membership[group].append(rule_id)
+                # Deferred overwrites may precede their base in scanned XML.
+                # Only accepted bases contribute declaration history.
+                if (
+                    declared_runtime_group is not None
+                    and declared_runtime_group
+                    not in self.runtime_group_history[rule_id]
+                ):
+                    self.runtime_group_history[rule_id].append(
+                        declared_runtime_group
+                    )
                 existing["mitre"] = self.extract_mitre_ids(element)
 
                 for attr in ("level", "maxsize"):
