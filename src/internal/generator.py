@@ -8,7 +8,7 @@ from typing import Final, Optional
 
 import networkx as nx
 
-from internal.catalog import RuleCatalog, os_word_match
+from internal.catalog import RuleCatalog, normalize_rule_id, os_word_match
 
 ENCODING: Final[str] = "utf-8"
 
@@ -424,6 +424,20 @@ class GraphGenerator:
                 regex_values,
             )
 
+            # Keep invalid declarations in the catalog for assessment, but
+            # do not turn them into visual rule nodes or group parents.
+            rule_id = element.get("id")
+            if (
+                declared_runtime_group is None
+                or rule_id is None
+                or normalize_rule_id(rule_id) is None
+            ):
+                logging.warning(
+                    "Skipping invalid visual rule in %s: id=%r, level=%r",
+                    xml_file, rule_id, element.get("level"),
+                )
+                return
+
             if element.get("overwrite", "").lower() == "yes":
                 overwrite_id = element.get("id")
                 if overwrite_id in self.G.nodes:
@@ -461,7 +475,7 @@ class GraphGenerator:
             rule_level = element.get('level')
             if_sid = element.findtext('if_sid', None)
             if_matched_sid = element.findtext('if_matched_sid', None)
-            if_group = element.findtext('if_group', None)
+            if_group = self._concat_child_text(element, "if_group")
             if_matched_group = element.findtext('if_matched_group', None)
 
             attributes = [(i.tag, i.text) for i in element]
