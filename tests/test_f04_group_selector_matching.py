@@ -136,3 +136,42 @@ def test_overwrite_history_preserves_source_selector_links(tmp_path):
         and data["load_order_candidate"] is False
         for data in edges.values()
     )
+
+
+def test_early_overwrite_runtime_group_is_a_declared_reference(tmp_path):
+    (tmp_path / "00-overwrite.xml").write_text(
+        '<group name="authentication_failed,">'
+        '<rule id="100300" level="5" overwrite="yes">'
+        '<description>Updated parent</description></rule></group>',
+        encoding="utf-8",
+    )
+    (tmp_path / "10-base.xml").write_text(
+        '<group name="beta,"><rule id="100300" level="3">'
+        '<description>Original parent</description></rule></group>',
+        encoding="utf-8",
+    )
+    (tmp_path / "20-child.xml").write_text(
+        '<group name="child,"><rule id="100301" level="4">'
+        '<if_group>authentication</if_group>'
+        '<description>Historical selector</description></rule>'
+        '<rule id="100302" level="4"><if_group>beta</if_group>'
+        '<description>Current scanned selector</description></rule></group>',
+        encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pickle"))
+    generator.build_graph_from_xml()
+
+    auth_edges = generator.G.get_edge_data("100300", "100301")
+    assert auth_edges is not None
+    assert any(
+        edge["relation_type"] == "if_group"
+        and edge["load_order_candidate"] is False
+        for edge in auth_edges.values()
+    )
+    beta_edges = generator.G.get_edge_data("100300", "100302")
+    assert beta_edges is not None
+    assert any(
+        edge["relation_type"] == "if_group"
+        and edge["load_order_candidate"] is True
+        for edge in beta_edges.values()
+    )
