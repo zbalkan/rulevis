@@ -72,3 +72,35 @@ def test_existing_group_edges_survive_later_overwrite(tmp_path, monkeypatch):
     assert generator.G.has_edge("100100", "100102")
     assert _group_candidate(generator.G, "100100", "100101") is True
     assert _group_candidate(generator.G, "100100", "100102") is False
+
+
+def test_overwrite_scanned_before_base_preserves_declared_group(tmp_path):
+    (tmp_path / "00-overwrite.xml").write_text(
+        '<group name="new_group,"><rule id="100200" level="5" '
+        'overwrite="yes"><description>Updated parent</description>'
+        '</rule></group>',
+        encoding="utf-8",
+    )
+    (tmp_path / "10-base.xml").write_text(
+        '<group name="old_group,"><rule id="100200" level="3">'
+        '<description>Original parent</description></rule></group>',
+        encoding="utf-8",
+    )
+    (tmp_path / "20-children.xml").write_text(
+        '<group name="child,">'
+        '<rule id="100201" level="4"><if_group>new_group</if_group>'
+        '<description>Declared new-group child</description></rule>'
+        '<rule id="100202" level="4"><if_group>old_group</if_group>'
+        '<description>Scanned base-group child</description></rule>'
+        '</group>',
+        encoding="utf-8",
+    )
+
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pickle"))
+    generator.build_graph_from_xml()
+
+    assert generator.G.nodes["100200"]["groups"] == ["new_group"]
+    assert generator.G.has_edge("100200", "100201")
+    assert _group_candidate(generator.G, "100200", "100201") is False
+    assert generator.G.has_edge("100200", "100202")
+    assert _group_candidate(generator.G, "100200", "100202") is True

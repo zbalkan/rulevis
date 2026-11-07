@@ -627,6 +627,9 @@ class GraphGenerator:
                     inherited_groups, attrs
                 )
                 self._replace_visual_groups(rule_id, effective_groups)
+                for group in effective_groups:
+                    if rule_id not in self.declared_group_membership[group]:
+                        self.declared_group_membership[group].append(rule_id)
                 # Deferred overwrites may precede their base in scanned XML.
                 # Only accepted bases contribute declaration history.
                 if (
