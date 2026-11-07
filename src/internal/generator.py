@@ -76,8 +76,6 @@ class GraphGenerator:
         self.group_membership: dict[str, list[str]] = defaultdict(list)
         self.runtime_group_by_rule: dict[str, str] = {}
         self.runtime_group_history: dict[str, list[str]] = defaultdict(list)
-        # Preserve groups declared anywhere in the accepted source history.
-        self.declared_group_membership: dict[str, list[str]] = defaultdict(list)
         self.G: nx.MultiDiGraph = nx.MultiDiGraph()
         self.graph_file: str = graph_file
         self.catalog: RuleCatalog = RuleCatalog()
@@ -149,26 +147,32 @@ class GraphGenerator:
         if if_sid:
             for sid in re.split(r'[,\s]+', if_sid.strip()):
                 if sid:
+                    parent = normalize_rule_id(sid) or sid
                     self.add_edge_with_type(
-                        sid, rule_id, 'if_sid', selector=sid
+                        parent, rule_id, 'if_sid', selector=sid
                     )
 
         if if_matched_sid:
             for sid in re.split(r'[,\s]+', if_matched_sid.strip()):
                 if sid:
+                    parent = normalize_rule_id(sid) or sid
                     self.add_edge_with_type(
-                        sid, rule_id, 'if_matched_sid', selector=sid
+                        parent, rule_id, 'if_matched_sid', selector=sid
                     )
 
         if if_group:
-            candidates = set(self.group_parent_snapshots.get(rule_id, ()))
-            for parent_rule, selector in self._declared_group_rules(if_group):
-                if parent_rule == rule_id:
-                    continue
-                self.add_edge_with_type(
-                    parent_rule, rule_id, "if_group", selector=selector,
-                    load_order_candidate=(parent_rule, selector) in candidates,
+            selector = if_group.strip()
+            if selector:
+                candidates = set(
+                    self.group_parent_snapshots.get(rule_id, ())
                 )
+                for parent_rule, matched in self._declared_group_rules(selector):
+                    if parent_rule == rule_id:
+                        continue
+                    self.add_edge_with_type(
+                        parent_rule, rule_id, "if_group", selector=matched,
+                        load_order_candidate=(parent_rule, matched) in candidates,
+                    )
 
         if if_matched_group:
             for group in re.split(r'[,\s]+', if_matched_group.strip()):
@@ -192,6 +196,7 @@ class GraphGenerator:
         self, rule_id: str, selector: str
     ) -> None:
         """Record available group parents before inserting this rule."""
+        selector = selector.strip()
         self.group_parent_snapshots[rule_id] = tuple(
             (parent, selector)
             for parent in self._matching_group_rules(selector)
@@ -426,20 +431,17 @@ class GraphGenerator:
 
             # Keep invalid declarations in the catalog for assessment, but
             # do not turn them into visual rule nodes or group parents.
-            rule_id = element.get("id")
-            if (
-                declared_runtime_group is None
-                or rule_id is None
-                or normalize_rule_id(rule_id) is None
-            ):
+            raw_rule_id = element.get("id")
+            rule_id = normalize_rule_id(raw_rule_id or "")
+            if declared_runtime_group is None or rule_id is None:
                 logging.warning(
                     "Skipping invalid visual rule in %s: id=%r, level=%r",
-                    xml_file, rule_id, element.get("level"),
+                    xml_file, raw_rule_id, element.get("level"),
                 )
                 return
 
             if element.get("overwrite", "").lower() == "yes":
-                overwrite_id = element.get("id")
+                overwrite_id = rule_id
                 if overwrite_id in self.G.nodes:
                     if declared_runtime_group is not None:
                         self.runtime_group_by_rule[overwrite_id] = (
@@ -455,11 +457,6 @@ class GraphGenerator:
                     self._replace_visual_groups(
                         overwrite_id, overwrite_groups
                     )
-                    for group in overwrite_groups:
-                        if overwrite_id not in self.declared_group_membership[group]:
-                            self.declared_group_membership[group].append(
-                                overwrite_id
-                            )
                 self.overwrite_rules.append(
                     (
                         element,
@@ -471,7 +468,6 @@ class GraphGenerator:
                 )
                 return
 
-            rule_id = element.get('id', '0')
             rule_level = element.get('level')
             if_sid = element.findtext('if_sid', None)
             if_matched_sid = element.findtext('if_matched_sid', None)
@@ -514,7 +510,6 @@ class GraphGenerator:
                 )
                 for group in all_groups:
                     self.group_membership[group].append(rule_id)
-                    self.declared_group_membership[group].append(rule_id)
 
                 # Resolve non-group relationships after parsing; group parent
                 # candidates were captured before this rule was inserted.
@@ -627,7 +622,7 @@ class GraphGenerator:
             inherited_groups,
             declared_runtime_group,
         ) in self.overwrite_rules:
-            rule_id = element.get("id")
+            rule_id = normalize_rule_id(element.get("id") or "")
             if rule_id in self.G.nodes:
                 existing = self.G.nodes[rule_id]
                 logging.info(f"Applying overwrite for rule {rule_id}")
@@ -641,9 +636,6 @@ class GraphGenerator:
                     inherited_groups, attrs
                 )
                 self._replace_visual_groups(rule_id, effective_groups)
-                for group in effective_groups:
-                    if rule_id not in self.declared_group_membership[group]:
-                        self.declared_group_membership[group].append(rule_id)
                 # Deferred overwrites may precede their base in scanned XML.
                 # Only accepted bases contribute declaration history.
                 if (
