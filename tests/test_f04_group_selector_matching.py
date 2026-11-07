@@ -442,3 +442,123 @@ def test_malformed_xml_file_does_not_prevent_valid_file_parsing(
         and "00-malformed.xml" in record.getMessage()
         for record in caplog.records
     )
+
+
+@pytest.mark.parametrize(
+    "selector,expected_parents",
+    [
+        (" authentication ", ("100100",)),
+        ("\n\tAUTHENTICATION\t ", ("100100",)),
+        ("\t missing|authentication \n", ("100100",)),
+        ("  authentication|beta  ", ("100100", "100101")),
+    ],
+)
+def test_if_group_ignores_outer_selector_whitespace(
+    tmp_path, selector, expected_parents
+):
+    (tmp_path / "whitespace.xml").write_text(
+        '<group name="authentication_failed,">'
+        '<rule id="100100" level="3"><description>Auth</description>'
+        '</rule></group>'
+        '<group name="beta,"><rule id="100101" level="3">'
+        '<description>Beta</description></rule></group>'
+        '<group name="children,">'
+        '<rule id="100102" level="4">'
+        f'<if_group>{selector}</if_group></rule></group>',
+        encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pickle"))
+    generator.build_graph_from_xml()
+    actual = {
+        parent: next(
+            edge
+            for edge in generator.G.get_edge_data(parent, "100102").values()
+            if edge["relation_type"] == "if_group"
+        )
+        for parent in expected_parents
+    }
+
+    assert set(actual) == set(expected_parents)
+    assert all(edge["load_order_candidate"] is True for edge in actual.values())
+    assert all(
+        edge["selector"] == selector.strip()
+        for edge in actual.values()
+    )
+
+
+def test_canonical_rule_ids_link_sid_temporal_group_and_overwrites(tmp_path):
+    (tmp_path / "canonical.xml").write_text(
+        '<group name="original,"><rule id="000001" level="3">'
+        '<description>Base</description></rule></group>'
+        '<group name="children,"><rule id="000002" level="4">'
+        '<if_sid>1</if_sid></rule>'
+        '<rule id="3" level="4"><if_sid>000001</if_sid></rule>'
+        '<rule id="000004" level="5">'
+        '<if_matched_sid>000001</if_matched_sid></rule>'
+        '</group>'
+        '<group name="updated,"><rule id="1" level="6" overwrite="yes">'
+        '<description>Canonical overwrite</description></rule></group>'
+        '<group name="children,"><rule id="000005" level="4">'
+        '<if_group>updated</if_group></rule></group>',
+        encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pickle"))
+    generator.build_graph_from_xml()
+    graph = generator.G
+
+    assert set(graph.nodes) == {"0", "1", "2", "3", "4", "5"}
+    assert graph.nodes["1"]["description"] == "Canonical overwrite"
+    assert graph.nodes["1"]["groups"] == ["updated"]
+    for child in ("2", "3", "4"):
+        edges = graph.get_edge_data("1", child)
+        assert edges is not None
+        assert any(
+            edge["relation_type"] == (
+                "if_matched_sid" if child == "4" else "if_sid"
+            )
+            for edge in edges.values()
+        )
+    group_edges = graph.get_edge_data("1", "5")
+    assert group_edges is not None
+    assert any(
+        edge["relation_type"] == "if_group"
+        and edge["load_order_candidate"] is True
+        for edge in group_edges.values()
+    )
+
+
+def test_canonical_rule_ids_collapse_duplicate_spellings_and_early_overwrite(
+    tmp_path
+):
+    (tmp_path / "00-overwrite.xml").write_text(
+        '<group name="updated,"><rule id="000011" level="6" '
+        'overwrite="yes"><description>Early overwrite</description>'
+        '</rule></group>',
+        encoding="utf-8",
+    )
+    (tmp_path / "10-base.xml").write_text(
+        '<group name="base,"><rule id="11" level="3">'
+        '<description>Base</description></rule></group>'
+        '<group name="duplicate,"><rule id="000011" level="3">'
+        '<description>Duplicate</description></rule></group>'
+        '<group name="children,"><rule id="000012" level="4">'
+        '<if_sid>000011</if_sid></rule>'
+        '<rule id="000013" level="4">'
+        '<if_group>updated</if_group></rule></group>',
+        encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pickle"))
+    generator.build_graph_from_xml()
+
+    assert set(generator.G.nodes) == {"0", "11", "12", "13"}
+    assert generator.G.nodes["11"]["description"] == "Early overwrite"
+    assert generator.G.nodes["11"]["groups"] == ["updated"]
+    assert generator.G.has_edge("11", "12")
+    group_edges = generator.G.get_edge_data("11", "13")
+    assert group_edges is not None
+    assert any(
+        edge["relation_type"] == "if_group"
+        and edge["load_order_candidate"] is False
+        for edge in group_edges.values()
+    )
+    assert "duplicate," not in generator.runtime_group_history["11"]
