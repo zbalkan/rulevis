@@ -65,7 +65,7 @@ jobs:
             esac
 
             case "$path" in
-              src/internal/static/*.js)
+              src/internal/static/*.js|tests/js/*.cjs|.github/workflows/unit-tests.yml)
                 javascript=true
                 ;;
             esac
@@ -108,3 +108,5 @@ jobs:
         run: |
           find src/internal/static -type f -name '*.js' -print0 \
             | xargs -0 -n1 node --check
+      - name: Run JavaScript interaction tests
+        run: node --test tests/js/*.test.cjs

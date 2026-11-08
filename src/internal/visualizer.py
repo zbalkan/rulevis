@@ -101,26 +101,64 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
     app = Flask(__name__)
 
     # ---------- shared helpers ----------
+    def structural_children(nid: str) -> list[str]:
+        """Expand only visible structural dependencies, not level candidates."""
+        return [
+            child for child in G.successors(nid)
+            if any(
+                data.get("relation_type") != "if_level"
+                for data in G.get_edge_data(nid, child, default={}).values()
+            )
+        ]
+
     def serialize_node(nid: str, displayed: set[str] | None = None) -> dict[str, Any]:
         attrs = G.nodes[nid]
-        if displayed is None:
-            # caller doesn't care about expandable computation
-            return {"id": nid, **{k: v for k, v in attrs.items() if k != "expandable" and not k.startswith("_")}}
-        expandable = any(child not in displayed for child in G.successors(nid))
-        return {
+        children = structural_children(nid)
+        payload = {
             "id": nid,
-            **{k: v for k, v in attrs.items() if k != "expandable" and not k.startswith("_")},
-            "expandable": expandable,
+            **{
+                key: value for key, value in attrs.items()
+                if key not in {"expandable", "children_ids"}
+                and not key.startswith("_")
+            },
+            "children_ids": children,
         }
+        if displayed is not None:
+            payload["expandable"] = any(child not in displayed for child in children)
+        return payload
 
-    def relation_type(u: str, v: str) -> str:
-        data = G.get_edge_data(u, v)
-        if not data:
-            return "unknown"
-        return next(iter(data.values()), {}).get("relation_type", "unknown")  # type: ignore
+    def shadowed_by(rule_id: str, relation: str) -> str | None:
+        precedence = G.nodes[rule_id].get("selector_precedence") or {}
+        if relation in precedence.get("shadowed", ()):
+            return precedence.get("effective")
+        return None
 
-    def make_edge(u: str, v: str) -> dict[str, Any]:
-        return {"source": u, "target": v, "relation_type": relation_type(u, v)}
+    def level_parent_summary(rule_id: str) -> dict[str, int]:
+        declared = 0
+        candidates = 0
+        for _, _, _, data in G.in_edges(rule_id, keys=True, data=True):
+            if data.get("relation_type") != "if_level":
+                continue
+            declared += 1
+            if data.get("load_order_candidate") is True:
+                candidates += 1
+        return {"declared": declared, "load_order_candidates": candidates}
+
+    def structural_edges(u: str, v: str) -> list[dict[str, Any]]:
+        """Keep parallel non-threshold edges in the force-directed graph."""
+        return [
+            {
+                "source": u,
+                "target": v,
+                "relation_type": data.get("relation_type", "unknown"),
+                **(
+                    {"shadowed_by": shadowed_by(v, data.get("relation_type"))}
+                    if shadowed_by(v, data.get("relation_type")) else {}
+                ),
+            }
+            for data in G.get_edge_data(u, v, default={}).values()
+            if data.get("relation_type") != "if_level"
+        ]
 
     def error(message: str, code: int = 400) -> tuple[Response, int]:
         return jsonify({"error": message}), code
@@ -141,9 +179,10 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         nodes = [serialize_node(nid, displayed) for nid in node_ids if nid in G]
         all_relevant = set(node_ids) | displayed
         sub_edges = [
-            make_edge(u, v)
-            for u, v in G.subgraph(all_relevant).edges()
+            edge
+            for u, v in dict.fromkeys(G.subgraph(all_relevant).edges())
             if u in node_ids or v in node_ids
+            for edge in structural_edges(u, v)
         ]
         return jsonify({"nodes": nodes, "edges": sub_edges})
 
@@ -155,10 +194,10 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         edges = []
         for p in G.predecessors(node_id):
             if p in displayed:
-                edges.append(make_edge(p, node_id))
+                edges.extend(structural_edges(p, node_id))
         for c in G.successors(node_id):
             if c in displayed:
-                edges.append(make_edge(node_id, c))
+                edges.extend(structural_edges(node_id, c))
         return jsonify({"nodes": [node_obj], "edges": edges})
 
     def _handle_single_node(node_id: str, neighbor_mode: str,
@@ -177,6 +216,13 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                     ),
                     "selector": edge_data.get("selector"),
                     **(
+                        {"shadowed_by": shadowed_by(
+                            node_id, edge_data.get("relation_type")
+                        )}
+                        if shadowed_by(node_id, edge_data.get("relation_type"))
+                        else {}
+                    ),
+                    **(
                         {"load_order_candidate": edge_data["load_order_candidate"]}
                         if "load_order_candidate" in edge_data else {}
                     ),
@@ -188,6 +234,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                 for parent_id, _, _, edge_data in G.in_edges(
                     node_id, keys=True, data=True
                 )
+                if edge_data.get("relation_type") != "if_level"
             ]
             children = [
                 {
@@ -196,6 +243,13 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                         "relation_type", "unknown"
                     ),
                     "selector": edge_data.get("selector"),
+                    **(
+                        {"shadowed_by": shadowed_by(
+                            child_id, edge_data.get("relation_type")
+                        )}
+                        if shadowed_by(child_id, edge_data.get("relation_type"))
+                        else {}
+                    ),
                     **(
                         {"load_order_candidate": edge_data["load_order_candidate"]}
                         if "load_order_candidate" in edge_data else {}
@@ -208,6 +262,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                 for _, child_id, _, edge_data in G.out_edges(
                     node_id, keys=True, data=True
                 )
+                if edge_data.get("relation_type") != "if_level"
             ]
             return jsonify({
                 "id": node_id,
@@ -215,6 +270,9 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                 "groups": node_data.get("groups", []),
                 "mitre": node_data.get("mitre", []),
                 "level": node_data.get("level"),
+                "if_level": node_data.get("if_level"),
+                "level_parents": level_parent_summary(node_id),
+                "selector_precedence": node_data.get("selector_precedence"),
                 "file": node_data.get("file"),
                 "temporal": bool(node_data.get("temporal", False)),
                 "parents": parents,
@@ -225,12 +283,15 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         edges = []
         if neighbor_mode in {"parents", "both"}:
             for p in G.predecessors(node_id):
+                relationships = structural_edges(p, node_id)
+                if not relationships:
+                    continue
                 nodes.append(serialize_node(p, displayed))
-                edges.append(make_edge(p, node_id))
+                edges.extend(relationships)
         if neighbor_mode in {"children", "both"}:
-            for c in G.successors(node_id):
+            for c in structural_children(node_id):
                 nodes.append(serialize_node(c, displayed))
-                edges.append(make_edge(node_id, c))
+                edges.extend(structural_edges(node_id, c))
         return jsonify({"nodes": nodes, "edges": edges})
 
     # ---------- UI ----------
@@ -358,8 +419,55 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         node_ids = payload.get("ids", [])
         if not node_ids:
             return jsonify({"nodes": [], "edges": []})
-        edges_list = [make_edge(u, v) for u, v in G.subgraph(node_ids).edges()]
+        edges_list = [
+            edge
+            for u, v in dict.fromkeys(G.subgraph(node_ids).edges())
+            for edge in structural_edges(u, v)
+        ]
         return jsonify({"nodes": [], "edges": edges_list})
+
+    @app.route("/api/level-parents", methods=["GET"])
+    def level_parents() -> Union[Response, tuple[Response, int]]:
+        """Return only visible candidates; never add them to graph physics."""
+        node_id = request.args.get("id", "").strip()
+        if node_id not in G:
+            return error("Rule not found", 404)
+        selector = G.nodes[node_id].get("if_level")
+        if selector is None or str(selector) == "":
+            return error("Rule has no if_level declaration", 400)
+        raw = str(selector)
+        if not raw.isascii() or not raw.isdigit() or not raw.lstrip("0"):
+            return error("Rule has no valid positive if_level threshold", 400)
+        precedence = G.nodes[node_id].get("selector_precedence") or {}
+        if "if_level" in precedence.get("shadowed", ()):
+            return error("if_level is shadowed by a higher-priority selector", 400)
+        displayed = set(filter(None, request.args.get("displayed", "").split(",")))
+        declared = 0
+        load_order_candidates = 0
+        visible = []
+        for parent, _, _, data in G.in_edges(
+            node_id, keys=True, data=True
+        ):
+            if data.get("relation_type") != "if_level":
+                continue
+            declared += 1
+            if data.get("load_order_candidate") is True:
+                load_order_candidates += 1
+            if parent not in displayed or node_id not in displayed:
+                continue
+            visible.append({
+                "source": parent,
+                "target": node_id,
+                "relation_type": "if_level",
+                "selector": data.get("selector", str(selector)),
+                "load_order_candidate": data.get("load_order_candidate"),
+            })
+        return jsonify({
+            "selector": str(selector),
+            "declared": declared,
+            "load_order_candidates": load_order_candidates,
+            "edges": visible,
+        })
 
     @app.route("/api/conditions", methods=["GET"])
     def conditions() -> Union[Response, tuple[Response, int]]:

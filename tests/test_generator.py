@@ -732,3 +732,94 @@ def test_overwrite_can_clear_mitre_metadata(tmp_path, monkeypatch):
     generator.build_graph_from_xml()
 
     assert generator.G.nodes["100811"]["mitre"] == []
+
+
+@pytest.mark.parametrize(
+    "rule_id,effective,shadowed",
+    [
+        ("100020", "if_level", ["if_group"]),
+        ("100030", "if_sid", ["if_level", "if_group"]),
+        ("100040", "if_sid", ["if_level"]),
+        ("100050", "if_group", []),
+        ("100060", "category", []),
+    ],
+)
+def test_structural_selector_precedence_metadata(
+    tmp_path, rule_id, effective, shadowed
+):
+    rules = tmp_path / "precedence.xml"
+    rules.write_text(
+        """
+<group name="source,">
+  <rule id="100010" level="8">
+    <description>Parent</description>
+  </rule>
+  <rule id="100020" level="8">
+    <if_level>5</if_level>
+    <if_group>source</if_group>
+    <description>Group shadowed by level</description>
+  </rule>
+  <rule id="100030" level="8">
+    <if_sid>100010</if_sid>
+    <if_level>5</if_level>
+    <if_group>source</if_group>
+    <description>SID shadows both</description>
+  </rule>
+  <rule id="100040" level="8">
+    <if_sid>100010</if_sid>
+    <if_level>5</if_level>
+    <description>SID shadows level</description>
+  </rule>
+  <rule id="100050" level="8">
+    <if_group>source</if_group>
+    <description>Group only</description>
+  </rule>
+  <rule id="100060" level="8">
+    <description>Category only</description>
+  </rule>
+</group>
+""".strip(),
+        encoding="utf-8",
+    )
+    generator = make_generator(tmp_path)
+    generator.build_graph_from_xml()
+    precedence = generator.G.nodes[rule_id]["selector_precedence"]
+    assert precedence["effective"] == effective
+    assert precedence["shadowed"] == shadowed
+
+
+def test_zero_if_level_does_not_claim_group_runtime_fallback(tmp_path):
+    rules = tmp_path / "zero.xml"
+    rules.write_text(
+        '<group name="example,">'
+        '<rule id="100001" level="5"><description>Source</description></rule>'
+        '<rule id="100002" level="5"><if_level>0</if_level>'
+        '<if_group>example</if_group><description>Invalid selector</description></rule>'
+        '</group>',
+        encoding="utf-8",
+    )
+    generator = make_generator(tmp_path)
+    generator.build_graph_from_xml()
+    precedence = generator.G.nodes["100002"]["selector_precedence"]
+    assert precedence["effective"] == "invalid_if_level"
+    assert precedence["shadowed"] == []
+    assert precedence["invalid"] == "if_level"
+
+
+def test_temporal_group_synthesis_is_not_reported_as_declared_group(tmp_path):
+    rules = tmp_path / "temporal.xml"
+    rules.write_text(
+        '<group name="example,">'
+        '<rule id="100001" level="8"><description>Source</description></rule>'
+        '<rule id="100002" level="8"><if_level>5</if_level>'
+        '<if_matched_group>example</if_matched_group>'
+        '<description>Temporal group</description></rule>'
+        '</group>',
+        encoding="utf-8",
+    )
+    generator = make_generator(tmp_path)
+    generator.build_graph_from_xml()
+    precedence = generator.G.nodes["100002"]["selector_precedence"]
+    assert precedence["effective"] == "if_level"
+    assert precedence["shadowed"] == ["if_group"]
+    assert precedence["shadowed_sources"] == {"if_group": "if_matched_group"}
