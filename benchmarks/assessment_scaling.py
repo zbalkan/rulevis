@@ -111,8 +111,12 @@ def benchmark(
     built = time.perf_counter()
 
     domain = BitsetDomain(event_count)
+    # These are structural scaling benchmarks, not predicate coverage tests.
+    # Explicitly assume every non-root rule matches every synthetic event.
     predicates = {"1": domain.top()}
-    result = BitsetAssessor(model, domain, predicates).assess()
+    result = BitsetAssessor(
+        model, domain, predicates, missing_predicate="match_all",
+    ).assess()
     assessed = time.perf_counter()
 
     findings = AssessmentClassifier(model, result).classify()
