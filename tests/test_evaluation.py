@@ -179,9 +179,25 @@ def test_overwrite_category_updates_preorder_index():
 
     model = EvaluationBuilder(catalog).build()
 
-    parent = model.occurrences_by_rule["100070"][0]
-    child = model.occurrences_by_rule["100071"][0]
-    assert model.children[parent] == (child,)
+    assert "100071" not in model.rules
+    assert ("CATEGORY_NOT_FOUND", "100071") in {
+        (issue.code, issue.rule_id) for issue in model.issues
+    }
+
+
+def test_category_fallback_ignores_nested_match_before_matching_root():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="windows")
+    add_rule(catalog, 100072, 5, if_sid="1")
+    add_rule(catalog, 100072, 5, category="custom", overwrite=True)
+    add_rule(catalog, 2, 0, category="custom")
+    add_rule(catalog, 100073, 6, category="custom")
+
+    model = EvaluationBuilder(catalog).build()
+
+    root = model.occurrences_by_rule["2"][0]
+    child = model.occurrences_by_rule["100073"][0]
+    assert model.children[root] == (child,)
 
 
 
