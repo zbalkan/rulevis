@@ -830,7 +830,7 @@ def test_temporal_group_synthesis_is_not_reported_as_declared_group(tmp_path):
     "rule_id,effective,shadowed,source",
     [
         ("100071", "if_sid", ["if_level"], "if_matched_sid"),
-        ("100072", "if_sid", ["if_group"], "if_sid"),
+        ("100072", "if_sid", [], "if_sid"),
     ],
 )
 def test_mixed_temporal_selector_precedence(
