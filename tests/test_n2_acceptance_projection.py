@@ -136,3 +136,41 @@ def test_if_level_fanout_preserves_distinct_physical_occurrences(tmp_path):
         if target == "100130"
     )
     assert generator.G.nodes["100130"]["modeled_acceptance"] == "accepted"
+
+
+def test_unknown_referenced_rule_is_not_mislabeled_as_rejected_declaration(
+    tmp_path,
+):
+    generator = make_generator(
+        tmp_path,
+        '<group name="root,">'
+        '<rule id="1" level="5"><description>Root</description></rule>'
+        '<rule id="100140" level="7"><if_sid>999999</if_sid>'
+        '<description>Unresolved reference</description></rule></group>',
+    )
+    assert "999999" in generator.G  # source reference node
+    assert generator.G.nodes["999999"]["modeled_acceptance"] == (
+        "undeclared_reference"
+    )
+    assert generator.G.nodes["100140"]["modeled_acceptance"] == "rejected"
+    assert generator.G.nodes["100140"]["modeled_load_issues"]
+
+
+def test_occurrence_budget_failure_does_not_publish_partial_projection(
+    tmp_path,
+):
+    from internal.evaluation import OccurrenceBudgetExceeded
+
+    generator = make_generator(
+        tmp_path,
+        '<group name="root,">'
+        '<rule id="1" level="5"><description>Root</description></rule>'
+        '<rule id="100150" level="7"><if_sid>1</if_sid>'
+        '<description>Child</description></rule></group>',
+    )
+    previous = generator.modeled_runtime_graph
+    previous_acceptance = generator.G.nodes["100150"]["modeled_acceptance"]
+    with pytest.raises(OccurrenceBudgetExceeded):
+        generator.build_modeled_runtime_projection(max_occurrences=1)
+    assert generator.modeled_runtime_graph is previous
+    assert generator.G.nodes["100150"]["modeled_acceptance"] == previous_acceptance
