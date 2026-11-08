@@ -313,3 +313,47 @@ def test_long_all_zero_threshold_is_rejected(tmp_path):
     ).test_client()
     response = client.get("/api/level-parents?id=100004")
     assert response.status_code == 400
+
+
+def test_rejected_rule_edges_are_labeled_rejected_in_all_api_views(tmp_path):
+    graph_path, stats_path, heatmap_path = write_app_files(tmp_path)
+    with graph_path.open("rb") as stream:
+        graph = pickle.load(stream)
+    graph.nodes["100004"]["if_level"] = "0"
+    graph.nodes["100004"]["selector_precedence"] = {
+        "effective": "invalid_if_level",
+        "invalid": "if_level",
+        "rejected": True,
+        "rejection_reason": "invalid_if_level",
+        "shadowed": [],
+    }
+    graph.add_edge(
+        "100001", "100004", relation_type="if_group", selector="example"
+    )
+    with graph_path.open("wb") as stream:
+        pickle.dump(graph, stream)
+    client = create_app(
+        str(graph_path), str(stats_path), str(heatmap_path)
+    ).test_client()
+
+    response = client.get("/api/nodes?id=100004&include=details")
+    assert response.status_code == 200
+    details = response.get_json()
+    assert details["selector_precedence"]["rejected"] is True
+    group_rows = [
+        parent for parent in details["parents"]
+        if parent["relation_type"] == "if_group"
+    ]
+    assert len(group_rows) == 1
+    assert group_rows[0]["rejected_reason"] == "invalid_if_level"
+
+    response = client.post(
+        "/api/edges", json={"ids": ["100001", "100004"]}
+    )
+    assert response.status_code == 200
+    group_edges = [
+        edge for edge in response.get_json()["edges"]
+        if edge["relation_type"] == "if_group"
+    ]
+    assert len(group_edges) == 1
+    assert group_edges[0]["rejected_reason"] == "invalid_if_level"
