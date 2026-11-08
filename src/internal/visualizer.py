@@ -145,7 +145,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         all_relevant = set(node_ids) | displayed
         sub_edges = [
             edge
-            for u, v in G.subgraph(all_relevant).edges()
+            for u, v in dict.fromkeys(G.subgraph(all_relevant).edges())
             if u in node_ids or v in node_ids
             for edge in structural_edges(u, v)
         ]
@@ -219,6 +219,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                 "groups": node_data.get("groups", []),
                 "mitre": node_data.get("mitre", []),
                 "level": node_data.get("level"),
+                "if_level": node_data.get("if_level"),
                 "file": node_data.get("file"),
                 "temporal": bool(node_data.get("temporal", False)),
                 "parents": parents,
@@ -364,7 +365,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
             return jsonify({"nodes": [], "edges": []})
         edges_list = [
             edge
-            for u, v in G.subgraph(node_ids).edges()
+            for u, v in dict.fromkeys(G.subgraph(node_ids).edges())
             for edge in structural_edges(u, v)
         ]
         return jsonify({"nodes": [], "edges": edges_list})
