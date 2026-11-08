@@ -431,6 +431,19 @@ class GraphGenerator:
                     return value
         return None
 
+    @staticmethod
+    def _invalid_if_level(element: ET.Element) -> Optional[str]:
+        """Wazuh skips declarations with nondecimal if_level content."""
+        for child in element:
+            if (
+                isinstance(child.tag, str)
+                and child.tag.lower() == "if_level"
+            ):
+                value = child.text or ""
+                if re.fullmatch(r"[0-9]+", value) is None:
+                    return value
+        return None
+
     def _last_int_child(
         self,
         element: ET.Element,
@@ -505,6 +518,7 @@ class GraphGenerator:
                 "if_matched_sid",
             ),
             invalid_if_matched_sid=self._invalid_matched_sid(element),
+            invalid_if_level=self._invalid_if_level(element),
             if_matched_group=self._concat_child_text(
                 element,
                 "if_matched_group",
@@ -545,6 +559,14 @@ class GraphGenerator:
                 logging.warning(
                     "Skipping invalid visual rule in %s: id=%r, level=%r",
                     xml_file, raw_rule_id, element.get("level"),
+                )
+                return
+
+            invalid_if_level = self.catalog.declarations[-1].invalid_if_level
+            if invalid_if_level is not None:
+                logging.warning(
+                    "Skipping rule %s in %s: invalid if_level %r",
+                    rule_id, xml_file, invalid_if_level,
                 )
                 return
 
