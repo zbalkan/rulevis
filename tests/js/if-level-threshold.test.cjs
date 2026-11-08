@@ -188,3 +188,38 @@ test('selecting the currently annotated rule retains its overlay', () => {
     assert.equal(state.levelOverlayEdges, overlay);
     assert.equal(state.levelOverlayRequestId, 7);
 });
+
+
+test('zero or shadowed if_level does not produce an active badge', () => {
+    const zero = { id: '100001', x: 10, y: 20, if_level: '0' };
+    assert.equal(graph.thresholdBadgeBounds(zero), null);
+    const shadowed = {
+        id: '100002', x: 10, y: 20, if_level: '5',
+        selector_precedence: { effective: 'if_sid', shadowed: ['if_level'] },
+    };
+    assert.equal(graph.thresholdBadgeBounds(shadowed), null);
+});
+
+test('details show level-parent counts and shadowed selector notice', () => {
+    const state = {
+        visualizer: { displayedRuleIDs: new Set() },
+        content: { innerHTML: '' },
+    };
+    const details = {
+        id: '100030', description: 'example', level: '8',
+        if_level: '5', groups: [], parents: [
+            { id: '100020', relation_type: 'if_group', shadowed_by: 'if_level' },
+        ], children: [],
+        level_parents: { declared: 12, load_order_candidates: 4 },
+        selector_precedence: { effective: 'if_level', shadowed: ['if_group'] },
+    };
+    graph.constructor; // keep class prototype available for rendering tests
+    const panel = vm.runInNewContext(
+        source + '\n globalThis.__DetailsPanel = DetailsPanel;',
+        { window: {} },
+    ).__DetailsPanel;
+    panel.prototype.render.call(state, details);
+    assert.match(state.content.innerHTML, /12 declared/);
+    assert.match(state.content.innerHTML, /4 load-order candidates/);
+    assert.match(state.content.innerHTML, /shadowed by if_level/);
+});
