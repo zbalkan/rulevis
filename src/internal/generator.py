@@ -655,12 +655,16 @@ class GraphGenerator:
                     f"{rule_id}. User must fix the rule manually."
                 )
             else:
-                structural_group = if_group
-                if not if_sid and not if_group and if_matched_group:
-                    structural_group = if_matched_group
-                if structural_group:
+                resolved = resolve_structural_parent_selectors(
+                    if_sid=if_sid,
+                    if_level=if_level,
+                    if_group=if_group,
+                    if_matched_sid=if_matched_sid,
+                    if_matched_group=if_matched_group,
+                )
+                if resolved.if_group:
                     self._snapshot_group_parents(
-                        rule_id, structural_group
+                        rule_id, resolved.if_group
                     )
                 if if_level is not None and if_level > 0:
                     self._snapshot_level_parents(rule_id, if_level)
