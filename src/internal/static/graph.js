@@ -89,7 +89,7 @@ class DetailsPanel {
         const hasGroupOrderNotes = [...(details.parents || []), ...(details.children || [])]
             .some(item => item.load_order_candidate !== undefined);
         const groupOrderNote = hasGroupOrderNotes
-            ? '<p>Group load-order eligibility is estimated from scanned XML order; the configured Wazuh load order may differ.</p>'
+            ? '<p>Group and level parent eligibility is estimated from scanned XML order and priorities; the configured Wazuh load order may differ.</p>'
             : '';
 
         const ruleLevel = parseInt(details.level, 10);

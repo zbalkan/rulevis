@@ -31,8 +31,8 @@ TEMPORAL_PARENT_TAGS: Final[frozenset[str]] = frozenset({
     "if_matched_group",
 })
 
-# RuleVis deliberately omits if_level relationships. Keep the condition model
-# aligned with the graph model so an "effective conditions" trace is complete.
+# Preserve declared if_level relationships independently of the runtime
+# occurrence simulator. Source-level edges can include unavailable parents.
 ATOMIC_CONDITION_TAGS: Final[frozenset[str]] = frozenset({
     "location",
     "decoded_as",
@@ -63,10 +63,12 @@ ATOMIC_CONDITION_TAGS: Final[frozenset[str]] = frozenset({
     "weekday",
     "if_sid",
     "if_group",
+    "if_level",
 })
 ATOMIC_PARENT_TAGS: Final[frozenset[str]] = frozenset({
     "if_sid",
     "if_group",
+    "if_level",
 })
 
 
@@ -76,6 +78,8 @@ class GraphGenerator:
         self.group_membership: dict[str, list[str]] = defaultdict(list)
         self.runtime_group_by_rule: dict[str, str] = {}
         self.runtime_group_history: dict[str, list[str]] = defaultdict(list)
+        self.runtime_priority_by_rule: dict[str, int] = {}
+        self.runtime_priority_history: dict[str, list[int]] = defaultdict(list)
         self.G: nx.MultiDiGraph = nx.MultiDiGraph()
         self.graph_file: str = graph_file
         self.catalog: RuleCatalog = RuleCatalog()
@@ -84,7 +88,7 @@ class GraphGenerator:
         ] = []
         self.rule_relationships: dict[
             str,
-            tuple[Optional[str], Optional[str], Optional[str], Optional[str]],
+            tuple[Optional[str], Optional[str], Optional[str], Optional[str], Optional[int]],
         ] = {}
         self.rule_load_index: dict[str, int] = {}
         # Freeze each dependency at declaration time: later overwrites must
@@ -92,6 +96,7 @@ class GraphGenerator:
         self.group_parent_snapshots: dict[
             str, tuple[tuple[str, str], ...]
         ] = {}
+        self.level_parent_snapshots: dict[str, tuple[str, ...]] = {}
 
     def get_all_xml_files(self) -> list[str]:
         xml_files: list[str] = []
@@ -143,6 +148,7 @@ class GraphGenerator:
         if_matched_sid: Optional[str],
         if_group: Optional[str],
         if_matched_group: Optional[str],
+        if_level: Optional[int],
     ) -> None:
         if if_sid:
             for sid in re.split(r'[,\s]+', if_sid.strip()):
@@ -173,6 +179,19 @@ class GraphGenerator:
                         parent_rule, rule_id, "if_group", selector=matched,
                         load_order_candidate=(parent_rule, matched) in candidates,
                     )
+
+        if if_level is not None and if_level > 0:
+            candidates = set(self.level_parent_snapshots.get(rule_id, ()))
+            threshold = if_level * 100
+            for parent, priorities in self.runtime_priority_history.items():
+                if parent == rule_id or not any(
+                    priority >= threshold for priority in priorities
+                ):
+                    continue
+                self.add_edge_with_type(
+                    parent, rule_id, "if_level", selector=str(if_level),
+                    load_order_candidate=parent in candidates,
+                )
 
         if if_matched_group:
             for group in re.split(r'[,\s]+', if_matched_group.strip()):
@@ -208,6 +227,16 @@ class GraphGenerator:
         return (
             rule_id for rule_id, groups in self.runtime_group_by_rule.items()
             if os_word_match(selector, groups)
+        )
+
+    def _snapshot_level_parents(
+        self, rule_id: str, level: int
+    ) -> None:
+        """Snapshot eligible existing rule priorities at declaration time."""
+        threshold = level * 100
+        self.level_parent_snapshots[rule_id] = tuple(
+            parent for parent, priority in self.runtime_priority_by_rule.items()
+            if parent != rule_id and priority >= threshold
         )
 
     def _replace_visual_groups(
@@ -440,9 +469,12 @@ class GraphGenerator:
                 )
                 return
 
+            priority = self.catalog.declarations[-1].load_priority
             if element.get("overwrite", "").lower() == "yes":
                 overwrite_id = rule_id
                 if overwrite_id in self.G.nodes:
+                    self.runtime_priority_by_rule[overwrite_id] = priority
+                    self.runtime_priority_history[overwrite_id].append(priority)
                     if declared_runtime_group is not None:
                         self.runtime_group_by_rule[overwrite_id] = (
                             declared_runtime_group
@@ -473,6 +505,8 @@ class GraphGenerator:
             if_matched_sid = element.findtext('if_matched_sid', None)
             if_group = self._concat_child_text(element, "if_group")
             if_matched_group = element.findtext('if_matched_group', None)
+            if_level = self._last_int_child(element, "if_level")
+            raw_if_level = self._concat_child_text(element, "if_level")
 
             attributes = [(i.tag, i.text) for i in element]
             rule_description = self.extract_rule_description(attributes)
@@ -488,6 +522,10 @@ class GraphGenerator:
             else:
                 if if_group:
                     self._snapshot_group_parents(rule_id, if_group)
+                if if_level is not None and if_level > 0:
+                    self._snapshot_level_parents(rule_id, if_level)
+                self.runtime_priority_by_rule[rule_id] = priority
+                self.runtime_priority_history[rule_id].append(priority)
                 if declared_runtime_group is not None:
                     self.runtime_group_by_rule[rule_id] = declared_runtime_group
                     self.runtime_group_history[rule_id].append(
@@ -498,6 +536,7 @@ class GraphGenerator:
                     groups=all_groups,
                     description=rule_description,
                     level=rule_level,
+                    if_level=raw_if_level,
                     file=os.path.basename(xml_file),
                     temporal=self.is_temporal_rule(element),
                     mitre=self.extract_mitre_ids(element),
@@ -511,7 +550,7 @@ class GraphGenerator:
                 for group in all_groups:
                     self.group_membership[group].append(rule_id)
 
-                # Resolve non-group relationships after parsing; group parent
+                # Resolve source relationships after parsing; group and level
                 # candidates were captured before this rule was inserted.
                 # Overwrites do not introduce another logical rule node.
                 self.rule_load_index[rule_id] = len(self.rule_load_index)
@@ -520,6 +559,7 @@ class GraphGenerator:
                     if_matched_sid,
                     if_group,
                     if_matched_group,
+                    if_level,
                 )
 
         elif element.tag == 'group':
@@ -653,6 +693,8 @@ class GraphGenerator:
                         existing[attr] = element.get(attr)
 
                 existing["file"] = os.path.basename(ow_file)
+                # Deferred application never rewrites original parent
+                # selectors; Wazuh preserves those relationships on overwrite.
 
                 preserved_parent_conditions = [
                     condition
