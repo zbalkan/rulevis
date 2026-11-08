@@ -111,6 +111,96 @@ def os_match(pattern: str, value: str) -> bool:
 
 
 @dataclass(frozen=True)
+class StructuralParentSelection:
+    """Wazuh structural-parent synthesis and OS_AddChild branch selection.
+
+    Declarative relationships are retained even if a branch is shadowed or
+    its selected attachment is rejected. Attachment success is separate.
+    """
+
+    if_sid: Optional[str]
+    if_level: Optional[int]
+    if_group: Optional[str]
+    sources: dict[str, str]
+    effective: str
+    shadowed: tuple[str, ...]
+    rejected: bool = False
+    rejection_reason: Optional[str] = None
+
+    def metadata(self) -> dict[str, object]:
+        return {
+            "effective": self.effective,
+            "shadowed": list(self.shadowed),
+            "shadowed_sources": {
+                key: self.sources[key] for key in self.shadowed
+                if key in self.sources
+            },
+            "sources": dict(self.sources),
+            "rejected": self.rejected,
+            **(
+                {"invalid": "if_level", "rejection_reason": self.rejection_reason}
+                if self.rejected else {}
+            ),
+        }
+
+
+def resolve_structural_parent_selectors(
+    *,
+    if_sid: Optional[str],
+    if_level: Optional[int],
+    if_group: Optional[str],
+    if_matched_sid: Optional[int | str],
+    if_matched_group: Optional[str],
+) -> StructuralParentSelection:
+    """Resolve Wazuh 4.14.10 parent synthesis and precedence once.
+
+    rules.c synthesizes group before SID, only when no structural parent
+    selector is already set. rules_list.c then selects if_sid, if_level,
+    if_group, or category in that order. A zero if_level selects the level
+    branch but rejects the rule; there is no if_group fallback.
+    """
+    sid = if_sid
+    group = if_group
+    sources: dict[str, str] = {}
+    if sid:
+        sources["if_sid"] = "if_sid"
+    if group:
+        sources["if_group"] = "if_group"
+    if not sid and not group and if_matched_group:
+        group = if_matched_group
+        sources["if_group"] = "if_matched_group"
+    if not sid and not group and if_matched_sid is not None:
+        sid = str(if_matched_sid)
+        sources["if_sid"] = "if_matched_sid"
+
+    rejected = not sid and if_level == 0
+    effective = (
+        "if_sid" if sid
+        else "invalid_if_level" if rejected
+        else "if_level" if if_level is not None
+        else "if_group" if group
+        else "category"
+    )
+    shadowed: list[str] = []
+    if if_level is not None and effective == "if_sid":
+        shadowed.append("if_level")
+    if group and effective in {"if_sid", "if_level"}:
+        shadowed.append("if_group")
+    if if_level is not None:
+        sources["if_level"] = "if_level"
+    return StructuralParentSelection(
+        if_sid=sid,
+        if_level=if_level,
+        if_group=group,
+        sources=sources,
+        effective=effective,
+        shadowed=tuple(shadowed),
+        rejected=rejected,
+        rejection_reason="invalid_if_level" if rejected else None,
+    )
+
+
+@dataclass(frozen=True)
 class RuleDeclaration:
     """One rule declaration in Wazuh load order."""
 
