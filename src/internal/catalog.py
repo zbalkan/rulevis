@@ -3,6 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Final, Optional
 
+def valid_if_sid(value: Optional[str]) -> bool:
+    """Match Wazuh 4.14.10's allowed if_sid characters (not its lookup)."""
+    return value is None or (
+        bool(value) and all(char in "0123456789, " for char in value)
+    )
+
+
 DEFAULT_CATEGORY: Final[str] = "syslog"
 MAX_RULE_ID_DIGITS: Final[int] = 6
 
