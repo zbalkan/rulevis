@@ -205,3 +205,22 @@ def test_catalog_accumulates_nested_runtime_groups(tmp_path):
 
 def test_ascii_fold_only_changes_ascii_uppercase_bytes():
     assert ascii_fold(b"AbC-\xc3\x84") == b"abc-\xc3\x84"
+
+
+@pytest.mark.parametrize(
+    "sid,group,expected",
+    [
+        (None, None, None),
+        (None, "audit", "if_matched_group"),
+        (0, "audit", "if_matched_group"),
+        ("000", "audit", "if_matched_group"),
+        (42, None, "if_matched_sid"),
+        (42, "audit", "if_matched_sid"),
+    ],
+)
+def test_historical_search_selector_matches_wazuh_registration_order(
+    sid, group, expected
+):
+    from internal.catalog import select_historical_search
+
+    assert select_historical_search(sid, group) == expected
