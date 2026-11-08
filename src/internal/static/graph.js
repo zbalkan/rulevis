@@ -1444,6 +1444,28 @@ class GraphVisualizer {
     }
     
     
+    handleCanvasClick(e) {
+        const thresholdNode = this.findThresholdBadgeAt(e.offsetX, e.offsetY);
+        if (thresholdNode) {
+            this.toggleLevelOverlay(thresholdNode.id);
+            return;
+        }
+        const node = this.findNodeAt(e.offsetX, e.offsetY);
+        if (node) {
+            this.highlightAndCenterNode(node.id);
+        } else if (this.highlightedNodeId || this.highlightedCycleIds.size > 0 ||
+                   this.activeLevelRuleId) {
+            this.clearHighlight();
+        }
+    }
+
+    handleEscape() {
+        if (this.conditionsModal.isOpen) this.conditionsModal.hide();
+        else if (this.heatmapModal.isOpen) this.heatmapModal.hide();
+        else if (this.highlightedNodeId || this.activeLevelRuleId) this.clearHighlight();
+        else if (this.statsPanel.isOpen) this.statsPanel.hide();
+    }
+
     initializeEventListeners() {
         document.getElementById("resetZoom").addEventListener("click", () => this.handleSearchById('0'));
         document.getElementById("resetGraph").addEventListener("click", () => this.resetGraph());
@@ -1453,10 +1475,7 @@ class GraphVisualizer {
         document.getElementById("showHeatmapBtn").addEventListener("click", () => this.heatmapModal.show());
         document.addEventListener("keydown", e => {
             if (e.key === "Escape") {
-                if (this.conditionsModal.isOpen) this.conditionsModal.hide();
-                else if (this.heatmapModal.isOpen) this.heatmapModal.hide();
-                else if (this.highlightedNodeId) this.clearHighlight();
-                else if (this.statsPanel.isOpen) this.statsPanel.hide();
+                this.handleEscape();
             } else if (e.key === " " && document.activeElement.tagName !== 'INPUT') {
                 e.preventDefault();
                 this.simulationPausedByKey = !this.simulationPausedByKey;
@@ -1485,19 +1504,7 @@ class GraphVisualizer {
                     this.render();
                 }
             });
-        this.canvas.on("click", e => {
-            const thresholdNode = this.findThresholdBadgeAt(e.offsetX, e.offsetY);
-            if (thresholdNode) {
-                this.toggleLevelOverlay(thresholdNode.id);
-                return;
-            }
-            const node = this.findNodeAt(e.offsetX, e.offsetY); 
-            if (node) {
-                this.highlightAndCenterNode(node.id); 
-            } else if (this.highlightedNodeId || this.highlightedCycleIds.size > 0) {
-                this.clearHighlight();
-            }
-        });
+        this.canvas.on("click", e => this.handleCanvasClick(e));
         this.canvas.on("contextmenu", e => {
             e.preventDefault();
             e.stopPropagation();
