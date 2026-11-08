@@ -12,6 +12,7 @@ from internal.catalog import (
     RuleCatalog,
     RuleDeclaration,
     normalize_rule_id,
+    valid_if_sid,
 )
 from internal.group_index import GroupMembershipIndex
 from internal.order import CategoryOrder, PrioritySequence
@@ -474,6 +475,12 @@ class EvaluationBuilder:
                     declaration.rule_id,
                     declaration.rule_id,
                 )
+            )
+            return
+
+        if not valid_if_sid(declaration.if_sid):
+            self.issues.append(
+                LoadIssue("INVALID_IF_SID", declaration.rule_id, declaration.if_sid)
             )
             return
 

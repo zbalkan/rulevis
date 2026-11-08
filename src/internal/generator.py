@@ -8,7 +8,13 @@ from typing import Final, Optional
 
 import networkx as nx
 
-from internal.catalog import RuleCatalog, normalize_rule_id, os_match, os_word_match
+from internal.catalog import (
+    RuleCatalog,
+    normalize_rule_id,
+    os_match,
+    os_word_match,
+    valid_if_sid,
+)
 
 ENCODING: Final[str] = "utf-8"
 
@@ -545,6 +551,13 @@ class GraphGenerator:
                 logging.warning(
                     "Skipping invalid visual rule in %s: id=%r, level=%r",
                     xml_file, raw_rule_id, element.get("level"),
+                )
+                return
+
+            if not valid_if_sid(self.catalog.declarations[-1].if_sid):
+                logging.warning(
+                    "Skipping rule %s in %s: invalid if_sid characters",
+                    rule_id, xml_file,
                 )
                 return
 
