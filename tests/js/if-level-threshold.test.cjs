@@ -223,4 +223,42 @@ test('details show level-parent counts and shadowed selector notice', () => {
     assert.match(state.content.innerHTML, /12 declared/);
     assert.match(state.content.innerHTML, /4 load-order candidates/);
     assert.match(state.content.innerHTML, /shadowed by if_level/);
+    assert.match(state.content.innerHTML, /Declared but shadowed: if_group/);
+    assert.match(state.content.innerHTML, /Toggle candidates/);
+    assert.doesNotMatch(state.content.innerHTML, /not active/);
+});
+
+
+test('synthesized group is not misrepresented as a declared if_group', () => {
+    const state = {
+        visualizer: { displayedRuleIDs: new Set() },
+        content: { innerHTML: '' },
+    };
+    const details = {
+        id: '100031', description: 'temporal group', level: '8',
+        if_level: '5', groups: [], parents: [], children: [],
+        level_parents: { declared: 2, load_order_candidates: 1 },
+        selector_precedence: {
+            effective: 'if_level', shadowed: ['if_group'],
+            shadowed_sources: { if_group: 'if_matched_group' },
+        },
+    };
+    const context = { window: {} };
+    vm.runInNewContext(source + '\n globalThis.__DetailsPanel = DetailsPanel;', context);
+    context.__DetailsPanel.prototype.render.call(state, details);
+    assert.match(state.content.innerHTML, /Synthesized but shadowed: if_matched_group/);
+    assert.doesNotMatch(state.content.innerHTML, /Declared but shadowed: if_group/);
+});
+
+test('legend explicitly names shadowed edges and level candidate overlay', () => {
+    const labels = [];
+    const context = {
+        font: '', fillStyle: '', strokeStyle: '', lineWidth: 1,
+        beginPath() {}, moveTo() {}, lineTo() {}, stroke() {},
+        arc() {}, fill() {}, fillRect() {}, save() {}, restore() {},
+        setLineDash() {}, fillText(label) { labels.push(label); },
+    };
+    graph.buildLegend.call({ context });
+    assert.ok(labels.includes('Shadowed selector (declared)'));
+    assert.ok(labels.includes('Level candidate (on demand)'));
 });
