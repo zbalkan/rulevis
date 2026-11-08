@@ -84,6 +84,7 @@ class DetailsPanel {
                     <strong>${escapeHTML(item.relation_type)}:</strong>
                     ${escapeHTML(item.id)}
                     ${item.synthesized_from ? `<span title="Structural parent synthesized from temporal selector"> (implicit from ${escapeHTML(item.synthesized_from)})</span>` : ''}
+                    ${item.shadowed_by ? `<span title="Declared relationship ignored for structural attachment by Wazuh"> (shadowed by ${escapeHTML(item.shadowed_by)})</span>` : ''}
                     ${item.load_order_candidate === false ? '<span title="Based on RuleVis file scanning, not a confirmed Wazuh load">(not a candidate in scanned load order)</span>' : ''}
                 </li>
             `).join('')}</ul>`;
@@ -119,11 +120,27 @@ class DetailsPanel {
             </div>
         ` : '';
 
-        const thresholdControl = details.if_level != null
+        const declaredThreshold = details.if_level != null && details.if_level !== '';
+        const validThreshold = declaredThreshold && /^[0-9]+$/.test(String(details.if_level)) &&
+            Number(details.if_level) > 0;
+        const effectiveSelector = details.selector_precedence?.effective;
+        const shadowedSelectors = details.selector_precedence?.shadowed || [];
+        const thresholdShadowed = shadowedSelectors.includes('if_level');
+        const parentCounts = details.level_parents || { declared: 0, load_order_candidates: 0 };
+        const thresholdControl = declaredThreshold
             ? `<div class="details-meta-full">
                     <strong>Threshold:</strong>
-                    <button class="conditions-btn" onclick="window.visualizer.toggleLevelOverlay('${escapeHTML(details.id)}')">L ≥ ${escapeHTML(details.if_level)} — Toggle candidates</button>
+                    ${validThreshold && !thresholdShadowed
+                        ? `<button class="conditions-btn" onclick="window.visualizer.toggleLevelOverlay('${escapeHTML(details.id)}')">L ≥ ${escapeHTML(details.if_level)} — Toggle candidates</button>`
+                        : `<span>L ≥ ${escapeHTML(details.if_level)} (not active: ${thresholdShadowed
+                            ? `shadowed by ${escapeHTML(effectiveSelector)}` : 'invalid threshold'})</span>`}
+                    <p>if_level parents: ${parentCounts.declared} declared (${parentCounts.load_order_candidates} load-order candidates)</p>
+                    <p>Candidate eligibility is estimated from scanned rules, not verified runtime attachment.</p>
                </div>`
+            : '';
+        const selectorWarning = shadowedSelectors.length
+            ? `<p><strong>Structural selector:</strong> ${escapeHTML(effectiveSelector)}.
+               Declared but shadowed: ${shadowedSelectors.map(escapeHTML).join(', ')}.</p>`
             : '';
 
         const conditionsButton = details.id !== "0"
@@ -145,6 +162,7 @@ class DetailsPanel {
 
             <p><strong>Description:</strong> ${escapeHTML(details.description || 'N/A')}</p>
             ${thresholdControl}
+            ${selectorWarning}
             ${conditionsButton ? `<div class="details-actions">${conditionsButton}</div>` : ''}
             <h4>Groups</h4>
             ${(details.groups && details.groups.length > 0) ? `<ul>${details.groups.map(g => `<li>${escapeHTML(g)}</li>`).join('')}</ul>` : '<p>No groups assigned.</p>'}
@@ -884,8 +902,14 @@ class GraphVisualizer {
                     this.context.moveTo(link.source.x, link.source.y);
                     this.context.lineTo(link.target.x, link.target.y);
                 }
-                this.context.strokeStyle = color;
+                if (color === '__shadowed__') {
+                    this.context.strokeStyle = '#94a3b8';
+                    this.context.setLineDash([5 / this.transform.k, 4 / this.transform.k]);
+                } else {
+                    this.context.strokeStyle = color;
+                }
                 this.context.stroke();
+                this.context.setLineDash([]);
             }
         }
         // Level candidates are annotations, not D3 force links.
@@ -908,7 +932,8 @@ class GraphVisualizer {
         }
         if (this.transform.k > 0.6) {
             for (let link of this.links) {
-                const edgeColor = STYLES.edges[link.relation_type] || STYLES.edges.unknown;
+                const edgeColor = link.shadowed_by ? '#94a3b8'
+                    : STYLES.edges[link.relation_type] || STYLES.edges.unknown;
                 this.context.fillStyle = edgeColor;
                 this.drawArrowhead(link.source, link.target);
             }
@@ -989,6 +1014,9 @@ class GraphVisualizer {
     
     thresholdBadgeBounds(node) {
         if (node.if_level == null || node.id === "0" ||
+            !/^[0-9]+$/.test(String(node.if_level)) ||
+            Number(node.if_level) <= 0 ||
+            node.selector_precedence?.shadowed?.includes('if_level') ||
             !Number.isFinite(node.x) || !Number.isFinite(node.y)) return null;
         const label = `L ≥ ${node.if_level}`;
         return {
@@ -1095,7 +1123,8 @@ class GraphVisualizer {
                 linkSet.add(linkId);
 
                 // Group link by color for batched rendering
-                const color = STYLES.edges[newLink.relation_type] || STYLES.edges.unknown;
+                const color = newLink.shadowed_by ? '__shadowed__'
+                    : STYLES.edges[newLink.relation_type] || STYLES.edges.unknown;
                 if (!this.linkGroups[color]) this.linkGroups[color] = [];
                 this.linkGroups[color].push(linkObj);
             }
