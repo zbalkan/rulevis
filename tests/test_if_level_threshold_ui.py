@@ -357,3 +357,34 @@ def test_rejected_rule_edges_are_labeled_rejected_in_all_api_views(tmp_path):
     ]
     assert len(group_edges) == 1
     assert group_edges[0]["rejected_reason"] == "invalid_if_level"
+
+
+def test_root_response_marks_rejected_zero_threshold_node(tmp_path):
+    graph_path, stats_path, heatmap_path = write_app_files(tmp_path)
+    with graph_path.open("rb") as stream:
+        graph = pickle.load(stream)
+    graph.add_node(
+        "100099", level="5", if_level="0", children_ids=[],
+        selector_precedence={
+            "effective": "invalid_if_level",
+            "invalid": "if_level",
+            "rejected": True,
+            "rejection_reason": "invalid_if_level",
+            "shadowed": [],
+        },
+    )
+    graph.add_edge("0", "100099", relation_type="root")
+    with graph_path.open("wb") as stream:
+        pickle.dump(graph, stream)
+    client = create_app(
+        str(graph_path), str(stats_path), str(heatmap_path)
+    ).test_client()
+    response = client.get("/api/nodes?mode=root")
+    assert response.status_code == 200
+    edges = [
+        edge for edge in response.get_json()["edges"]
+        if edge["target"] == "100099"
+    ]
+    assert len(edges) == 1
+    assert edges[0]["relation_type"] == "no_parent"
+    assert edges[0]["rejected_reason"] == "invalid_if_level"
