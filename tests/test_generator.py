@@ -732,3 +732,57 @@ def test_overwrite_can_clear_mitre_metadata(tmp_path, monkeypatch):
     generator.build_graph_from_xml()
 
     assert generator.G.nodes["100811"]["mitre"] == []
+
+
+@pytest.mark.parametrize(
+    "rule_id,effective,shadowed",
+    [
+        ("100020", "if_level", ["if_group"]),
+        ("100030", "if_sid", ["if_level", "if_group"]),
+        ("100040", "if_sid", ["if_level"]),
+        ("100050", "if_group", []),
+        ("100060", "category", []),
+    ],
+)
+def test_structural_selector_precedence_metadata(
+    tmp_path, rule_id, effective, shadowed
+):
+    rules = tmp_path / "precedence.xml"
+    rules.write_text(
+        """
+<group name="source,">
+  <rule id="100010" level="8">
+    <description>Parent</description>
+  </rule>
+  <rule id="100020" level="8">
+    <if_level>5</if_level>
+    <if_group>source</if_group>
+    <description>Group shadowed by level</description>
+  </rule>
+  <rule id="100030" level="8">
+    <if_sid>100010</if_sid>
+    <if_level>5</if_level>
+    <if_group>source</if_group>
+    <description>SID shadows both</description>
+  </rule>
+  <rule id="100040" level="8">
+    <if_sid>100010</if_sid>
+    <if_level>5</if_level>
+    <description>SID shadows level</description>
+  </rule>
+  <rule id="100050" level="8">
+    <if_group>source</if_group>
+    <description>Group only</description>
+  </rule>
+  <rule id="100060" level="8">
+    <description>Category only</description>
+  </rule>
+</group>
+""".strip(),
+        encoding="utf-8",
+    )
+    generator = make_generator(tmp_path)
+    generator.build_graph_from_xml()
+    precedence = generator.G.nodes[rule_id]["selector_precedence"]
+    assert precedence["effective"] == effective
+    assert precedence["shadowed"] == shadowed
