@@ -10,6 +10,15 @@ def valid_if_sid(value: Optional[str]) -> bool:
     )
 
 
+def active_temporal_sid(value: Optional[int | str]) -> bool:
+    """Wazuh's integer if_matched_sid field activates only when nonzero.
+
+    Decimal strings are accepted because the graph generator preserves a
+    normalized textual representation of the parsed integer.
+    """
+    return value is not None and bool(str(value).lstrip("0"))
+
+
 DEFAULT_CATEGORY: Final[str] = "syslog"
 MAX_RULE_ID_DIGITS: Final[int] = 6
 
@@ -169,7 +178,7 @@ def resolve_structural_parent_selectors(
     if not sid and not group and if_matched_group:
         group = if_matched_group
         sources["if_group"] = "if_matched_group"
-    if not sid and not group and if_matched_sid is not None:
+    if not sid and not group and active_temporal_sid(if_matched_sid):
         sid = str(if_matched_sid)
         sources["if_sid"] = "if_matched_sid"
 
