@@ -113,15 +113,6 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
             "expandable": expandable,
         }
 
-    def relation_type(u: str, v: str) -> str:
-        data = G.get_edge_data(u, v)
-        if not data:
-            return "unknown"
-        return next(iter(data.values()), {}).get("relation_type", "unknown")  # type: ignore
-
-    def make_edge(u: str, v: str) -> dict[str, Any]:
-        return {"source": u, "target": v, "relation_type": relation_type(u, v)}
-
     def structural_edges(u: str, v: str) -> list[dict[str, Any]]:
         """Keep parallel non-threshold edges in the force-directed graph."""
         return [
@@ -388,26 +379,27 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         if selector is None or str(selector) == "":
             return error("Rule has no if_level declaration", 400)
         displayed = set(filter(None, request.args.get("displayed", "").split(",")))
-        candidates = [
-            {
+        candidate_count = 0
+        visible = []
+        for parent, _, _, data in G.in_edges(
+            node_id, keys=True, data=True
+        ):
+            if data.get("relation_type") != "if_level":
+                continue
+            candidate_count += 1
+            if parent not in displayed or node_id not in displayed:
+                continue
+            visible.append({
                 "source": parent,
                 "target": node_id,
                 "relation_type": "if_level",
                 "selector": data.get("selector", str(selector)),
                 "load_order_candidate": data.get("load_order_candidate"),
-            }
-            for parent, _, _, data in G.in_edges(
-                node_id, keys=True, data=True
-            )
-            if data.get("relation_type") == "if_level"
-        ]
+            })
         return jsonify({
             "selector": str(selector),
-            "candidate_count": len(candidates),
-            "edges": [
-                edge for edge in candidates
-                if edge["source"] in displayed and node_id in displayed
-            ],
+            "candidate_count": candidate_count,
+            "edges": visible,
         })
 
     @app.route("/api/conditions", methods=["GET"])
