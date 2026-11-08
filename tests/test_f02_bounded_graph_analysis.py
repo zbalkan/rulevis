@@ -97,3 +97,28 @@ def test_stats_panel_discloses_truncated_cycle_samples():
 
     assert "stats.cycles_truncated" in javascript
     assert "Additional cycles omitted" in javascript
+
+
+def test_direct_rule_counts_do_not_inflate_parallel_relationships():
+    graph = nx.MultiDiGraph()
+    graph.add_edge("0", "A", relation_type="root")
+    graph.add_edge("A", "B", relation_type="if_sid")
+    graph.add_edge("A", "B", relation_type="if_group")
+    graph.add_edge("B", "C", relation_type="if_sid")
+    analyzer = object.__new__(Analyzer)
+    analyzer.G = graph
+    stats = analyzer.calculate_statistics()
+    descendants = {
+        item["id"]: item["count"]
+        for item in stats["top_direct_descendants"]
+    }
+    ancestors = {
+        item["id"]: item["count"]
+        for item in stats["top_direct_ancestors"]
+    }
+    assert descendants["A"] == 1
+    assert descendants["B"] == 1
+    assert ancestors["B"] == 1
+    assert ancestors["C"] == 1
+    assert stats["top_indirect_descendants"][0]["id"] == "A"
+    assert stats["top_indirect_descendants"][0]["count"] == 2
