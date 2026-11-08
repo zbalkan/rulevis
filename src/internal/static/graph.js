@@ -1333,6 +1333,12 @@ class GraphVisualizer {
     highlightAndCenterNode(nodeId) {
         const node = this.nodeMap.get(nodeId);
         if (!node) return;
+        // A threshold overlay belongs to the selected rule only.
+        if (this.activeLevelRuleId && this.activeLevelRuleId !== nodeId) {
+            this.activeLevelRuleId = null;
+            this.levelOverlayEdges = [];
+            ++this.levelOverlayRequestId;
+        }
         this.highlightedNodeId = nodeId;
         this.detailsPanel.show(node);
         this.updateFocusContext(nodeId);
