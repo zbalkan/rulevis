@@ -1,4 +1,5 @@
 """Smoke-test benchmark entry points against the assessor predicate contract."""
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -9,6 +10,12 @@ import pytest
 @pytest.mark.parametrize("scenario", ["wide", "deep", "group"])
 def test_assessment_scaling_benchmark_uses_explicit_predicate_policy(scenario):
     repository = Path(__file__).resolve().parents[1]
+    # pytest's pythonpath setting affects only this process; the benchmark
+    # executes in a fresh interpreter, including from an uninstalled checkout.
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join(
+        filter(None, (str(repository / "src"), env.get("PYTHONPATH", "")))
+    )
     result = subprocess.run(
         [
             sys.executable,
@@ -18,6 +25,7 @@ def test_assessment_scaling_benchmark_uses_explicit_predicate_policy(scenario):
             "--events", "2",
         ],
         cwd=repository,
+        env=env,
         capture_output=True,
         text=True,
         check=False,
