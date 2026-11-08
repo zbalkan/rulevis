@@ -804,6 +804,7 @@ def test_zero_if_level_does_not_claim_group_runtime_fallback(tmp_path):
     assert precedence["effective"] == "invalid_if_level"
     assert precedence["shadowed"] == []
     assert precedence["invalid"] == "if_level"
+    assert precedence["rejected"] is True
 
 
 def test_temporal_group_synthesis_is_not_reported_as_declared_group(tmp_path):
@@ -823,3 +824,59 @@ def test_temporal_group_synthesis_is_not_reported_as_declared_group(tmp_path):
     assert precedence["effective"] == "if_level"
     assert precedence["shadowed"] == ["if_group"]
     assert precedence["shadowed_sources"] == {"if_group": "if_matched_group"}
+
+
+@pytest.mark.parametrize(
+    "rule_id,effective,shadowed,source",
+    [
+        ("100071", "if_sid", ["if_level"], "if_matched_sid"),
+        ("100072", "if_sid", ["if_group"], "if_sid"),
+    ],
+)
+def test_mixed_temporal_selector_precedence(
+    tmp_path, rule_id, effective, shadowed, source
+):
+    xml = tmp_path / "mixed.xml"
+    xml.write_text(
+        '<group name="example,">'
+        '<rule id="100070" level="8"><description>Parent</description></rule>'
+        '<rule id="100071" level="8"><if_level>5</if_level>'
+        '<if_matched_sid>100070</if_matched_sid>'
+        '<description>Synthesized SID wins</description></rule>'
+        '<rule id="100072" level="8"><if_sid>100070</if_sid>'
+        '<if_matched_group>example</if_matched_group>'
+        '<description>Explicit SID wins</description></rule>'
+        '</group>',
+        encoding="utf-8",
+    )
+    generator = make_generator(tmp_path)
+    generator.build_graph_from_xml()
+    precedence = generator.G.nodes[rule_id]["selector_precedence"]
+    assert precedence["effective"] == effective
+    assert precedence["shadowed"] == shadowed
+    assert precedence["sources"]["if_sid"] == source
+
+
+def test_zero_threshold_rejection_preserves_declared_group_without_activation(tmp_path):
+    xml = tmp_path / "rejected.xml"
+    xml.write_text(
+        '<group name="example,">'
+        '<rule id="100001" level="8"><description>Parent</description></rule>'
+        '<rule id="100002" level="8"><if_level>0</if_level>'
+        '<if_group>example</if_group>'
+        '<description>Rejected child</description></rule>'
+        '</group>',
+        encoding="utf-8",
+    )
+    generator = make_generator(tmp_path)
+    generator.build_graph_from_xml()
+    precedence = generator.G.nodes["100002"]["selector_precedence"]
+    assert precedence["effective"] == "invalid_if_level"
+    assert precedence["rejected"] is True
+    assert precedence["rejection_reason"] == "invalid_if_level"
+    assert precedence["shadowed"] == []
+    group_edges = [
+        data for _, target, data in generator.G.edges(data=True)
+        if target == "100002" and data["relation_type"] == "if_group"
+    ]
+    assert group_edges
