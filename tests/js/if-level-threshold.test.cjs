@@ -24,7 +24,7 @@ test('threshold badge is based on if_level, not node level', () => {
     }), null);
 });
 
-test('clicking badge toggles only the overlay', () => {
+test('badge hit testing and overlay toggling are independent of physics', () => {
     const node = { id: '100030', if_level: '5', x: 100, y: 100 };
     const state = {
         nodes: [node],
@@ -85,4 +85,65 @@ test('threshold links never become physics links; parallel types survive', () =>
         [...state.links.map(link => link.relation_type)].sort(),
         ['if_group', 'if_sid'],
     );
+});
+
+
+test('canvas click on badge opens overlay and empty click clears it', () => {
+    const node = { id: '100030', if_level: '5', x: 100, y: 100 };
+    const badge = graph.thresholdBadgeBounds(node);
+    let redraws = 0;
+    let refreshes = 0;
+    const state = {
+        nodes: [node],
+        nodeMap: new Map([[node.id, node]]),
+        transform: { k: 1, invert: point => point },
+        focusModeEnabled: false,
+        focusedContextIds: new Set(),
+        highlightedNodeId: null,
+        highlightedCycleIds: new Set(),
+        activeLevelRuleId: null,
+        levelOverlayEdges: [],
+        levelOverlayRequestId: 0,
+        detailsPanel: { hide() {} },
+        thresholdBadgeBounds: graph.thresholdBadgeBounds,
+        findThresholdBadgeAt: graph.findThresholdBadgeAt,
+        findNodeAt: () => null,
+        toggleLevelOverlay: graph.toggleLevelOverlay,
+        refreshLevelOverlay: () => { ++refreshes; },
+        clearHighlight: graph.clearHighlight,
+        render: () => { ++redraws; },
+    };
+    graph.handleCanvasClick.call(state, {
+        offsetX: badge.x + 2, offsetY: badge.y + 2,
+    });
+    assert.equal(state.activeLevelRuleId, node.id);
+    assert.equal(refreshes, 1);
+
+    state.levelOverlayEdges = [{ source: '100001', target: node.id }];
+    graph.handleCanvasClick.call(state, { offsetX: 0, offsetY: 0 });
+    assert.equal(state.activeLevelRuleId, null);
+    assert.equal(state.levelOverlayEdges.length, 0);
+    assert.equal(redraws, 1);
+});
+
+test('Escape clears an overlay without a highlighted node', () => {
+    const state = {
+        conditionsModal: { isOpen: false },
+        heatmapModal: { isOpen: false },
+        statsPanel: { isOpen: false },
+        highlightedNodeId: null,
+        activeLevelRuleId: '100030',
+        levelOverlayEdges: [{}],
+        levelOverlayRequestId: 2,
+        highlightedCycleIds: new Set(),
+        focusedContextIds: new Set(),
+        detailsPanel: { hide() {} },
+        nodeMap: new Map(),
+        render() {},
+        clearHighlight: graph.clearHighlight,
+    };
+    graph.handleEscape.call(state);
+    assert.equal(state.activeLevelRuleId, null);
+    assert.equal(state.levelOverlayEdges.length, 0);
+    assert.equal(state.levelOverlayRequestId, 3);
 });
