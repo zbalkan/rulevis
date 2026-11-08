@@ -12,6 +12,7 @@ from internal.catalog import (
     RuleCatalog,
     RuleDeclaration,
     normalize_rule_id,
+    valid_if_sid,
 )
 from internal.group_index import GroupMembershipIndex
 from internal.order import CategoryOrder, PrioritySequence
@@ -477,6 +478,12 @@ class EvaluationBuilder:
             )
             return
 
+        if not valid_if_sid(declaration.if_sid):
+            self.issues.append(
+                LoadIssue("INVALID_IF_SID", declaration.rule_id, declaration.if_sid)
+            )
+            return
+
         if declaration.invalid_if_level is not None:
             self.issues.append(
                 LoadIssue(
@@ -571,9 +578,19 @@ class EvaluationBuilder:
                 parents.if_group,
             )
         else:
-            category_bit = self._category_bit(state.category)
-            token = self.order.first_with_category(category_bit)
-            if token is None:
+            # Wazuh category fallback inspects top-level siblings only.
+            # It never descends into children for this selector.
+            parent_id = next(
+                (
+                    occurrence_id
+                    for occurrence_id in self.sequences[None]
+                    if self.rules[
+                        self.occurrences[occurrence_id].rule_id
+                    ].category == state.category
+                ),
+                None,
+            )
+            if parent_id is None:
                 self.issues.append(
                     LoadIssue(
                         "CATEGORY_NOT_FOUND",
@@ -583,7 +600,6 @@ class EvaluationBuilder:
                 )
                 attached = False
             else:
-                parent_id = self.occurrence_by_enter_token[token]
                 parent_rule_id = self.occurrences[parent_id].rule_id
                 self._set_category(
                     state,
