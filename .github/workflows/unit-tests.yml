@@ -65,7 +65,7 @@ jobs:
             esac
 
             case "$path" in
-              src/internal/static/*.js|tests/js/*.cjs)
+              src/internal/static/*.js|tests/js/*.cjs|.github/workflows/unit-tests.yml)
                 javascript=true
                 ;;
             esac
