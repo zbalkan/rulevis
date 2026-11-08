@@ -122,8 +122,15 @@ declarations to the occurrence evaluator. It stores a separate
 `occurrence_count` and per-node accepted occurrence counts. It also
 annotates the **declared** graph nodes with `modeled_acceptance`:
 `accepted`, `rejected`, or `undeclared_reference` for placeholder
-nodes introduced by missing dependency IDs. Modeled load issues are
-available as `modeled_load_issues` on declared nodes.
+nodes introduced by missing dependency IDs. Presence of a declaration is
+determined from the catalog, even if its invalid selector prevented a normal
+visual node from being created. Each graph node also receives
+`modeled_occurrence_count`, the number of physical RuleVis-modeled
+occurrences for that rule (zero for rejected or undeclared references).
+`modeled_load_issues` on graph nodes contains issues for that node, while
+`generator.modeled_load_issues` contains the complete ordered modeled
+load-issue output, including declarations that never created graph nodes.
+Each global record contains `rule_id`, `code`, and `selector`.
 
 This method is **not** invoked during ordinary XML graph generation.
 It does not replace source edges, rewrite candidate snapshots, change
