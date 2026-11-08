@@ -612,6 +612,7 @@ def test_if_matched_group_resolves_members_with_selector(tmp_path):
             {
                 "relation_type": "if_matched_group",
                 "selector": "source_group",
+                "load_order_candidate": True,
             }
         ]
 

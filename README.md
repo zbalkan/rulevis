@@ -135,7 +135,7 @@ The project is composed of four main Python modules and a JavaScript frontend:
 
 ### Experimental Source-Faithful Assessment
 
-The experimental assessment pipeline is deliberately separate from the visualization graph and UI. It preserves Wazuh rule declarations in load order, reconstructs Wazuh 4.14.10 runtime rule occurrences, evaluates an explicitly supplied finite event domain with exact bitsets, classifies the resulting reachability/shadowing/drop behavior, and can serialize a stable JSON report.
+The experimental assessment pipeline is deliberately separate from the visualization graph and UI. It preserves Wazuh rule declarations in load order, reconstructs Wazuh 4.14.10 runtime rule occurrences, evaluates an explicitly supplied finite event domain with exact bitsets, classifies the resulting reachability/shadowing/drop behavior, and can serialize a stable JSON report. `project_occurrence_relationships()` additionally reduces the runtime occurrence tree to logical rule-to-rule attachments with multiplicity counts for comparison against the declared visualization graph; it is not used by the UI.
 
 The pipeline is:
 
@@ -172,7 +172,7 @@ The log file records informational messages, warnings, and errors emitted during
 
 ## Group relationship interpretation
 
-RuleVis displays declared `if_group` dependencies even when their parents would not have been available at the point the child was encountered in RuleVis's file scan. The rule details label those relationships **not a candidate in scanned load order**. The same annotation is used for declared `if_level` dependencies. Other links are *candidates*, not verified runtime attachments. The scan uses sorted XML files and may differ from the manager's configured rule-loading order. Source-faithful runtime occurrence reconstruction remains a separate experimental subsystem.
+RuleVis displays declared `if_group`, `if_level`, and `if_matched_group` dependencies even when their parents would not have been available at the point the child was encountered in RuleVis's file scan. The temporal `if_matched_group` selector uses Wazuh's `OSMatch` semantics, including negation, alternatives, and anchoring; ordinary `if_group` instead uses `OS_WordMatch`. The rule details label those relationships **not a candidate in scanned load order**. The same annotation is used for declared `if_level` dependencies. Other links are *candidates*, not verified runtime attachments. The scan uses sorted XML files and may differ from the manager's configured rule-loading order. Source-faithful runtime occurrence reconstruction remains a separate experimental subsystem.
 
 ## Notes
 

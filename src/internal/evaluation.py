@@ -26,6 +26,8 @@ class RuleState:
     noalert: bool
     conditions: tuple[dict[str, object], ...]
     temporal_conditions: tuple[dict[str, object], ...]
+    parent_relation: Optional[str] = None
+    parent_selector: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -485,6 +487,26 @@ class EvaluationBuilder:
                 LoadIssue("OVERWRITE_RULE_NOT_FOUND", declaration.rule_id)
             )
 
+        parents = self._effective_parents(declaration)
+        if int(normalized_rule_id) < 10:
+            parent_relation, parent_selector = "root", None
+        elif parents.if_sid:
+            parent_relation = (
+                "if_sid" if declaration.if_sid else "if_matched_sid"
+            )
+            parent_selector = parents.if_sid
+        elif parents.if_level is not None:
+            parent_relation, parent_selector = (
+                "if_level", str(parents.if_level)
+            )
+        elif parents.if_group:
+            parent_relation = (
+                "if_group" if declaration.if_group else "if_matched_group"
+            )
+            parent_selector = parents.if_group
+        else:
+            parent_relation, parent_selector = "category", declaration.category
+
         state = RuleState(
             rule_id=declaration.rule_id,
             load_priority=declaration.load_priority,
@@ -493,14 +515,14 @@ class EvaluationBuilder:
             noalert=declaration.noalert,
             conditions=declaration.conditions,
             temporal_conditions=declaration.temporal_conditions,
+            parent_relation=parent_relation,
+            parent_selector=parent_selector,
         )
         self._register_state(state)
 
         if int(normalized_rule_id) < 10:
             self._new_occurrence(state.rule_id, None)
             return
-
-        parents = self._effective_parents(declaration)
 
         if parents.if_sid:
             attached = self._attach_if_sid(
@@ -568,3 +590,44 @@ class EvaluationBuilder:
             occurrences_by_rule=occurrence_map,
             issues=tuple(self.issues),
         )
+
+
+def project_occurrence_relationships(
+    model: EvaluationModel,
+) -> nx.MultiDiGraph:
+    """Collapse accepted RuleNode occurrences into logical runtime edges.
+
+    The projection preserves attachment multiplicity. It is not the declared
+    dependency graph and does not imply historical-event correlation.
+    """
+    projected = nx.MultiDiGraph()
+    for rule_id in model.rules:
+        projected.add_node(
+            rule_id,
+            occurrence_count=len(model.occurrences_by_rule.get(rule_id, ())),
+        )
+
+    for occurrence in model.occurrences.values():
+        if occurrence.parent_id is None:
+            continue
+        parent_rule = model.occurrences[occurrence.parent_id].rule_id
+        child_rule = occurrence.rule_id
+        state = model.rules[child_rule]
+        relation = state.parent_relation or "unknown"
+        selector = state.parent_selector
+        key = (relation, selector)
+        if projected.has_edge(parent_rule, child_rule, key):
+            projected.edges[parent_rule, child_rule, key][
+                "occurrence_count"
+            ] += 1
+        else:
+            projected.add_edge(
+                parent_rule,
+                child_rule,
+                key=key,
+                relation_type=relation,
+                selector=selector,
+                occurrence_count=1,
+            )
+
+    return projected

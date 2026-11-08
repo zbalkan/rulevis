@@ -8,7 +8,7 @@ from typing import Final, Optional
 
 import networkx as nx
 
-from internal.catalog import RuleCatalog, normalize_rule_id, os_word_match
+from internal.catalog import RuleCatalog, normalize_rule_id, os_match, os_word_match
 
 ENCODING: Final[str] = "utf-8"
 
@@ -79,7 +79,10 @@ class GraphGenerator:
         self.runtime_group_by_rule: dict[str, str] = {}
         self.runtime_group_history: dict[str, list[str]] = defaultdict(list)
         self.runtime_priority_by_rule: dict[str, int] = {}
-        self.runtime_priority_history: dict[str, list[int]] = defaultdict(list)
+        # Encoded Wazuh load priorities occupy a small, bounded key space.
+        # The indices avoid testing every rule for every if_level selector.
+        self.active_priority_index: dict[int, dict[str, None]] = defaultdict(dict)
+        self.history_priority_index: dict[int, dict[str, None]] = defaultdict(dict)
         self.G: nx.MultiDiGraph = nx.MultiDiGraph()
         self.graph_file: str = graph_file
         self.catalog: RuleCatalog = RuleCatalog()
@@ -97,6 +100,7 @@ class GraphGenerator:
             str, tuple[tuple[str, str], ...]
         ] = {}
         self.level_parent_snapshots: dict[str, tuple[str, ...]] = {}
+        self.temporal_group_parent_snapshots: dict[str, tuple[str, ...]] = {}
 
     def get_all_xml_files(self) -> list[str]:
         xml_files: list[str] = []
@@ -183,10 +187,14 @@ class GraphGenerator:
         if if_level is not None and if_level > 0:
             candidates = set(self.level_parent_snapshots.get(rule_id, ()))
             threshold = if_level * 100
-            for parent, priorities in self.runtime_priority_history.items():
-                if parent == rule_id or not any(
-                    priority >= threshold for priority in priorities
-                ):
+            possible: set[str] = set()
+            for priority, parents in self.history_priority_index.items():
+                if priority >= threshold:
+                    possible.update(parents)
+            for parent in sorted(
+                possible, key=self.rule_load_index.__getitem__
+            ):
+                if parent == rule_id:
                     continue
                 self.add_edge_with_type(
                     parent, rule_id, "if_level", selector=str(if_level),
@@ -194,16 +202,19 @@ class GraphGenerator:
                 )
 
         if if_matched_group:
-            for group in re.split(r'[,\s]+', if_matched_group.strip()):
-                if not group:
+            candidates = set(
+                self.temporal_group_parent_snapshots.get(rule_id, ())
+            )
+            for parent, histories in self.runtime_group_history.items():
+                if not any(
+                    os_match(if_matched_group, value) for value in histories
+                ):
                     continue
-                for parent_rule in self.group_membership.get(group, []):
-                    self.add_edge_with_type(
-                        parent_rule,
-                        rule_id,
-                        'if_matched_group',
-                        selector=group,
-                    )
+                self.add_edge_with_type(
+                    parent, rule_id, 'if_matched_group',
+                    selector=if_matched_group,
+                    load_order_candidate=parent in candidates,
+                )
 
     def _declared_group_rules(self, selector: str):
         """Find declarations matching any accepted runtime group assignment."""
@@ -229,14 +240,36 @@ class GraphGenerator:
             if os_word_match(selector, groups)
         )
 
+    def _record_priority(
+        self, rule_id: str, priority: int
+    ) -> None:
+        previous = self.runtime_priority_by_rule.get(rule_id)
+        if previous is not None:
+            self.active_priority_index[previous].pop(rule_id, None)
+        self.runtime_priority_by_rule[rule_id] = priority
+        self.active_priority_index[priority][rule_id] = None
+        self.history_priority_index[priority][rule_id] = None
+
     def _snapshot_level_parents(
         self, rule_id: str, level: int
     ) -> None:
         """Snapshot eligible existing rule priorities at declaration time."""
         threshold = level * 100
-        self.level_parent_snapshots[rule_id] = tuple(
-            parent for parent, priority in self.runtime_priority_by_rule.items()
-            if parent != rule_id and priority >= threshold
+        parents: set[str] = set()
+        for priority, rule_ids in self.active_priority_index.items():
+            if priority >= threshold:
+                parents.update(rule_ids)
+        parents.discard(rule_id)
+        self.level_parent_snapshots[rule_id] = tuple(parents)
+
+    def _snapshot_temporal_group_parents(
+        self, rule_id: str, selector: str
+    ) -> None:
+        """Wazuh registers historical sources after inserting the rule."""
+        self.temporal_group_parent_snapshots[rule_id] = tuple(
+            parent
+            for parent, group in self.runtime_group_by_rule.items()
+            if os_match(selector, group)
         )
 
     def _replace_visual_groups(
@@ -353,6 +386,19 @@ class GraphGenerator:
         ]
         return "".join(values) if values else None
 
+    def _concat_int_child(
+        self,
+        element: ET.Element,
+        tag: str,
+    ) -> Optional[int]:
+        value = self._concat_child_text(element, tag)
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except ValueError:
+            return None
+
     def _last_int_child(
         self,
         element: ET.Element,
@@ -420,7 +466,7 @@ class GraphGenerator:
             display_groups=display_groups,
             category=category if category else None,
             if_sid=self._concat_child_text(element, "if_sid"),
-            if_level=self._last_int_child(element, "if_level"),
+            if_level=self._concat_int_child(element, "if_level"),
             if_group=self._concat_child_text(element, "if_group"),
             if_matched_sid=self._last_int_child(
                 element,
@@ -472,8 +518,7 @@ class GraphGenerator:
             priority = self.catalog.declarations[-1].load_priority
             if element.get("overwrite", "").lower() == "yes":
                 if rule_id in self.G.nodes:
-                    self.runtime_priority_by_rule[rule_id] = priority
-                    self.runtime_priority_history[rule_id].append(priority)
+                    self._record_priority(rule_id, priority)
                     self.runtime_group_by_rule[rule_id] = declared_runtime_group
                     self.runtime_group_history[rule_id].append(
                         declared_runtime_group
@@ -502,11 +547,16 @@ class GraphGenerator:
                 )
 
             rule_level = element.get('level')
-            if_sid = element.findtext('if_sid', None)
-            if_matched_sid = element.findtext('if_matched_sid', None)
+            if_sid = self._concat_child_text(element, "if_sid")
+            matched_sid = self._last_int_child(element, "if_matched_sid")
+            if_matched_sid = (
+                str(matched_sid) if matched_sid is not None else None
+            )
             if_group = self._concat_child_text(element, "if_group")
-            if_matched_group = element.findtext('if_matched_group', None)
-            if_level = self._last_int_child(element, "if_level")
+            if_matched_group = self._concat_child_text(
+                element, "if_matched_group"
+            )
+            if_level = self._concat_int_child(element, "if_level")
             raw_if_level = self._concat_child_text(element, "if_level")
 
             attributes = [(i.tag, i.text) for i in element]
@@ -525,12 +575,15 @@ class GraphGenerator:
                     self._snapshot_group_parents(rule_id, if_group)
                 if if_level is not None and if_level > 0:
                     self._snapshot_level_parents(rule_id, if_level)
-                self.runtime_priority_by_rule[rule_id] = priority
-                self.runtime_priority_history[rule_id].append(priority)
+                self._record_priority(rule_id, priority)
                 if declared_runtime_group is not None:
                     self.runtime_group_by_rule[rule_id] = declared_runtime_group
                     self.runtime_group_history[rule_id].append(
                         declared_runtime_group
+                    )
+                if if_matched_group:
+                    self._snapshot_temporal_group_parents(
+                        rule_id, if_matched_group
                     )
                 self.G.add_node(
                     rule_id,

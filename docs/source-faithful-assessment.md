@@ -78,9 +78,46 @@ mis-model:
   Wazuh's early return within a sibling-list invocation;
 - one logical rule can therefore have multiple runtime occurrences.
 
-These semantics are separate from the existing condition-path visualization.
-For example, the UI graph still deliberately omits `if_level`, while the
-source-faithful evaluator models it because runtime reconstruction requires it.
+These semantics are separate from the condition-path visualization.
+The UI graph includes declared `if_level` dependencies, including later
+and superseded references, because RuleVis is also a source-analysis tool.
+The evaluator instead models attachments to accepted rule occurrences in
+current Wazuh tree order.
+
+## Logical relationship projection
+
+`project_occurrence_relationships(EvaluationBuilder(catalog).build())`
+projects accepted physical `RuleNode` occurrences onto logical rule IDs.
+Every edge retains its originating relationship type, selector, and the
+number of physical attachments it represents. Implicit category-based
+attachments are labeled `category`; synthesized temporal parents retain
+their `if_matched_sid` or `if_matched_group` origin. This graph can be
+compared with `GraphGenerator.G` without deleting declared-only edges or
+cycles from static analysis.
+
+The occurrence graph itself must remain acyclic. Its logical projection
+does not establish that a declared relation was available at load time
+unless the corresponding accepted occurrences exist. The projection
+does not model historical-event searches (`OS_MarkID`/`OS_MarkGroup`)
+and does not validate arbitrary regex or field predicates.
+
+Tests include mutual group dependencies analogous to stock Wazuh rules
+80790/80791, level-threshold multiplicity, and missing-base overwrites.
+
+## Wazuh relationship sources
+
+The model is checked against Wazuh 4.14.10's `rules.c`,
+`rules_list.c`, `os_match_compile.c`, and `os_match_execute.c`.
+The source-graph parser now concatenates repeated selector elements,
+uses `OSMatch` semantics for temporal group references (different
+from `OS_WordMatch`), preserves `if_level` priority history, and treats
+missing-base overwrites as new declarations at scan time.
+
+As before, RuleVis's filesystem scanning is not equivalent to an
+`ossec.conf`-selected include order. A source-level
+`load_order_candidate` remains an estimate, not proof of a runtime
+attachment. Differential tests against a compiled 4.14.10 loader are
+still required before claiming byte- or occurrence-identical behavior.
 
 ## Exact finite-domain evaluation
 
