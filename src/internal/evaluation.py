@@ -484,6 +484,16 @@ class EvaluationBuilder:
             )
             return
 
+        if declaration.invalid_if_level is not None:
+            self.issues.append(
+                LoadIssue(
+                    "INVALID_IF_LEVEL",
+                    declaration.rule_id,
+                    declaration.invalid_if_level,
+                )
+            )
+            return
+
         if declaration.invalid_if_matched_sid is not None:
             self.issues.append(
                 LoadIssue(
