@@ -127,6 +127,23 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
             payload["expandable"] = any(child not in displayed for child in children)
         return payload
 
+    def shadowed_by(rule_id: str, relation: str) -> str | None:
+        precedence = G.nodes[rule_id].get("selector_precedence") or {}
+        if relation in precedence.get("shadowed", ()):
+            return precedence.get("effective")
+        return None
+
+    def level_parent_summary(rule_id: str) -> dict[str, int]:
+        declared = 0
+        candidates = 0
+        for _, _, _, data in G.in_edges(rule_id, keys=True, data=True):
+            if data.get("relation_type") != "if_level":
+                continue
+            declared += 1
+            if data.get("load_order_candidate") is True:
+                candidates += 1
+        return {"declared": declared, "load_order_candidates": candidates}
+
     def structural_edges(u: str, v: str) -> list[dict[str, Any]]:
         """Keep parallel non-threshold edges in the force-directed graph."""
         return [
@@ -134,6 +151,10 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                 "source": u,
                 "target": v,
                 "relation_type": data.get("relation_type", "unknown"),
+                **(
+                    {"shadowed_by": shadowed_by(v, data.get("relation_type"))}
+                    if shadowed_by(v, data.get("relation_type")) else {}
+                ),
             }
             for data in G.get_edge_data(u, v, default={}).values()
             if data.get("relation_type") != "if_level"
@@ -195,6 +216,13 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                     ),
                     "selector": edge_data.get("selector"),
                     **(
+                        {"shadowed_by": shadowed_by(
+                            node_id, edge_data.get("relation_type")
+                        )}
+                        if shadowed_by(node_id, edge_data.get("relation_type"))
+                        else {}
+                    ),
+                    **(
                         {"load_order_candidate": edge_data["load_order_candidate"]}
                         if "load_order_candidate" in edge_data else {}
                     ),
@@ -216,6 +244,13 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                     ),
                     "selector": edge_data.get("selector"),
                     **(
+                        {"shadowed_by": shadowed_by(
+                            child_id, edge_data.get("relation_type")
+                        )}
+                        if shadowed_by(child_id, edge_data.get("relation_type"))
+                        else {}
+                    ),
+                    **(
                         {"load_order_candidate": edge_data["load_order_candidate"]}
                         if "load_order_candidate" in edge_data else {}
                     ),
@@ -236,6 +271,8 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                 "mitre": node_data.get("mitre", []),
                 "level": node_data.get("level"),
                 "if_level": node_data.get("if_level"),
+                "level_parents": level_parent_summary(node_id),
+                "selector_precedence": node_data.get("selector_precedence"),
                 "file": node_data.get("file"),
                 "temporal": bool(node_data.get("temporal", False)),
                 "parents": parents,
@@ -398,6 +435,12 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         selector = G.nodes[node_id].get("if_level")
         if selector is None or str(selector) == "":
             return error("Rule has no if_level declaration", 400)
+        raw = str(selector)
+        if not raw.isascii() or not raw.isdigit() or int(raw) == 0:
+            return error("Rule has no valid positive if_level threshold", 400)
+        precedence = G.nodes[node_id].get("selector_precedence") or {}
+        if "if_level" in precedence.get("shadowed", ()):
+            return error("if_level is shadowed by a higher-priority selector", 400)
         displayed = set(filter(None, request.args.get("displayed", "").split(",")))
         candidate_count = 0
         visible = []
