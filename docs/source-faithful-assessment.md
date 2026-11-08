@@ -160,6 +160,24 @@ As before, RuleVis's filesystem scanning is not equivalent to an
 attachment. Differential tests against a compiled 4.14.10 loader are
 still required before claiming byte- or occurrence-identical behavior.
 
+### Incremental SID-list placement
+
+Wazuh 4.14.10 `OS_AddChild` calls `_AddtoRule` separately for each
+ordinary `if_sid` token, immediately inserting any matching child
+occurrences. Subsequent tokens can therefore resolve against occurrences
+inserted earlier in the same declaration; this can produce logical
+self-dependencies in the occurrence projection while the physical
+occurrence graph remains acyclic. RuleVis models that incremental behavior
+for ordinary SID lists.
+
+The **nonzero `if_matched_sid` rejection case** remains a deliberate
+safety abstraction: RuleVis stages those attachments and avoids retaining
+partial nodes when a later SID lookup fails. Wazuh's `OS_AddChild` may
+return an error after an earlier insertion, and its rule-loading cleanup
+then frees the rejected `RuleInfo`. The resulting partial-node ownership
+requires separate analysis; RuleVis does not claim exact fidelity for
+that error path.
+
 ## Exact finite-domain evaluation
 
 The assessor does not attempt arbitrary symbolic regex satisfiability.
