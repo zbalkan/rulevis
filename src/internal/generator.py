@@ -935,6 +935,75 @@ class GraphGenerator:
             f"{len(first_level_rules)}"
         )
 
+    def build_modeled_runtime_projection(
+        self, *, max_occurrences: int = 100_000
+    ) -> nx.MultiDiGraph:
+        """Build an opt-in, occurrence-derived attachment projection.
+
+        This is a RuleVis simulation of Wazuh 4.14.10 load behavior, not
+        an independently verified statement about a running manager.
+        The declared graph and its source edges remain unchanged. Callers
+        must opt in because occurrence expansion can be expensive and
+        may exceed the configured budget.
+        """
+        from internal.evaluation import (
+            EvaluationBuilder,
+            project_occurrence_relationships,
+        )
+
+        model = EvaluationBuilder(
+            self.catalog, max_occurrences=max_occurrences
+        ).build()
+        projected = project_occurrence_relationships(model)
+
+        issues_by_rule: dict[str, list[dict[str, object]]] = defaultdict(list)
+        for issue in model.issues:
+            issues_by_rule[issue.rule_id].append({
+                "code": issue.code,
+                "selector": issue.selector,
+            })
+
+        # The source graph can omit invalid declarations entirely, or
+        # contain only a placeholder created by a later SID reference.
+        # Relationship-map membership therefore cannot prove declaration
+        # presence. Preserve the complete issue stream independently.
+        declared_rule_ids = {
+            normalized
+            for declaration in self.catalog.declarations
+            if (normalized := normalize_rule_id(declaration.rule_id)) is not None
+        }
+        issue_records = [
+            {
+                "rule_id": issue.rule_id,
+                "code": issue.code,
+                "selector": issue.selector,
+            }
+            for issue in model.issues
+        ]
+
+        # Commit model annotations only once construction has succeeded.
+        # On an occurrence-budget failure, do not publish partial results.
+        for rule_id, attrs in self.G.nodes(data=True):
+            if rule_id == "0":
+                continue
+            accepted = rule_id in model.rules
+            declared = rule_id in declared_rule_ids
+            attrs["modeled_acceptance"] = (
+                "accepted" if accepted else
+                "rejected" if declared else
+                "undeclared_reference"
+            )
+            attrs["modeled_occurrence_count"] = len(
+                model.occurrences_by_rule.get(rule_id, ())
+            )
+            attrs["modeled_load_issues"] = list(
+                issues_by_rule.get(rule_id, ())
+            )
+
+        self.modeled_load_issues = issue_records
+        self.modeled_runtime_graph = projected
+        return projected
+
     def save_graph(self) -> None:
         try:
             output_path = self.graph_file

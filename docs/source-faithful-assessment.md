@@ -112,6 +112,36 @@ and does not validate arbitrary regex or field predicates.
 Tests include mutual group dependencies analogous to stock Wazuh rules
 80790/80791, level-threshold multiplicity, and missing-base overwrites.
 
+## Opt-in modeled attachment projection (N2 foundation)
+
+`GraphGenerator.build_modeled_runtime_projection(max_occurrences=100_000)`
+is an explicit, potentially expensive bridge from parsed `RuleCatalog`
+declarations to the occurrence evaluator. It stores a separate
+`generator.modeled_runtime_graph` using
+`project_occurrence_relationships()`, with per-edge attachment
+`occurrence_count` and per-node accepted occurrence counts. It also
+annotates the **declared** graph nodes with `modeled_acceptance`:
+`accepted`, `rejected`, or `undeclared_reference` for placeholder
+nodes introduced by missing dependency IDs. Presence of a declaration is
+determined from the catalog, even if its invalid selector prevented a normal
+visual node from being created. Each graph node also receives
+`modeled_occurrence_count`, the number of physical RuleVis-modeled
+occurrences for that rule (zero for rejected or undeclared references).
+`modeled_load_issues` on graph nodes contains issues for that node, while
+`generator.modeled_load_issues` contains the complete ordered modeled
+load-issue output, including declarations that never created graph nodes.
+Each global record contains `rule_id`, `code`, and `selector`.
+
+This method is **not** invoked during ordinary XML graph generation.
+It does not replace source edges, rewrite candidate snapshots, change
+Flask graph presentation, or claim that Wazuh accepted any rule.
+`accepted` here means *accepted by RuleVis's occurrence model*, not
+confirmed by a running Wazuh manager. The configured manager include
+order and runtime loader may differ from RuleVis's file scan. A model
+occurrence-budget exception leaves the previously published projection
+unchanged. The N2 issue requires version-pinned differential tests
+before presenting this model as verified effective runtime attachment.
+
 ## Wazuh relationship sources
 
 The model is checked against Wazuh 4.14.10's `rules.c`,
