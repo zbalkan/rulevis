@@ -293,8 +293,9 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                             aria-label="Close conditions">×</button>
                 </div>
                 <p class="conditions-scope-note">
-                    Resolved paths include RuleVis-supported relationships only.
-                    <code>if_level</code> is intentionally not modeled.
+                    Resolved paths follow declared rule dependencies, including
+                    <code>if_level</code>. They are source-level possibilities, not
+                    verified analysisd runtime attachments.
                 </p>
                 <div id="conditionsBody"></div>
             </div>

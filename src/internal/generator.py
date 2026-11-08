@@ -729,10 +729,9 @@ class GraphGenerator:
                     f"Error parsing {xml_file}: {e}", exc_info=True
                 )
 
-        # Apply overwrites after all base rules exist. Wazuh preserves the
-        # dependency labels (if_sid/if_group and the matched SID/group
-        # relationships), but replaces ordinary predicates and other rule
-        # properties. Keep the effective condition model consistent with that.
+        # Apply condition and display metadata for overwrites whose bases
+        # already existed when scanned. Wazuh retains original parent
+        # selectors while replacing non-parent predicates and rule properties.
         for (
             element,
             ow_file,
@@ -754,8 +753,8 @@ class GraphGenerator:
                     inherited_groups, attrs
                 )
                 self._replace_visual_groups(rule_id, effective_groups)
-                # Deferred overwrites may precede their base in scanned XML.
-                # Only accepted bases contribute declaration history.
+                # The base was already accepted when this overwrite was scanned.
+                # Preserve the recorded group history for source-level analysis.
                 if (
                     declared_runtime_group is not None
                     and declared_runtime_group
@@ -809,12 +808,6 @@ class GraphGenerator:
                     + overwrite_temporal_conditions
                 )
                 existing["temporal"] = self.is_temporal_rule(element)
-            else:
-                logging.warning(
-                    f"Overwrite rule {rule_id} found with no base rule; "
-                    "skipping."
-                )
-
         logging.info("Resolving rule relationships...")
         for rule_id, relationships in self.rule_relationships.items():
             self.add_relationship_edges(rule_id, *relationships)

@@ -134,3 +134,34 @@ def test_projection_retains_structural_type_and_temporal_origin():
     assert group[0]["synthesized_from"] == "if_matched_group"
     assert not _edges(runtime, "100861", "100862", "if_matched_sid")
     assert not _edges(runtime, "100861", "100863", "if_matched_group")
+
+
+def test_multi_sid_projection_records_matching_parent_selector():
+    catalog = RuleCatalog()
+    _append(catalog, 1, 0, group="root,")
+    _append(catalog, 2, 0, group="root,")
+    _append(catalog, 100870, 7, if_sid="000001,2", group="child,")
+
+    model = EvaluationBuilder(catalog).build()
+    projected = project_occurrence_relationships(model)
+
+    first = _edges(projected, "1", "100870", "if_sid")
+    second = _edges(projected, "2", "100870", "if_sid")
+    assert len(first) == 1
+    assert len(second) == 1
+    assert first[0]["selector"] == "000001"
+    assert second[0]["selector"] == "2"
+
+
+def test_repeated_sid_textual_references_preserve_distinct_provenance():
+    catalog = RuleCatalog()
+    _append(catalog, 1, 0, group="root,")
+    _append(catalog, 100871, 7, if_sid="1,000001", group="child,")
+
+    model = EvaluationBuilder(catalog).build()
+    projected = project_occurrence_relationships(model)
+    sid = _edges(projected, "1", "100871", "if_sid")
+
+    assert len(model.occurrences_by_rule["100871"]) == 2
+    assert {edge["selector"] for edge in sid} == {"1", "000001"}
+    assert all(edge["occurrence_count"] == 1 for edge in sid)

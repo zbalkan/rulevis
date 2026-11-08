@@ -563,3 +563,13 @@ def test_details_expose_synthesized_structural_relationship(tmp_path):
         and row["synthesized_from"] == "if_matched_sid"
         for row in parents
     )
+
+
+def test_conditions_modal_includes_if_level_as_declared_relationship(tmp_path):
+    paths = write_app_files(tmp_path)
+    client = create_app(*(str(path) for path in paths)).test_client()
+    html = client.get("/").get_data(as_text=True)
+
+    assert "if_level</code> is intentionally not modeled" not in html
+    assert "<code>if_level</code>" in html
+    assert "declared" in html.lower()

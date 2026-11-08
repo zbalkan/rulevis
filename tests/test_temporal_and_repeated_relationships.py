@@ -186,3 +186,66 @@ def test_explicit_sid_avoids_synthesizing_if_group_from_temporal_selector(
     assert not any(
         e["relation_type"] == "if_group" for e in edges.values()
     )
+
+
+@pytest.mark.parametrize(
+    "selector,matched",
+    [
+        ("|missing", True),
+        ("missing|", True),
+        ("present||missing", True),
+        ("!missing|", False),
+        ("!missing", True),
+    ],
+)
+def test_native_os_match_empty_alternatives_are_match_all(selector, matched):
+    # Wazuh OSMatch_Compile maps an empty branch to _os_strmatch.
+    assert os_match(selector, "unrelated_group,") is matched
+
+
+def test_invalid_temporal_sid_is_reported_and_rejected(tmp_path, caplog):
+    (tmp_path / "bad_sid.xml").write_text(
+        '<group name="root,">'
+        '<rule id="100970" level="4"><description>Parent</description></rule>'
+        '<rule id="100971" level="7">'
+        '<if_matched_sid>100970,100972</if_matched_sid>'
+        '<description>Invalid temporal SID</description></rule>'
+        '</group>',
+        encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pkl"))
+    generator.build_graph_from_xml()
+
+    assert "100971" not in generator.G
+    assert "if_matched_sid" in caplog.text
+    assert "100970,100972" in caplog.text
+    from internal.evaluation import EvaluationBuilder
+    model = EvaluationBuilder(generator.catalog).build()
+    assert "100971" not in model.rules
+    assert any(
+        issue.code == "INVALID_IF_MATCHED_SID" and issue.rule_id == "100971"
+        for issue in model.issues
+    )
+
+
+def test_invalid_repeated_temporal_sid_cannot_be_hidden_by_last_value(
+    tmp_path, caplog,
+):
+    (tmp_path / "bad_sid.xml").write_text(
+        '<group name="root,">'
+        '<rule id="100980" level="4"><description>Parent</description></rule>'
+        '<rule id="100981" level="7">'
+        '<if_matched_sid>100980,100982</if_matched_sid>'
+        '<if_matched_sid>100980</if_matched_sid>'
+        '<description>Invalid repeated temporal SID</description></rule>'
+        '</group>',
+        encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pkl"))
+    generator.build_graph_from_xml()
+
+    assert "100981" not in generator.G
+    assert "100980,100982" in caplog.text
+    from internal.evaluation import EvaluationBuilder
+    model = EvaluationBuilder(generator.catalog).build()
+    assert "100981" not in model.rules

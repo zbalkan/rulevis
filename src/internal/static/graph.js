@@ -14,6 +14,7 @@ const STYLES = {
         if_sid: 'blue', 
         if_matched_sid: 'green', 
         if_group: 'red', 
+        if_level: 'darkorange', 
         if_matched_group: 'purple', 
         no_parent: '#6b6b6b', 
         unknown: '#999' 
@@ -1100,6 +1101,7 @@ class GraphVisualizer {
             { label: "if_sid", color: STYLES.edges.if_sid },
             { label: "if_matched_sid", color: STYLES.edges.if_matched_sid },
             { label: "if_group", color: STYLES.edges.if_group },
+            { label: "if_level", color: STYLES.edges.if_level },
             { label: "if_matched_group", color: STYLES.edges.if_matched_group },
             { label: "No parent", color: STYLES.edges.no_parent },
             { label: "Unknown", color: STYLES.edges.unknown }
