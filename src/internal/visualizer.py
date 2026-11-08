@@ -101,17 +101,31 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
     app = Flask(__name__)
 
     # ---------- shared helpers ----------
+    def structural_children(nid: str) -> list[str]:
+        """Expand only visible structural dependencies, not level candidates."""
+        return [
+            child for child in G.successors(nid)
+            if any(
+                data.get("relation_type") != "if_level"
+                for data in G.get_edge_data(nid, child, default={}).values()
+            )
+        ]
+
     def serialize_node(nid: str, displayed: set[str] | None = None) -> dict[str, Any]:
         attrs = G.nodes[nid]
-        if displayed is None:
-            # caller doesn't care about expandable computation
-            return {"id": nid, **{k: v for k, v in attrs.items() if k != "expandable" and not k.startswith("_")}}
-        expandable = any(child not in displayed for child in G.successors(nid))
-        return {
+        children = structural_children(nid)
+        payload = {
             "id": nid,
-            **{k: v for k, v in attrs.items() if k != "expandable" and not k.startswith("_")},
-            "expandable": expandable,
+            **{
+                key: value for key, value in attrs.items()
+                if key not in {"expandable", "children_ids"}
+                and not key.startswith("_")
+            },
+            "children_ids": children,
         }
+        if displayed is not None:
+            payload["expandable"] = any(child not in displayed for child in children)
+        return payload
 
     def structural_edges(u: str, v: str) -> list[dict[str, Any]]:
         """Keep parallel non-threshold edges in the force-directed graph."""
@@ -192,6 +206,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                 for parent_id, _, _, edge_data in G.in_edges(
                     node_id, keys=True, data=True
                 )
+                if edge_data.get("relation_type") != "if_level"
             ]
             children = [
                 {
@@ -212,6 +227,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                 for _, child_id, _, edge_data in G.out_edges(
                     node_id, keys=True, data=True
                 )
+                if edge_data.get("relation_type") != "if_level"
             ]
             return jsonify({
                 "id": node_id,
@@ -230,10 +246,13 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         edges = []
         if neighbor_mode in {"parents", "both"}:
             for p in G.predecessors(node_id):
+                relationships = structural_edges(p, node_id)
+                if not relationships:
+                    continue
                 nodes.append(serialize_node(p, displayed))
-                edges.extend(structural_edges(p, node_id))
+                edges.extend(relationships)
         if neighbor_mode in {"children", "both"}:
-            for c in G.successors(node_id):
+            for c in structural_children(node_id):
                 nodes.append(serialize_node(c, displayed))
                 edges.extend(structural_edges(node_id, c))
         return jsonify({"nodes": nodes, "edges": edges})
