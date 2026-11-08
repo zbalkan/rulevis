@@ -880,3 +880,78 @@ def test_zero_threshold_rejection_preserves_declared_group_without_activation(tm
         if target == "100002" and data["relation_type"] == "if_group"
     ]
     assert group_edges
+
+
+@pytest.mark.parametrize(
+    "rule_id,effective,expected_relation",
+    [
+        ("100202", "if_group", "if_group"),
+        ("100203", "if_level", "if_level"),
+        ("100204", "category", None),
+        ("100205", "if_group", "if_group"),
+    ],
+)
+def test_zero_temporal_sid_does_not_create_parent_edges(
+    tmp_path, rule_id, effective, expected_relation
+):
+    rules = tmp_path / "zero-temporal-sid.xml"
+    rules.write_text(
+        '<group name="source,">'
+        '<rule id="100201" level="8"><description>Parent</description></rule>'
+        '<rule id="100202" level="6"><if_matched_sid>0</if_matched_sid>'
+        '<if_group>source</if_group><description>Group</description></rule>'
+        '<rule id="100203" level="6"><if_matched_sid>0</if_matched_sid>'
+        '<if_level>5</if_level><description>Level</description></rule>'
+        '<rule id="100204" level="6"><if_matched_sid>0</if_matched_sid>'
+        '<description>Category</description></rule>'
+        '<rule id="100205" level="6"><if_matched_sid>0</if_matched_sid>'
+        '<if_matched_group>source</if_matched_group>'
+        '<description>Temporal group</description></rule>'
+        '</group>',
+        encoding="utf-8",
+    )
+    generator = make_generator(tmp_path)
+    generator.build_graph_from_xml()
+    graph = generator.G
+    precedence = graph.nodes[rule_id]["selector_precedence"]
+    assert precedence["effective"] == effective
+    assert precedence["sources"].get("if_sid") is None
+    temporal_sid_edges = [
+        (source, target)
+        for source, target, data in graph.edges(data=True)
+        if target == rule_id and data.get("relation_type") == "if_matched_sid"
+    ]
+    assert temporal_sid_edges == []
+    synthesized_sid_edges = [
+        (source, target)
+        for source, target, data in graph.edges(data=True)
+        if target == rule_id and data.get("relation_type") == "if_sid"
+    ]
+    assert synthesized_sid_edges == []
+    if expected_relation is not None:
+        assert any(
+            target == rule_id and data.get("relation_type") == expected_relation
+            for _, target, data in graph.edges(data=True)
+        )
+
+
+def test_nonzero_temporal_sid_retains_structural_synthesis(tmp_path):
+    rules = tmp_path / "nonzero-temporal-sid.xml"
+    rules.write_text(
+        '<group name="source,">'
+        '<rule id="100210" level="8"><description>Parent</description></rule>'
+        '<rule id="100211" level="6"><if_matched_sid>100210</if_matched_sid>'
+        '<description>Temporal SID</description></rule>'
+        '</group>',
+        encoding="utf-8",
+    )
+    generator = make_generator(tmp_path)
+    generator.build_graph_from_xml()
+    precedence = generator.G.nodes["100211"]["selector_precedence"]
+    assert precedence["effective"] == "if_sid"
+    assert precedence["sources"]["if_sid"] == "if_matched_sid"
+    assert any(
+        source == "100210" and target == "100211"
+        and data["relation_type"] == "if_matched_sid"
+        for source, target, data in generator.G.edges(data=True)
+    )

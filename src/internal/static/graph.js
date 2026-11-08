@@ -1339,7 +1339,7 @@ class GraphVisualizer {
         this.context.stroke();
         this.context.setLineDash([]);
         this.context.fillStyle = STYLES.legend.text;
-        this.context.fillText('Rejected attachment (not active)', 55, legendY + 14);
+        this.context.fillText('Invalid selector (rejected)', 55, legendY + 14);
         legendY += 32;
         edgeLegendData.forEach(item => {
             this.context.beginPath();

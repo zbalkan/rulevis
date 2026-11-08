@@ -10,6 +10,7 @@ import networkx as nx
 
 from internal.catalog import (
     RuleCatalog,
+    active_temporal_sid,
     normalize_rule_id,
     os_match,
     os_word_match,
@@ -191,7 +192,7 @@ class GraphGenerator:
                         synthesized_from=sid_origin,
                     )
 
-        if if_matched_sid:
+        if active_temporal_sid(if_matched_sid):
             for sid in re.split(r'[,\s]+', if_matched_sid.strip()):
                 if sid:
                     parent = normalize_rule_id(sid) or sid

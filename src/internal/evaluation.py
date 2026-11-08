@@ -11,6 +11,7 @@ import networkx as nx
 from internal.catalog import (
     RuleCatalog,
     RuleDeclaration,
+    active_temporal_sid,
     normalize_rule_id,
     valid_if_sid,
     resolve_structural_parent_selectors,
@@ -335,7 +336,7 @@ class EvaluationBuilder:
                 self.issues.append(
                     LoadIssue("SID_NOT_FOUND", state.rule_id, sid)
                 )
-                if declaration.if_matched_sid is not None:
+                if active_temporal_sid(declaration.if_matched_sid):
                     return False
                 continue
 
