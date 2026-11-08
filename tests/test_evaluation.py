@@ -719,6 +719,9 @@ def test_zero_temporal_sid_uses_group_parent_without_sid_failure():
     model = EvaluationBuilder(catalog).build()
     assert model.rules["100221"].parent_relation == "if_group"
     assert "100221" in model.occurrences_by_rule
+    child = model.occurrences_by_rule["100221"][0]
+    parent = model.occurrences_by_rule["1"][0]
+    assert model.occurrences[child].parent_id == parent
     assert not any(
         issue.code == "SID_NOT_FOUND" and issue.rule_id == "100221"
         for issue in model.issues
@@ -732,6 +735,9 @@ def test_zero_temporal_sid_uses_category_fallback():
     model = EvaluationBuilder(catalog).build()
     assert model.rules["100222"].parent_relation == "category"
     assert "100222" in model.occurrences_by_rule
+    child = model.occurrences_by_rule["100222"][0]
+    parent = model.occurrences_by_rule["1"][0]
+    assert model.occurrences[child].parent_id == parent
     assert not any(
         issue.code == "SID_NOT_FOUND" and issue.rule_id == "100222"
         for issue in model.issues
