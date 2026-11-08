@@ -61,7 +61,8 @@ def test_level_overlay_only_returns_displayed_parent_candidates(tmp_path):
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["selector"] == "5"
-    assert payload["candidate_count"] == 2
+    assert payload["declared"] == 2
+    assert payload["load_order_candidates"] == 1
     assert payload["edges"] == [
         {
             "source": "100001", "target": "100004",
