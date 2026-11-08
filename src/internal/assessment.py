@@ -216,13 +216,29 @@ class BitsetAssessor:
         model: EvaluationModel,
         domain: BitsetDomain,
         predicates: dict[str, int],
+        *,
+        missing_predicate: str = "error",
     ) -> None:
+        if missing_predicate not in {"error", "match_all"}:
+            raise ValueError("missing_predicate must be 'error' or 'match_all'")
+        missing = set(model.rules) - set(predicates)
+        if missing and missing_predicate == "error":
+            sample = ", ".join(sorted(missing)[:10])
+            remainder = (
+                f" (+{len(missing) - 10} more)" if len(missing) > 10 else ""
+            )
+            raise ValueError(
+                f"Missing predicates for accepted rules: {sample}{remainder}. "
+                "Supply predicates for every accepted rule or explicitly "
+                "select missing_predicate='match_all'."
+            )
         self.model = model
         self.domain = domain
         self.predicates = {
             rule_id: domain.normalize(predicate)
             for rule_id, predicate in predicates.items()
         }
+        self.missing_predicate = missing_predicate
 
     def _predicate(self, rule_id: str) -> int:
         return self.predicates.get(rule_id, self.domain.top())
