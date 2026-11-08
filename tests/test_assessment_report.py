@@ -271,7 +271,11 @@ def test_end_to_end_report_handles_deep_chain():
         add_rule(catalog, rule_id, 5, if_sid=parent)
         parent = rule_id
 
-    report = make_report(catalog, 1, {"1": 1})
+    report = make_report(
+        catalog,
+        1,
+        {declaration.rule_id: 1 for declaration in catalog.declarations},
+    )
 
     deepest = _rule(report, parent)
     assert deepest.selected_events == 1
