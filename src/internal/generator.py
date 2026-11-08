@@ -969,8 +969,11 @@ class GraphGenerator:
             if rule_id == "0":
                 continue
             accepted = rule_id in model.rules
+            declared = rule_id in self.rule_relationships
             attrs["modeled_acceptance"] = (
-                "accepted" if accepted else "rejected"
+                "accepted" if accepted else
+                "rejected" if declared else
+                "undeclared_reference"
             )
             attrs["modeled_occurrence_count"] = len(
                 model.occurrences_by_rule.get(rule_id, ())
