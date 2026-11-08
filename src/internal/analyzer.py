@@ -38,8 +38,14 @@ class Analyzer:
         """
         # --- Calculate Top 5 Lists ---
         real_nodes = [n for n in self.G.nodes() if n != '0']
-        out_degrees = dict(self.G.out_degree(real_nodes))
-        in_degrees = dict(self.G.in_degree(real_nodes))
+        # These metrics count distinct child/parent rules, not parallel
+        # declared relationship types between the same pair of rules.
+        out_degrees = {
+            node: len(self.G.succ[node]) for node in real_nodes
+        }
+        in_degrees = {
+            node: len(self.G.pred[node]) for node in real_nodes
+        }
 
         top_5_direct_descendants = sorted(out_degrees, key=out_degrees.get, reverse=True)[:5]
         indirect_descendants_counts = {n: len(descendants(self.G, n)) for n in real_nodes}

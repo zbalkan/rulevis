@@ -134,7 +134,14 @@ still required before claiming byte- or occurrence-identical behavior.
 
 The assessor does not attempt arbitrary symbolic regex satisfiability.
 Instead, the caller supplies a finite event universe and a bitset predicate for
-each logical rule.
+each accepted logical rule. Missing predicates raise `ValueError` by default:
+silently treating an omitted predicate as match-all can create false findings
+about selection and shadowing.
+When `event_count=0`, predicate coverage is vacuous: missing predicates are
+permitted, because the universe contains no events to classify. This does not
+relax coverage requirements for any nonempty domain. Tests or explicitly permissive analyses can
+opt into `missing_predicate="match_all"`; that policy is an assumption, not
+a property inferred from Wazuh rules.
 
 For each runtime occurrence it records:
 

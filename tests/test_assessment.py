@@ -1,3 +1,5 @@
+import pytest
+
 from internal.assessment import (
     AssessmentClassifier,
     BitsetAssessor,
@@ -191,7 +193,10 @@ def test_deep_chain_does_not_depend_on_python_recursion():
     model, result = assess(
         catalog,
         1,
-        {"1": 1},
+        {
+            declaration.rule_id: 1
+            for declaration in catalog.declarations
+        },
     )
 
     deepest = model.occurrences_by_rule[parent][0]
@@ -361,3 +366,58 @@ def test_classifier_distinguishes_impossible_path_from_empty_predicate():
     assert by_rule["100141"].kind is FindingKind.PATH_IMPOSSIBLE
     assert by_rule["100141"].region == 1
     assert by_rule["100141"].witness.event_index == 0
+
+
+def test_missing_predicate_for_accepted_rule_is_rejected():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(catalog, 100500, 7, if_sid="1")
+    model = EvaluationBuilder(catalog).build()
+    with pytest.raises(ValueError, match=r"100500"):
+        BitsetAssessor(model, BitsetDomain(2), {"1": 0b11})
+
+
+def test_missing_predicate_for_rejected_rule_is_not_required():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(catalog, 100501, 7, if_sid="999999")
+    model = EvaluationBuilder(catalog).build()
+    result = BitsetAssessor(model, BitsetDomain(2), {"1": 0b11}).assess()
+    assert "100501" not in model.rules
+    assert result.facts
+
+
+def test_zero_event_universe_needs_no_rule_predicates():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(catalog, 100503, 7, if_sid="1")
+    model = EvaluationBuilder(catalog).build()
+    result = BitsetAssessor(model, BitsetDomain(0), {}).assess()
+    assert set(result.facts) == set(model.occurrences)
+    assert all(
+        facts.predicate == facts.candidate == facts.matched == 0
+        for facts in result.facts.values()
+    )
+
+
+def test_zero_event_universe_still_validates_missing_predicate_policy():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    model = EvaluationBuilder(catalog).build()
+    with pytest.raises(ValueError, match="missing_predicate"):
+        BitsetAssessor(
+            model, BitsetDomain(0), {}, missing_predicate="invalid"
+        )
+
+
+def test_unknown_predicate_policy_can_be_explicitly_match_all():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(catalog, 100502, 7, if_sid="1")
+    model = EvaluationBuilder(catalog).build()
+    result = BitsetAssessor(
+        model, BitsetDomain(2), {"1": 0b11},
+        missing_predicate="match_all",
+    ).assess()
+    target = model.occurrences_by_rule["100502"][0]
+    assert result.facts[target].matched == 0b11
