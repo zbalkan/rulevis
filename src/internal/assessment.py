@@ -222,7 +222,7 @@ class BitsetAssessor:
         if missing_predicate not in {"error", "match_all"}:
             raise ValueError("missing_predicate must be 'error' or 'match_all'")
         missing = set(model.rules) - set(predicates)
-        if missing and missing_predicate == "error":
+        if missing and missing_predicate == "error" and domain.event_count > 0:
             sample = ", ".join(sorted(missing)[:10])
             remainder = (
                 f" (+{len(missing) - 10} more)" if len(missing) > 10 else ""
