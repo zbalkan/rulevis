@@ -112,6 +112,29 @@ and does not validate arbitrary regex or field predicates.
 Tests include mutual group dependencies analogous to stock Wazuh rules
 80790/80791, level-threshold multiplicity, and missing-base overwrites.
 
+## Opt-in modeled attachment projection (N2 foundation)
+
+`GraphGenerator.build_modeled_runtime_projection(max_occurrences=100_000)`
+is an explicit, potentially expensive bridge from parsed `RuleCatalog`
+declarations to the occurrence evaluator. It stores a separate
+`generator.modeled_runtime_graph` using
+`project_occurrence_relationships()`, with per-edge attachment
+`occurrence_count` and per-node accepted occurrence counts. It also
+annotates the **declared** graph nodes with `modeled_acceptance`:
+`accepted`, `rejected`, or `undeclared_reference` for placeholder
+nodes introduced by missing dependency IDs. Modeled load issues are
+available as `modeled_load_issues` on declared nodes.
+
+This method is **not** invoked during ordinary XML graph generation.
+It does not replace source edges, rewrite candidate snapshots, change
+Flask graph presentation, or claim that Wazuh accepted any rule.
+`accepted` here means *accepted by RuleVis's occurrence model*, not
+confirmed by a running Wazuh manager. The configured manager include
+order and runtime loader may differ from RuleVis's file scan. A model
+occurrence-budget exception leaves the previously published projection
+unchanged. The N2 issue requires version-pinned differential tests
+before presenting this model as verified effective runtime attachment.
+
 ## Wazuh relationship sources
 
 The model is checked against Wazuh 4.14.10's `rules.c`,
