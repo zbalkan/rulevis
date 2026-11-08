@@ -11,6 +11,7 @@ import networkx as nx
 from internal.catalog import (
     RuleCatalog,
     active_temporal_sid,
+    select_historical_search,
     normalize_rule_id,
     os_match,
     os_word_match,
@@ -133,6 +134,7 @@ class GraphGenerator:
         selector: Optional[str] = None,
         load_order_candidate: Optional[bool] = None,
         synthesized_from: Optional[str] = None,
+        shadowed_by: Optional[str] = None,
     ) -> None:
         if logging.getLogger().getEffectiveLevel() <= logging.DEBUG:
             logging.debug(
@@ -145,6 +147,8 @@ class GraphGenerator:
             edge_data["load_order_candidate"] = load_order_candidate
         if synthesized_from is not None:
             edge_data["synthesized_from"] = synthesized_from
+        if shadowed_by is not None:
+            edge_data["shadowed_by"] = shadowed_by
 
         existing_edges = self.G.get_edge_data(source, target) or {}
         if any(
@@ -233,6 +237,9 @@ class GraphGenerator:
                 )
 
         if if_matched_group:
+            historical_search = select_historical_search(
+                if_matched_sid, if_matched_group,
+            )
             candidates = set(
                 self.temporal_group_parent_snapshots.get(rule_id, ())
             )
@@ -245,6 +252,10 @@ class GraphGenerator:
                     parent, rule_id, 'if_matched_group',
                     selector=if_matched_group,
                     load_order_candidate=parent in candidates,
+                    shadowed_by=(
+                        "if_matched_sid"
+                        if historical_search == "if_matched_sid" else None
+                    ),
                 )
 
     def _declared_group_rules(self, selector: str):
@@ -687,6 +698,9 @@ class GraphGenerator:
                     if_level=raw_if_level,
                     file=os.path.basename(xml_file),
                     temporal=self.is_temporal_rule(element),
+                    historical_search=select_historical_search(
+                        if_matched_sid, if_matched_group,
+                    ),
                     mitre=self.extract_mitre_ids(element),
                     conditions=self.extract_atomic_conditions(
                         element, regex_values
