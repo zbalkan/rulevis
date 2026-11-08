@@ -119,6 +119,13 @@ class DetailsPanel {
             </div>
         ` : '';
 
+        const thresholdControl = details.if_level != null
+            ? `<div class="details-meta-full">
+                    <strong>Threshold:</strong>
+                    <button class="conditions-btn" onclick="window.visualizer.toggleLevelOverlay('${escapeHTML(details.id)}')">L ≥ ${escapeHTML(details.if_level)} — Toggle candidates</button>
+               </div>`
+            : '';
+
         const conditionsButton = details.id !== "0"
             ? `<button id="showConditionsBtn" class="conditions-btn" onclick="window.visualizer.detailsPanel.showConditions('${details.id}')">Analyze Conditions</button>`
             : '';
@@ -137,6 +144,7 @@ class DetailsPanel {
             </div>
 
             <p><strong>Description:</strong> ${escapeHTML(details.description || 'N/A')}</p>
+            ${thresholdControl}
             ${conditionsButton ? `<div class="details-actions">${conditionsButton}</div>` : ''}
             <h4>Groups</h4>
             ${(details.groups && details.groups.length > 0) ? `<ul>${details.groups.map(g => `<li>${escapeHTML(g)}</li>`).join('')}</ul>` : '<p>No groups assigned.</p>'}
@@ -802,6 +810,9 @@ class GraphVisualizer {
     constructor(canvasSelector) {
         this.nodes = [];
         this.links = [];
+        this.levelOverlayEdges = [];
+        this.activeLevelRuleId = null;
+        this.levelOverlayRequestId = 0;
         this.nodeMap = new Map();
         this.highlightedNodeId = null;
         this.highlightedCycleIds = new Set(); 
@@ -876,6 +887,24 @@ class GraphVisualizer {
                 this.context.strokeStyle = color;
                 this.context.stroke();
             }
+        }
+        // Level candidates are annotations, not D3 force links.
+        if (this.activeLevelRuleId && this.levelOverlayEdges.length) {
+            this.context.save();
+            this.context.setLineDash([6 / this.transform.k, 4 / this.transform.k]);
+            this.context.lineWidth = 2 / this.transform.k;
+            for (const edge of this.levelOverlayEdges) {
+                const source = this.nodeMap.get(edge.source);
+                const target = this.nodeMap.get(edge.target);
+                if (!source || !target) continue;
+                this.context.strokeStyle = edge.load_order_candidate
+                    ? STYLES.edges.if_level : '#94a3b8';
+                this.context.beginPath();
+                this.context.moveTo(source.x, source.y);
+                this.context.lineTo(target.x, target.y);
+                this.context.stroke();
+            }
+            this.context.restore();
         }
         if (this.transform.k > 0.6) {
             for (let link of this.links) {
@@ -952,11 +981,93 @@ class GraphVisualizer {
             }
         }
 
+        this.drawThresholdBadges();
         this.context.restore();
         this.buildLegend();
         this.drawCounter();
     }
     
+    thresholdBadgeBounds(node) {
+        if (node.if_level == null || node.id === "0" ||
+            !Number.isFinite(node.x) || !Number.isFinite(node.y)) return null;
+        const label = `L ≥ ${node.if_level}`;
+        return {
+            x: node.x + NODE_RADIUS + 5,
+            y: node.y - 27,
+            width: label.length * 7 + 12,
+            height: 17,
+            label,
+        };
+    }
+
+    drawThresholdBadges() {
+        if (this.transform.k < 0.7) return;
+        for (const node of this.nodes) {
+            if (this.focusModeEnabled && this.focusedContextIds.size &&
+                !this.focusedContextIds.has(node.id)) continue;
+            const badge = this.thresholdBadgeBounds(node);
+            if (!badge) continue;
+            this.context.fillStyle = this.activeLevelRuleId === node.id
+                ? '#92400e' : '#b45309';
+            this.context.fillRect(badge.x, badge.y, badge.width, badge.height);
+            this.context.fillStyle = '#fff';
+            this.context.font = '11px sans-serif';
+            this.context.fillText(badge.label, badge.x + 6, badge.y + 12);
+        }
+    }
+
+    findThresholdBadgeAt(x, y) {
+        if (this.transform.k < 0.7) return null;
+        const [worldX, worldY] = this.transform.invert([x, y]);
+        for (const node of this.nodes) {
+            if (this.focusModeEnabled && this.focusedContextIds.size &&
+                !this.focusedContextIds.has(node.id)) continue;
+            const badge = this.thresholdBadgeBounds(node);
+            if (badge && worldX >= badge.x && worldX <= badge.x + badge.width &&
+                worldY >= badge.y && worldY <= badge.y + badge.height) {
+                return node;
+            }
+        }
+        return null;
+    }
+
+    toggleLevelOverlay(nodeId) {
+        if (this.activeLevelRuleId === nodeId) {
+            this.activeLevelRuleId = null;
+            this.levelOverlayEdges = [];
+            ++this.levelOverlayRequestId;
+            this.render();
+            return;
+        }
+        this.activeLevelRuleId = nodeId;
+        this.levelOverlayEdges = [];
+        this.refreshLevelOverlay();
+    }
+
+    refreshLevelOverlay() {
+        const nodeId = this.activeLevelRuleId;
+        if (!nodeId || !this.displayedRuleIDs.has(nodeId)) return;
+        const requestId = ++this.levelOverlayRequestId;
+        const displayed = encodeURIComponent(this.getDisplayedIds());
+        fetchJSON(`/api/level-parents?id=${encodeURIComponent(nodeId)}&displayed=${displayed}`)
+            .then(payload => {
+                if (requestId !== this.levelOverlayRequestId ||
+                    this.activeLevelRuleId !== nodeId) return;
+                this.levelOverlayEdges = payload.edges;
+                this.render();
+                this.notificationManager.show(
+                    `${payload.edges.length} visible of ${payload.candidate_count} declared if_level candidates`
+                );
+            })
+            .catch(() => {
+                if (requestId === this.levelOverlayRequestId) {
+                    this.levelOverlayEdges = [];
+                    this.render();
+                }
+            });
+        this.render();
+    }
+
     updateGraph(newNodesData, newLinksData, onUpdateComplete = null) {
         const newIds = new Set((newNodesData || []).map(n => n.id));
         (newNodesData || []).forEach(newNode => {
@@ -968,10 +1079,12 @@ class GraphVisualizer {
             }
         });
         this.nodes = Array.from(this.nodeMap.values());
-        const linkSet = new Set(this.links.map(l => `${l.source.id}-${l.target.id}`));
+        const linkKey = link => `${link.source.id}| ${link.target.id}| ${link.relation_type}`;
+        const linkSet = new Set(this.links.map(linkKey));
         if (!this.linkGroups) this.linkGroups = {};
         (newLinksData || []).forEach(newLink => {
-            const linkId = `${newLink.source}-${newLink.target}`;
+            if (newLink.relation_type === 'if_level') return;
+            const linkId = `${newLink.source}| ${newLink.target}| ${newLink.relation_type}`;
             if (!linkSet.has(linkId) && this.nodeMap.has(newLink.source) && this.nodeMap.has(newLink.target)) {
                 const linkObj = { 
                     ...newLink, 
@@ -1004,6 +1117,7 @@ class GraphVisualizer {
         this.simulation.nodes(this.nodes);
         this.simulation.force("link").links(this.links);
         this.simulation.alpha(1).restart();
+        if (this.activeLevelRuleId) this.refreshLevelOverlay();
     }
 
     linkUpExistingNodes() {
@@ -1101,7 +1215,6 @@ class GraphVisualizer {
             { label: "if_sid", color: STYLES.edges.if_sid },
             { label: "if_matched_sid", color: STYLES.edges.if_matched_sid },
             { label: "if_group", color: STYLES.edges.if_group },
-            { label: "if_level", color: STYLES.edges.if_level },
             { label: "if_matched_group", color: STYLES.edges.if_matched_group },
             { label: "No parent", color: STYLES.edges.no_parent },
             { label: "Unknown", color: STYLES.edges.unknown }
@@ -1137,7 +1250,26 @@ class GraphVisualizer {
             legendY += 25;
         });
 
-        legendY += 20;
+        this.context.fillStyle = STYLES.edges.if_level;
+        this.context.fillRect(10, legendY + 4, 43, 17);
+        this.context.fillStyle = '#fff';
+        this.context.font = '11px sans-serif';
+        this.context.fillText('L ≥ N', 14, legendY + 16);
+        this.context.fillStyle = STYLES.legend.text;
+        this.context.font = '14px sans-serif';
+        this.context.fillText('if_level (select badge)', 58, legendY + 18);
+        legendY += 31;
+        this.context.setLineDash([5, 4]);
+        this.context.beginPath();
+        this.context.moveTo(10, legendY + 9);
+        this.context.lineTo(40, legendY + 9);
+        this.context.strokeStyle = STYLES.edges.if_level;
+        this.context.lineWidth = 3;
+        this.context.stroke();
+        this.context.setLineDash([]);
+        this.context.fillStyle = STYLES.legend.text;
+        this.context.fillText('Level candidate (on demand)', 55, legendY + 14);
+        legendY += 32;
         edgeLegendData.forEach(item => {
             this.context.beginPath();
             this.context.moveTo(10, legendY);
@@ -1247,6 +1379,9 @@ class GraphVisualizer {
             node.fy = null;
         }
         this.highlightedNodeId = null;
+        this.activeLevelRuleId = null;
+        this.levelOverlayEdges = [];
+        ++this.levelOverlayRequestId;
         this.highlightedCycleIds.clear();
         this.focusedContextIds.clear(); 
         this.detailsPanel.hide();
@@ -1256,6 +1391,9 @@ class GraphVisualizer {
     resetGraph() {
         this.nodes = [];
         this.links = [];
+        this.activeLevelRuleId = null;
+        this.levelOverlayEdges = [];
+        ++this.levelOverlayRequestId;
         this.nodeMap.clear();
         this.displayedRuleIDs.clear();
         this.linkGroups = {};
@@ -1347,7 +1485,12 @@ class GraphVisualizer {
                     this.render();
                 }
             });
-        this.canvas.on("click", e => { 
+        this.canvas.on("click", e => {
+            const thresholdNode = this.findThresholdBadgeAt(e.offsetX, e.offsetY);
+            if (thresholdNode) {
+                this.toggleLevelOverlay(thresholdNode.id);
+                return;
+            }
             const node = this.findNodeAt(e.offsetX, e.offsetY); 
             if (node) {
                 this.highlightAndCenterNode(node.id); 
