@@ -754,3 +754,54 @@ def test_zero_temporal_sid_does_not_convert_missing_explicit_sid_to_rejection():
         issue.code == "SID_NOT_FOUND" and issue.rule_id == "100223"
         for issue in model.issues
     )
+
+
+def test_ordinary_sid_list_looks_up_each_token_after_prior_attachment():
+    # Wazuh OS_AddChild invokes _AddtoRule immediately for each SID token.
+    # The second SID can therefore find the rule just inserted by the first.
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(catalog, 100900, 5, if_sid="1,100900")
+
+    model = EvaluationBuilder(catalog).build()
+
+    root = model.occurrences_by_rule["1"][0]
+    first, nested = model.occurrences_by_rule["100900"]
+    assert model.occurrences[first].parent_id == root
+    assert model.occurrences[nested].parent_id == first
+    assert not any(
+        issue.code == "SID_NOT_FOUND" and issue.selector == "100900"
+        for issue in model.issues
+    )
+
+
+def test_sequential_sid_tokens_preserve_parent_selection_and_duplicates():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(catalog, 100901, 5, if_sid="1,100901,100901")
+
+    model = EvaluationBuilder(catalog).build()
+
+    root = model.occurrences_by_rule["1"][0]
+    first, second, third = model.occurrences_by_rule["100901"]
+    assert model.occurrences[first].parent_id == root
+    assert model.occurrences[second].parent_id == first
+    assert model.occurrences[third].parent_id == first
+    assert model.occurrences[second].matched_selector == "100901"
+    assert model.occurrences[third].matched_selector == "100901"
+
+
+def test_sequential_sid_missing_before_later_success_remains_warning():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(catalog, 100902, 5, if_sid="999999,1,100902")
+
+    model = EvaluationBuilder(catalog).build()
+    root = model.occurrences_by_rule["1"][0]
+    first, nested = model.occurrences_by_rule["100902"]
+    assert model.occurrences[first].parent_id == root
+    assert model.occurrences[nested].parent_id == first
+    assert any(
+        issue.code == "SID_NOT_FOUND" and issue.selector == "999999"
+        for issue in model.issues
+    )
