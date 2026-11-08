@@ -471,34 +471,35 @@ class GraphGenerator:
 
             priority = self.catalog.declarations[-1].load_priority
             if element.get("overwrite", "").lower() == "yes":
-                overwrite_id = rule_id
-                if overwrite_id in self.G.nodes:
-                    self.runtime_priority_by_rule[overwrite_id] = priority
-                    self.runtime_priority_history[overwrite_id].append(priority)
-                    if declared_runtime_group is not None:
-                        self.runtime_group_by_rule[overwrite_id] = (
-                            declared_runtime_group
-                        )
-                        self.runtime_group_history[overwrite_id].append(
-                            declared_runtime_group
-                        )
+                if rule_id in self.G.nodes:
+                    self.runtime_priority_by_rule[rule_id] = priority
+                    self.runtime_priority_history[rule_id].append(priority)
+                    self.runtime_group_by_rule[rule_id] = declared_runtime_group
+                    self.runtime_group_history[rule_id].append(
+                        declared_runtime_group
+                    )
                     overwrite_groups = self.extract_rule_groups(
                         inherited_groups,
                         [(child.tag, child.text) for child in element],
                     )
-                    self._replace_visual_groups(
-                        overwrite_id, overwrite_groups
+                    self._replace_visual_groups(rule_id, overwrite_groups)
+                    self.overwrite_rules.append(
+                        (
+                            element,
+                            xml_file,
+                            regex_values,
+                            list(inherited_groups),
+                            declared_runtime_group,
+                        )
                     )
-                self.overwrite_rules.append(
-                    (
-                        element,
-                        xml_file,
-                        regex_values,
-                        list(inherited_groups),
-                        declared_runtime_group,
-                    )
+                    return
+                # analysisd treats an overwrite with no existing rule as an
+                # ordinary new declaration. A later base is a duplicate.
+                logging.warning(
+                    "Overwrite rule %s has no existing base in %s; "
+                    "loading it as the first declaration.",
+                    rule_id, xml_file,
                 )
-                return
 
             rule_level = element.get('level')
             if_sid = element.findtext('if_sid', None)

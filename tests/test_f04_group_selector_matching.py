@@ -140,7 +140,7 @@ def test_overwrite_history_preserves_source_selector_links(tmp_path):
     )
 
 
-def test_early_overwrite_runtime_group_is_a_declared_reference(tmp_path):
+def test_early_overwrite_is_accepted_and_later_base_is_duplicate(tmp_path):
     (tmp_path / "00-overwrite.xml").write_text(
         '<group name="authentication_failed,">'
         '<rule id="100300" level="5" overwrite="yes">'
@@ -167,16 +167,14 @@ def test_early_overwrite_runtime_group_is_a_declared_reference(tmp_path):
     assert auth_edges is not None
     assert any(
         edge["relation_type"] == "if_group"
-        and edge["load_order_candidate"] is False
+        and edge["load_order_candidate"] is True
         for edge in auth_edges.values()
     )
-    beta_edges = generator.G.get_edge_data("100300", "100302")
-    assert beta_edges is not None
-    assert any(
-        edge["relation_type"] == "if_group"
-        and edge["load_order_candidate"] is True
-        for edge in beta_edges.values()
-    )
+    assert not generator.G.has_edge("100300", "100302")
+    assert generator.G.nodes["100300"]["description"] == "Updated parent"
+    assert generator.runtime_group_history["100300"] == [
+        "authentication_failed,"
+    ]
 
 
 @pytest.mark.parametrize(
@@ -336,7 +334,7 @@ def test_multiple_overwrites_preserve_declared_history_and_load_snapshots(tmp_pa
         assert group_edges[0]["load_order_candidate"] is available
 
 
-def test_orphan_overwrite_cannot_create_a_phantom_group_parent(tmp_path):
+def test_missing_base_overwrite_is_a_declared_group_parent(tmp_path):
     (tmp_path / "orphan.xml").write_text(
         '<group name="phantom,"><rule id="100626" level="4" overwrite="yes">'
         '<description>No base</description></rule></group>'
@@ -347,10 +345,10 @@ def test_orphan_overwrite_cannot_create_a_phantom_group_parent(tmp_path):
     generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pickle"))
     generator.build_graph_from_xml()
 
-    assert "100626" not in generator.G
-    assert not generator.G.has_edge("100626", "100627")
-    assert "100626" not in generator.runtime_group_by_rule
-    assert "100626" not in generator.runtime_group_history
+    assert "100626" in generator.G
+    assert generator.G.has_edge("100626", "100627")
+    assert generator.runtime_group_by_rule["100626"] == "phantom,"
+    assert generator.runtime_group_history["100626"] == ["phantom,"]
 
 
 def test_duplicate_rule_cannot_contribute_a_different_group(tmp_path):
@@ -560,7 +558,7 @@ def test_canonical_rule_ids_collapse_duplicate_spellings_and_early_overwrite(
     assert group_edges is not None
     assert any(
         edge["relation_type"] == "if_group"
-        and edge["load_order_candidate"] is False
+        and edge["load_order_candidate"] is True
         for edge in group_edges.values()
     )
     assert "duplicate," not in generator.runtime_group_history["11"]

@@ -74,7 +74,7 @@ def test_existing_group_edges_survive_later_overwrite(tmp_path, monkeypatch):
     assert _group_candidate(generator.G, "100100", "100102") is False
 
 
-def test_overwrite_scanned_before_base_preserves_declared_group(tmp_path):
+def test_overwrite_scanned_before_base_is_first_accepted_rule(tmp_path):
     (tmp_path / "00-overwrite.xml").write_text(
         '<group name="new_group,"><rule id="100200" level="5" '
         'overwrite="yes"><description>Updated parent</description>'
@@ -101,6 +101,7 @@ def test_overwrite_scanned_before_base_preserves_declared_group(tmp_path):
 
     assert generator.G.nodes["100200"]["groups"] == ["new_group"]
     assert generator.G.has_edge("100200", "100201")
-    assert _group_candidate(generator.G, "100200", "100201") is False
-    assert generator.G.has_edge("100200", "100202")
-    assert _group_candidate(generator.G, "100200", "100202") is True
+    assert _group_candidate(generator.G, "100200", "100201") is True
+    assert not generator.G.has_edge("100200", "100202")
+    assert generator.G.nodes["100200"]["description"] == "Updated parent"
+    assert generator.runtime_group_history["100200"] == ["new_group,"]
