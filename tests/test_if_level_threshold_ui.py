@@ -272,3 +272,43 @@ def test_zero_level_selector_is_not_an_eligible_overlay(tmp_path):
     client = create_app(str(graph_path), str(stats_path), str(heatmap_path)).test_client()
     response = client.get("/api/level-parents?id=100004")
     assert response.status_code == 400
+
+
+def test_level_overlay_reports_unambiguous_candidate_counts(tmp_path):
+    client = make_client(tmp_path)
+    response = client.get(
+        "/api/level-parents?id=100004&displayed=100001,100004"
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["declared"] == 2
+    assert payload["load_order_candidates"] == 1
+    assert "candidate_count" not in payload
+
+
+def test_long_decimal_threshold_never_causes_http_500(tmp_path):
+    graph_path, stats_path, heatmap_path = write_app_files(tmp_path)
+    with graph_path.open("rb") as stream:
+        graph = pickle.load(stream)
+    graph.nodes["100004"]["if_level"] = "7" * 5000
+    with graph_path.open("wb") as stream:
+        pickle.dump(graph, stream)
+    client = create_app(
+        str(graph_path), str(stats_path), str(heatmap_path)
+    ).test_client()
+    response = client.get("/api/level-parents?id=100004")
+    assert response.status_code != 500
+
+
+def test_long_all_zero_threshold_is_rejected(tmp_path):
+    graph_path, stats_path, heatmap_path = write_app_files(tmp_path)
+    with graph_path.open("rb") as stream:
+        graph = pickle.load(stream)
+    graph.nodes["100004"]["if_level"] = "0" * 5000
+    with graph_path.open("wb") as stream:
+        pickle.dump(graph, stream)
+    client = create_app(
+        str(graph_path), str(stats_path), str(heatmap_path)
+    ).test_client()
+    response = client.get("/api/level-parents?id=100004")
+    assert response.status_code == 400
