@@ -436,20 +436,23 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         if selector is None or str(selector) == "":
             return error("Rule has no if_level declaration", 400)
         raw = str(selector)
-        if not raw.isascii() or not raw.isdigit() or int(raw) == 0:
+        if not raw.isascii() or not raw.isdigit() or not raw.lstrip("0"):
             return error("Rule has no valid positive if_level threshold", 400)
         precedence = G.nodes[node_id].get("selector_precedence") or {}
         if "if_level" in precedence.get("shadowed", ()):
             return error("if_level is shadowed by a higher-priority selector", 400)
         displayed = set(filter(None, request.args.get("displayed", "").split(",")))
-        candidate_count = 0
+        declared = 0
+        load_order_candidates = 0
         visible = []
         for parent, _, _, data in G.in_edges(
             node_id, keys=True, data=True
         ):
             if data.get("relation_type") != "if_level":
                 continue
-            candidate_count += 1
+            declared += 1
+            if data.get("load_order_candidate") is True:
+                load_order_candidates += 1
             if parent not in displayed or node_id not in displayed:
                 continue
             visible.append({
@@ -461,7 +464,8 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
             })
         return jsonify({
             "selector": str(selector),
-            "candidate_count": candidate_count,
+            "declared": declared,
+            "load_order_candidates": load_order_candidates,
             "edges": visible,
         })
 
