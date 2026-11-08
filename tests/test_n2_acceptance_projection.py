@@ -14,6 +14,7 @@ def make_generator(tmp_path, body):
     (tmp_path / "rules.xml").write_text(body, encoding="utf-8")
     generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pkl"))
     generator.build_graph_from_xml()
+    generator.build_modeled_runtime_projection()
     return generator
 
 
@@ -79,7 +80,8 @@ def test_rejected_or_future_parent_keeps_declaration_but_not_effective_edge(
     # inspectable rather than deleting rejected source edges.
     actual = generator.modeled_runtime_graph
     assert dependent not in actual
-    assert rejected not in actual if rejected != dependent else True
+    if rejected != dependent:
+        assert rejected not in actual
     assert all(
         target != dependent for _, target, _ in modeled_edge_tuples(actual)
     )
