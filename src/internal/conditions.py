@@ -375,8 +375,13 @@ def flatten_temporal_conditions(
             continue
 
         downstream_edges = edges[index:]
+        # A path containing a shadowed historical selector is declared
+        # provenance, not evidence that this ancestor can feed an active
+        # historical search. Preserve the path, but prevent an active scope.
         ancestor_scope = (
-            "historical_source"
+            "declared_only"
+            if any(edge.get("shadowed_by") for edge in downstream_edges)
+            else "historical_source"
             if any(
                 edge.get("relation_type") in TEMPORAL_EDGE_TYPES
                 for edge in downstream_edges
