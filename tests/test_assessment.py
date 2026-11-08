@@ -387,12 +387,27 @@ def test_missing_predicate_for_rejected_rule_is_not_required():
     assert result.facts
 
 
-def test_zero_event_universe_still_requires_explicit_rule_predicates():
+def test_zero_event_universe_needs_no_rule_predicates():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(catalog, 100503, 7, if_sid="1")
+    model = EvaluationBuilder(catalog).build()
+    result = BitsetAssessor(model, BitsetDomain(0), {}).assess()
+    assert set(result.facts) == set(model.occurrences)
+    assert all(
+        facts.predicate == facts.candidate == facts.matched == 0
+        for facts in result.facts.values()
+    )
+
+
+def test_zero_event_universe_still_validates_missing_predicate_policy():
     catalog = RuleCatalog()
     add_rule(catalog, 1, 0, category="test")
     model = EvaluationBuilder(catalog).build()
-    with pytest.raises(ValueError, match=r"1"):
-        BitsetAssessor(model, BitsetDomain(0), {})
+    with pytest.raises(ValueError, match="missing_predicate"):
+        BitsetAssessor(
+            model, BitsetDomain(0), {}, missing_predicate="invalid"
+        )
 
 
 def test_unknown_predicate_policy_can_be_explicitly_match_all():
