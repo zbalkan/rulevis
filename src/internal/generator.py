@@ -963,13 +963,31 @@ class GraphGenerator:
                 "selector": issue.selector,
             })
 
+        # The source graph can omit invalid declarations entirely, or
+        # contain only a placeholder created by a later SID reference.
+        # Relationship-map membership therefore cannot prove declaration
+        # presence. Preserve the complete issue stream independently.
+        declared_rule_ids = {
+            normalized
+            for declaration in self.catalog.declarations
+            if (normalized := normalize_rule_id(declaration.rule_id)) is not None
+        }
+        issue_records = [
+            {
+                "rule_id": issue.rule_id,
+                "code": issue.code,
+                "selector": issue.selector,
+            }
+            for issue in model.issues
+        ]
+
         # Commit model annotations only once construction has succeeded.
         # On an occurrence-budget failure, do not publish partial results.
         for rule_id, attrs in self.G.nodes(data=True):
             if rule_id == "0":
                 continue
             accepted = rule_id in model.rules
-            declared = rule_id in self.rule_relationships
+            declared = rule_id in declared_rule_ids
             attrs["modeled_acceptance"] = (
                 "accepted" if accepted else
                 "rejected" if declared else
@@ -982,6 +1000,7 @@ class GraphGenerator:
                 issues_by_rule.get(rule_id, ())
             )
 
+        self.modeled_load_issues = issue_records
         self.modeled_runtime_graph = projected
         return projected
 
