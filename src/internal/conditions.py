@@ -228,6 +228,8 @@ def _parent_edges(
         }
         if data.get("selector") is not None:
             edge["selector"] = data["selector"]
+        if data.get("shadowed_by") is not None:
+            edge["shadowed_by"] = data["shadowed_by"]
         edges.append(edge)
 
     edges.sort(
