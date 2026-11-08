@@ -193,7 +193,10 @@ def test_deep_chain_does_not_depend_on_python_recursion():
     model, result = assess(
         catalog,
         1,
-        {"1": 1},
+        {
+            declaration.rule_id: 1
+            for declaration in catalog.declarations
+        },
     )
 
     deepest = model.occurrences_by_rule[parent][0]
