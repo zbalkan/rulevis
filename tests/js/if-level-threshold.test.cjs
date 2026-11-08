@@ -262,3 +262,34 @@ test('legend explicitly names shadowed edges and level candidate overlay', () =>
     assert.ok(labels.includes('Shadowed selector (declared)'));
     assert.ok(labels.includes('Level candidate (on demand)'));
 });
+
+
+test('rejected rule relationship renders as rejected rather than active or shadowed', () => {
+    const state = {
+        visualizer: { displayedRuleIDs: new Set() },
+        content: { innerHTML: '' },
+    };
+    const details = {
+        id: '100002', description: 'Rejected child', level: '8',
+        if_level: '0', groups: [], parents: [{
+            id: '100001', relation_type: 'if_group',
+            rejected_reason: 'invalid_if_level',
+        }], children: [],
+        selector_precedence: {
+            effective: 'invalid_if_level', invalid: 'if_level',
+            rejected: true, rejection_reason: 'invalid_if_level',
+            shadowed: [],
+        },
+    };
+    const detailSandbox = { window: {} };
+    vm.runInNewContext(
+        source + '\n globalThis.__DetailsPanel = DetailsPanel;',
+        detailSandbox,
+    );
+    detailSandbox.__DetailsPanel.prototype.render.call(state, details);
+    assert.match(state.content.innerHTML, /rejected: invalid_if_level/);
+    assert.match(state.content.innerHTML, /Wazuh rejects this attachment/);
+    assert.match(state.content.innerHTML, /not active: invalid threshold/);
+    assert.doesNotMatch(state.content.innerHTML, /Toggle candidates/);
+    assert.doesNotMatch(state.content.innerHTML, /shadowed by if_level/);
+});

@@ -84,6 +84,7 @@ class DetailsPanel {
                     <strong>${escapeHTML(item.relation_type)}:</strong>
                     ${escapeHTML(item.id)}
                     ${item.synthesized_from ? `<span title="Structural parent synthesized from temporal selector"> (implicit from ${escapeHTML(item.synthesized_from)})</span>` : ''}
+                    ${item.rejected_reason ? `<span title="Rule rejected by Wazuh during structural attachment"> (rejected: ${escapeHTML(item.rejected_reason)})</span>` : ''}
                     ${item.shadowed_by ? `<span title="Declared relationship ignored for structural attachment by Wazuh"> (shadowed by ${escapeHTML(item.shadowed_by)})</span>` : ''}
                     ${item.load_order_candidate === false ? '<span title="Based on RuleVis file scanning, not a confirmed Wazuh load">(not a candidate in scanned load order)</span>' : ''}
                 </li>
@@ -916,7 +917,10 @@ class GraphVisualizer {
                     this.context.moveTo(link.source.x, link.source.y);
                     this.context.lineTo(link.target.x, link.target.y);
                 }
-                if (color === '__shadowed__') {
+                if (color === '__rejected__') {
+                    this.context.strokeStyle = '#dc2626';
+                    this.context.setLineDash([3 / this.transform.k, 5 / this.transform.k]);
+                } else if (color === '__shadowed__') {
                     this.context.strokeStyle = '#94a3b8';
                     this.context.setLineDash([5 / this.transform.k, 4 / this.transform.k]);
                 } else {
@@ -946,7 +950,8 @@ class GraphVisualizer {
         }
         if (this.transform.k > 0.6) {
             for (let link of this.links) {
-                const edgeColor = link.shadowed_by ? '#94a3b8'
+                const edgeColor = link.rejected_reason ? '#dc2626'
+                    : link.shadowed_by ? '#94a3b8'
                     : STYLES.edges[link.relation_type] || STYLES.edges.unknown;
                 this.context.fillStyle = edgeColor;
                 this.drawArrowhead(link.source, link.target);
@@ -1137,7 +1142,8 @@ class GraphVisualizer {
                 linkSet.add(linkId);
 
                 // Group link by color for batched rendering
-                const color = newLink.shadowed_by ? '__shadowed__'
+                const color = newLink.rejected_reason ? '__rejected__'
+                    : newLink.shadowed_by ? '__shadowed__'
                     : STYLES.edges[newLink.relation_type] || STYLES.edges.unknown;
                 if (!this.linkGroups[color]) this.linkGroups[color] = [];
                 this.linkGroups[color].push(linkObj);
@@ -1323,6 +1329,17 @@ class GraphVisualizer {
         this.context.setLineDash([]);
         this.context.fillStyle = STYLES.legend.text;
         this.context.fillText('Shadowed selector (declared)', 55, legendY + 14);
+        legendY += 32;
+        this.context.setLineDash([3, 5]);
+        this.context.beginPath();
+        this.context.moveTo(10, legendY + 9);
+        this.context.lineTo(40, legendY + 9);
+        this.context.strokeStyle = '#dc2626';
+        this.context.lineWidth = 3;
+        this.context.stroke();
+        this.context.setLineDash([]);
+        this.context.fillStyle = STYLES.legend.text;
+        this.context.fillText('Rejected attachment (not active)', 55, legendY + 14);
         legendY += 32;
         edgeLegendData.forEach(item => {
             this.context.beginPath();

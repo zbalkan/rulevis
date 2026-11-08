@@ -13,6 +13,7 @@ from internal.catalog import (
     RuleDeclaration,
     normalize_rule_id,
     valid_if_sid,
+    resolve_structural_parent_selectors,
 )
 from internal.group_index import GroupMembershipIndex
 from internal.order import CategoryOrder, PrioritySequence
@@ -55,13 +56,6 @@ class EvaluationModel:
     children: dict[Optional[int], tuple[int, ...]]
     occurrences_by_rule: dict[str, tuple[int, ...]]
     issues: tuple[LoadIssue, ...]
-
-
-@dataclass
-class _EffectiveParents:
-    if_sid: Optional[str]
-    if_level: Optional[int]
-    if_group: Optional[str]
 
 
 class OccurrenceBudgetExceeded(RuntimeError):
@@ -122,28 +116,13 @@ class EvaluationBuilder:
     @staticmethod
     def _effective_parents(
         declaration: RuleDeclaration,
-    ) -> _EffectiveParents:
-        if_sid = declaration.if_sid
-        if_group = declaration.if_group
-
-        if (
-            declaration.if_matched_group
-            and not if_sid
-            and not if_group
-        ):
-            if_group = declaration.if_matched_group
-
-        if (
-            declaration.if_matched_sid is not None
-            and not if_sid
-            and not if_group
-        ):
-            if_sid = str(declaration.if_matched_sid)
-
-        return _EffectiveParents(
-            if_sid=if_sid,
+    ):
+        return resolve_structural_parent_selectors(
+            if_sid=declaration.if_sid,
             if_level=declaration.if_level,
-            if_group=if_group,
+            if_group=declaration.if_group,
+            if_matched_sid=declaration.if_matched_sid,
+            if_matched_group=declaration.if_matched_group,
         )
 
     def _category_bit(self, category: Optional[str]) -> int:

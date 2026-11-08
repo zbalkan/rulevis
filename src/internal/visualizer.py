@@ -127,6 +127,12 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
             payload["expandable"] = any(child not in displayed for child in children)
         return payload
 
+    def rejected_reason(rule_id: str) -> str | None:
+        precedence = G.nodes[rule_id].get("selector_precedence") or {}
+        if precedence.get("rejected"):
+            return precedence.get("rejection_reason") or precedence.get("invalid")
+        return None
+
     def shadowed_by(rule_id: str, relation: str) -> str | None:
         precedence = G.nodes[rule_id].get("selector_precedence") or {}
         if relation in precedence.get("shadowed", ()):
@@ -152,6 +158,10 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                 "target": v,
                 "relation_type": data.get("relation_type", "unknown"),
                 **(
+                    {"rejected_reason": rejected_reason(v)}
+                    if rejected_reason(v) else {}
+                ),
+                **(
                     {"shadowed_by": shadowed_by(v, data.get("relation_type"))}
                     if shadowed_by(v, data.get("relation_type")) else {}
                 ),
@@ -169,7 +179,18 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
             return error("Root node not found", 404)
         children = list(G.successors(root))
         nodes = [serialize_node(root, displayed)] + [serialize_node(c, displayed) for c in children]
-        edges = [{"source": root, "target": c, "relation_type": "no_parent"} for c in children]
+        edges = [
+            {
+                "source": root,
+                "target": child,
+                "relation_type": "no_parent",
+                **(
+                    {"rejected_reason": rejected_reason(child)}
+                    if rejected_reason(child) else {}
+                ),
+            }
+            for child in children
+        ]
         return jsonify({"nodes": nodes, "edges": edges})
 
     def _handle_batch(ids_param: str, displayed: set[str]) -> Union[Response, tuple[Response, int]]:
@@ -216,6 +237,10 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                     ),
                     "selector": edge_data.get("selector"),
                     **(
+                        {"rejected_reason": rejected_reason(node_id)}
+                        if rejected_reason(node_id) else {}
+                    ),
+                    **(
                         {"shadowed_by": shadowed_by(
                             node_id, edge_data.get("relation_type")
                         )}
@@ -243,6 +268,10 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                         "relation_type", "unknown"
                     ),
                     "selector": edge_data.get("selector"),
+                    **(
+                        {"rejected_reason": rejected_reason(child_id)}
+                        if rejected_reason(child_id) else {}
+                    ),
                     **(
                         {"shadowed_by": shadowed_by(
                             child_id, edge_data.get("relation_type")

@@ -14,6 +14,7 @@ from internal.catalog import (
     os_match,
     os_word_match,
     valid_if_sid,
+    resolve_structural_parent_selectors,
 )
 
 ENCODING: Final[str] = "utf-8"
@@ -163,19 +164,23 @@ class GraphGenerator:
         if_matched_group: Optional[str],
         if_level: Optional[int],
     ) -> None:
-        structural_group = if_group
-        structural_sid = if_sid
-        group_origin = None
-        sid_origin = None
-        # Wazuh rules.c synthesizes structural parents for temporal selectors
-        # when an explicit if_sid/if_group is absent. The group synthesis runs
-        # before the SID synthesis. Historical registration remains separate.
-        if not structural_sid and not structural_group and if_matched_group:
-            structural_group = if_matched_group
-            group_origin = "if_matched_group"
-        if not structural_sid and not structural_group and if_matched_sid:
-            structural_sid = if_matched_sid
-            sid_origin = "if_matched_sid"
+        resolved = resolve_structural_parent_selectors(
+            if_sid=if_sid,
+            if_level=if_level,
+            if_group=if_group,
+            if_matched_sid=if_matched_sid,
+            if_matched_group=if_matched_group,
+        )
+        structural_sid = resolved.if_sid
+        structural_group = resolved.if_group
+        sid_origin = (
+            "if_matched_sid"
+            if resolved.sources.get("if_sid") == "if_matched_sid" else None
+        )
+        group_origin = (
+            "if_matched_group"
+            if resolved.sources.get("if_group") == "if_matched_group" else None
+        )
 
         if structural_sid:
             for sid in re.split(r'[,\s]+', structural_sid.strip()):
@@ -650,12 +655,16 @@ class GraphGenerator:
                     f"{rule_id}. User must fix the rule manually."
                 )
             else:
-                structural_group = if_group
-                if not if_sid and not if_group and if_matched_group:
-                    structural_group = if_matched_group
-                if structural_group:
+                resolved = resolve_structural_parent_selectors(
+                    if_sid=if_sid,
+                    if_level=if_level,
+                    if_group=if_group,
+                    if_matched_sid=if_matched_sid,
+                    if_matched_group=if_matched_group,
+                )
+                if resolved.if_group:
                     self._snapshot_group_parents(
-                        rule_id, structural_group
+                        rule_id, resolved.if_group
                     )
                 if if_level is not None and if_level > 0:
                     self._snapshot_level_parents(rule_id, if_level)
@@ -871,39 +880,14 @@ class GraphGenerator:
         logging.info("Resolving rule relationships...")
         for rule_id, relationships in self.rule_relationships.items():
             if_sid, if_matched_sid, if_group, if_matched_group, if_level = relationships
-            # Mirror the structural-parent synthesis and the OS_AddChild
-            # precedence without deleting source-level declared edges.
-            structural_sid = if_sid
-            structural_group = if_group
-            if not structural_sid and not structural_group and if_matched_group:
-                structural_group = if_matched_group
-            if not structural_sid and not structural_group and if_matched_sid:
-                structural_sid = if_matched_sid
-            # OS_AddChild chooses the if_level branch even for zero and
-            # rejects that rule; it does not fall through to if_group.
-            invalid_level = not structural_sid and if_level == 0
-            effective = (
-                "if_sid" if structural_sid
-                else "invalid_if_level" if invalid_level
-                else "if_level" if if_level is not None
-                else "if_group" if structural_group
-                else "category"
+            resolved = resolve_structural_parent_selectors(
+                if_sid=if_sid,
+                if_level=if_level,
+                if_group=if_group,
+                if_matched_sid=if_matched_sid,
+                if_matched_group=if_matched_group,
             )
-            shadowed = []
-            shadowed_sources = {}
-            if if_level is not None and effective == "if_sid":
-                shadowed.append("if_level")
-            if structural_group and effective in {"if_sid", "if_level"}:
-                shadowed.append("if_group")
-                shadowed_sources["if_group"] = (
-                    "if_group" if if_group else "if_matched_group"
-                )
-            self.G.nodes[rule_id]["selector_precedence"] = {
-                "effective": effective,
-                "shadowed": shadowed,
-                "shadowed_sources": shadowed_sources,
-                **({"invalid": "if_level"} if invalid_level else {}),
-            }
+            self.G.nodes[rule_id]["selector_precedence"] = resolved.metadata()
             self.add_relationship_edges(rule_id, *relationships)
 
         first_level_rules = [
