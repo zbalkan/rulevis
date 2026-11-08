@@ -85,7 +85,7 @@ class DetailsPanel {
                     ${escapeHTML(item.id)}
                     ${item.synthesized_from ? `<span title="Structural parent synthesized from temporal selector"> (implicit from ${escapeHTML(item.synthesized_from)})</span>` : ''}
                     ${item.rejected_reason ? `<span title="Rule rejected by Wazuh during structural attachment"> (rejected: ${escapeHTML(item.rejected_reason)})</span>` : ''}
-                    ${item.shadowed_by ? `<span title="Declared relationship ignored for structural attachment by Wazuh"> (shadowed by ${escapeHTML(item.shadowed_by)})</span>` : ''}
+                    ${item.shadowed_by ? `<span title="Declared relationship not selected by Wazuh selector precedence"> (shadowed by ${escapeHTML(item.shadowed_by)})</span>` : ''}
                     ${item.load_order_candidate === false ? '<span title="Based on RuleVis file scanning, not a confirmed Wazuh load">(not a candidate in scanned load order)</span>' : ''}
                 </li>
             `).join('')}</ul>`;
@@ -752,7 +752,10 @@ class ConditionsModal {
                 ? `:${escapeHTML(edge.selector)}`
                 : "";
             const target = escapeHTML(nodes[index + 1] || "");
-            label += ` → [${relation}${selector}] → ${target}`;
+            const precedence = edge.shadowed_by
+                ? ` (shadowed by ${escapeHTML(edge.shadowed_by)})`
+                : "";
+            label += ` → [${relation}${selector}${precedence}] → ${target}`;
         });
         return label;
     }

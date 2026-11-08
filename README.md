@@ -117,9 +117,12 @@ For atomic rules, RuleVis follows atomic parent relationships and keeps alternat
 
 For temporal rules, the same path view also follows historical `if_matched_sid` and `if_matched_group` relationships. Temporal tables add a **Scope** column:
 
-* `historical_source` identifies predicates belonging to events whose earlier matches feed the temporal rule;
+* `historical_source` identifies predicates belonging to declared active historical-search sources (subject to actual rule acceptance and event-history state);
+* `declared_only` identifies ancestor conditions reachable only through a shadowed historical selector; these paths do not represent an active historical search;
 * `current_event` identifies predicates applied on the current-event side of the path;
 * `temporal` identifies correlation conditions on the selected temporal rule, such as `frequency` and `timeframe`.
+
+Wazuh 4.14.10 chooses historical SID search over historical group search when both selectors are declared and the SID is nonzero. RuleVis retains the shadowed `if_matched_group` relationship for source inspection and labels it **shadowed by if_matched_sid**. Its ancestry has the `declared_only` scope rather than being presented as a historical event source. This selector decision alone does not prove runtime rule acceptance.
 
 The clock shape is intentionally classified only by the presence of the `frequency` or `timeframe` rule attributes. Condition analysis is independent from that visual heuristic: temporal constructs such as `if_matched_*`, `check_diff`, or `if_fts` are still retained and analyzed even when they do not make the node a clock.
 

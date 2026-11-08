@@ -293,3 +293,26 @@ test('rejected rule relationship renders as rejected rather than active or shado
     assert.doesNotMatch(state.content.innerHTML, /Toggle candidates/);
     assert.doesNotMatch(state.content.innerHTML, /shadowed by if_level/);
 });
+
+
+test('temporal condition path labels disclose shadowed source relationships', () => {
+    const context = { window: {} };
+    vm.runInNewContext(
+        source + '\n globalThis.__ConditionsModal = ConditionsModal;',
+        context,
+    );
+    const label = context.__ConditionsModal.prototype.renderPathLabel({
+        nodes: ['100990', '100991'],
+        edges: [{
+            relation_type: 'if_matched_group',
+            selector: 'auth',
+            shadowed_by: 'if_matched_sid',
+        }],
+    });
+    assert.match(
+        label,
+        /\[if_matched_group:auth \(shadowed by if_matched_sid\)\]/,
+    );
+    assert.match(label, /100990/);
+    assert.match(label, /100991/);
+});

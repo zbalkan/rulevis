@@ -19,6 +19,22 @@ def active_temporal_sid(value: Optional[int | str]) -> bool:
     return value is not None and bool(str(value).lstrip("0"))
 
 
+def select_historical_search(
+    if_matched_sid: Optional[int | str],
+    if_matched_group: Optional[str],
+) -> Optional[str]:
+    """Select Wazuh rules.c's historical-search branch, not load acceptance.
+
+    Search_LastSids takes precedence over Search_LastGroups when the parsed
+    temporal SID is nonzero. A declaration can retain both source selectors.
+    """
+    if active_temporal_sid(if_matched_sid):
+        return "if_matched_sid"
+    if if_matched_group:
+        return "if_matched_group"
+    return None
+
+
 DEFAULT_CATEGORY: Final[str] = "syslog"
 MAX_RULE_ID_DIGITS: Final[int] = 6
 

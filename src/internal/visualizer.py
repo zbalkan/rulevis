@@ -139,6 +139,13 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
             return precedence.get("effective")
         return None
 
+    def edge_shadowed_by(rule_id: str, edge_data: dict) -> str | None:
+        # Structural precedence is node-wide; historical-search precedence
+        # applies to the individual declared temporal edge.
+        return edge_data.get("shadowed_by") or shadowed_by(
+            rule_id, edge_data.get("relation_type", "unknown")
+        )
+
     def level_parent_summary(rule_id: str) -> dict[str, int]:
         declared = 0
         candidates = 0
@@ -162,8 +169,8 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                     if rejected_reason(v) else {}
                 ),
                 **(
-                    {"shadowed_by": shadowed_by(v, data.get("relation_type"))}
-                    if shadowed_by(v, data.get("relation_type")) else {}
+                    {"shadowed_by": edge_shadowed_by(v, data)}
+                    if edge_shadowed_by(v, data) else {}
                 ),
             }
             for data in G.get_edge_data(u, v, default={}).values()
@@ -241,10 +248,8 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                         if rejected_reason(node_id) else {}
                     ),
                     **(
-                        {"shadowed_by": shadowed_by(
-                            node_id, edge_data.get("relation_type")
-                        )}
-                        if shadowed_by(node_id, edge_data.get("relation_type"))
+                        {"shadowed_by": edge_shadowed_by(node_id, edge_data)}
+                        if edge_shadowed_by(node_id, edge_data)
                         else {}
                     ),
                     **(
@@ -273,10 +278,8 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                         if rejected_reason(child_id) else {}
                     ),
                     **(
-                        {"shadowed_by": shadowed_by(
-                            child_id, edge_data.get("relation_type")
-                        )}
-                        if shadowed_by(child_id, edge_data.get("relation_type"))
+                        {"shadowed_by": edge_shadowed_by(child_id, edge_data)}
+                        if edge_shadowed_by(child_id, edge_data)
                         else {}
                     ),
                     **(
@@ -302,6 +305,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                 "if_level": node_data.get("if_level"),
                 "level_parents": level_parent_summary(node_id),
                 "selector_precedence": node_data.get("selector_precedence"),
+                "historical_search": node_data.get("historical_search"),
                 "file": node_data.get("file"),
                 "temporal": bool(node_data.get("temporal", False)),
                 "parents": parents,

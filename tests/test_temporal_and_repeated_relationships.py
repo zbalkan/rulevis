@@ -249,3 +249,72 @@ def test_invalid_repeated_temporal_sid_cannot_be_hidden_by_last_value(
     from internal.evaluation import EvaluationBuilder
     model = EvaluationBuilder(generator.catalog).build()
     assert "100981" not in model.rules
+
+
+@pytest.mark.parametrize(
+    "temporal_sid,expected_search,expected_shadowed",
+    [
+        ("100990", "if_matched_sid", "if_matched_sid"),
+        ("0", "if_matched_group", None),
+    ],
+)
+def test_historical_sid_precedes_group_without_losing_declared_source(
+    tmp_path, temporal_sid, expected_search, expected_shadowed
+):
+    (tmp_path / "precedence.xml").write_text(
+        '<group name="auth,">'
+        '<rule id="100990" level="5"><description>Source</description></rule>'
+        '</group><group name="child,">'
+        '<rule id="100991" level="8" frequency="2" timeframe="60">'
+        f'<if_matched_sid>{temporal_sid}</if_matched_sid>'
+        '<if_matched_group>auth</if_matched_group>'
+        '<description>Mixed historical selectors</description>'
+        '</rule></group>',
+        encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pkl"))
+    generator.build_graph_from_xml()
+    graph = generator.G
+    assert graph.nodes["100991"]["historical_search"] == expected_search
+    group_edges = [
+        data for _, target, data in graph.edges(data=True)
+        if target == "100991" and data["relation_type"] == "if_matched_group"
+    ]
+    assert group_edges
+    assert all(
+        data.get("shadowed_by") == expected_shadowed for data in group_edges
+    )
+    sid_edges = [
+        data for _, target, data in graph.edges(data=True)
+        if target == "100991" and data["relation_type"] == "if_matched_sid"
+    ]
+    assert bool(sid_edges) is (temporal_sid != "0")
+    if expected_shadowed:
+        # Source history remains inspectable, but not a registered group search.
+        assert all(data["shadowed_by"] == "if_matched_sid" for data in group_edges)
+    else:
+        assert all(data.get("shadowed_by") is None for data in group_edges)
+
+
+def test_nonhistorical_selector_does_not_shadow_matched_group(tmp_path):
+    (tmp_path / "explicit.xml").write_text(
+        '<group name="auth,">'
+        '<rule id="100992" level="5"><description>Parent</description></rule>'
+        '</group><group name="other,">'
+        '<rule id="100993" level="8">'
+        '<if_sid>100992</if_sid>'
+        '<if_matched_group>auth</if_matched_group>'
+        '<description>Explicit SID</description></rule>'
+        '</group>',
+        encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pkl"))
+    generator.build_graph_from_xml()
+    node = generator.G.nodes["100993"]
+    assert node["historical_search"] == "if_matched_group"
+    edges = generator.G.get_edge_data("100992", "100993").values()
+    assert any(
+        data["relation_type"] == "if_matched_group"
+        and data.get("shadowed_by") is None
+        for data in edges
+    )
