@@ -870,6 +870,30 @@ class GraphGenerator:
                 existing["temporal"] = self.is_temporal_rule(element)
         logging.info("Resolving rule relationships...")
         for rule_id, relationships in self.rule_relationships.items():
+            if_sid, if_matched_sid, if_group, if_matched_group, if_level = relationships
+            # Mirror the structural-parent synthesis and the OS_AddChild
+            # precedence without deleting source-level declared edges.
+            structural_sid = if_sid
+            structural_group = if_group
+            if not structural_sid and not structural_group and if_matched_group:
+                structural_group = if_matched_group
+            if not structural_sid and not structural_group and if_matched_sid:
+                structural_sid = if_matched_sid
+            effective = (
+                "if_sid" if structural_sid
+                else "if_level" if if_level is not None
+                else "if_group" if structural_group
+                else "category"
+            )
+            shadowed = []
+            if if_level is not None and effective == "if_sid":
+                shadowed.append("if_level")
+            if structural_group and effective in {"if_sid", "if_level"}:
+                shadowed.append("if_group")
+            self.G.nodes[rule_id]["selector_precedence"] = {
+                "effective": effective,
+                "shadowed": shadowed,
+            }
             self.add_relationship_edges(rule_id, *relationships)
 
         first_level_rules = [
