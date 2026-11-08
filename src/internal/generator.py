@@ -8,7 +8,13 @@ from typing import Final, Optional
 
 import networkx as nx
 
-from internal.catalog import RuleCatalog, normalize_rule_id, valid_if_sid, os_match, os_word_match
+from internal.catalog import (
+    RuleCatalog,
+    normalize_rule_id,
+    os_match,
+    os_word_match,
+    valid_if_sid,
+)
 
 ENCODING: Final[str] = "utf-8"
 
