@@ -127,6 +127,7 @@ class RuleDeclaration:
     if_matched_sid: Optional[int] = None
     if_matched_group: Optional[str] = None
     invalid_if_matched_sid: Optional[str] = None
+    invalid_if_level: Optional[str] = None
 
     conditions: tuple[dict[str, object], ...] = ()
     temporal_conditions: tuple[dict[str, object], ...] = ()
@@ -158,6 +159,7 @@ class RuleCatalog:
         conditions: list[dict[str, object]],
         temporal_conditions: list[dict[str, object]],
         invalid_if_matched_sid: Optional[str] = None,
+        invalid_if_level: Optional[str] = None,
     ) -> RuleDeclaration:
         normalized_rule_id = normalize_rule_id(rule_id)
 
@@ -187,6 +189,7 @@ class RuleCatalog:
             if_matched_sid=if_matched_sid,
             if_matched_group=if_matched_group,
             invalid_if_matched_sid=invalid_if_matched_sid,
+            invalid_if_level=invalid_if_level,
             conditions=tuple(dict(condition) for condition in conditions),
             temporal_conditions=tuple(
                 dict(condition) for condition in temporal_conditions
