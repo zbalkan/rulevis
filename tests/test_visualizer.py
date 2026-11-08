@@ -434,7 +434,7 @@ def test_if_matched_rule_can_be_temporal_analysis_without_clock(tmp_path):
     )
 
 
-def test_index_documents_if_level_path_deviation(tmp_path):
+def test_index_documents_declared_if_level_path_scope(tmp_path):
     paths = write_app_files(tmp_path)
     client = create_app(*(str(path) for path in paths)).test_client()
 
@@ -442,8 +442,9 @@ def test_index_documents_if_level_path_deviation(tmp_path):
     html = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert "if_level" in html
-    assert "intentionally not modeled" in html
+    assert "<code>if_level</code>" in html
+    assert "source-level possibilities" in html
+    assert "intentionally not modeled" not in html
 
 
 def test_conditions_api_marks_subsumed_field_constraint(tmp_path):

@@ -36,6 +36,7 @@ class Occurrence:
     occurrence_id: int
     rule_id: str
     parent_id: Optional[int]
+    matched_selector: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -196,6 +197,8 @@ class EvaluationBuilder:
         self,
         rule_id: str,
         parent_id: Optional[int],
+        *,
+        matched_selector: Optional[str] = None,
     ) -> int:
         self._ensure_occurrence_budget(rule_id)
         occurrence_id = self._next_occurrence
@@ -249,6 +252,7 @@ class EvaluationBuilder:
             occurrence_id=occurrence_id,
             rule_id=rule_id,
             parent_id=parent_id,
+            matched_selector=matched_selector,
         )
         self.occurrences[occurrence_id] = occurrence
         self.parent_by_occurrence[occurrence_id] = parent_id
@@ -293,13 +297,14 @@ class EvaluationBuilder:
                 )
 
     @staticmethod
-    def _sid_values(value: str) -> list[str]:
-        values: list[str] = []
+    def _sid_values(value: str) -> list[tuple[str, str]]:
+        """Preserve each raw SID token alongside its canonical lookup ID."""
+        values: list[tuple[str, str]] = []
         for sid in re.split(r"[,\s]+", value.strip()):
             if not sid:
                 continue
             normalized = normalize_rule_id(sid)
-            values.append(normalized if normalized is not None else sid)
+            values.append((sid, normalized if normalized is not None else sid))
         return values
 
     def _sid_parent_occurrences(self, rule_id: str) -> list[int]:
@@ -344,7 +349,7 @@ class EvaluationBuilder:
         # Resolve every required parent before mutating the occurrence tree.
         # if_matched_sid failures reject the rule, so staging prevents
         # partially created RuleNodes from surviving that rejection.
-        for sid in self._sid_values(selector):
+        for raw_sid, sid in self._sid_values(selector):
             parent_ids = self._sid_parent_occurrences(sid)
             if not parent_ids:
                 self.issues.append(
@@ -354,17 +359,19 @@ class EvaluationBuilder:
                     return False
                 continue
 
-            planned.append((sid, parent_ids))
+            planned.append((raw_sid, parent_ids))
 
         attached = False
-        for _, parent_ids in planned:
+        for raw_sid, parent_ids in planned:
             for parent_id in parent_ids:
                 parent_rule_id = self.occurrences[parent_id].rule_id
                 self._set_category(
                     state,
                     self.rules[parent_rule_id].category,
                 )
-                self._new_occurrence(state.rule_id, parent_id)
+                self._new_occurrence(
+                    state.rule_id, parent_id, matched_selector=raw_sid
+                )
                 attached = True
 
         return attached
@@ -466,6 +473,16 @@ class EvaluationBuilder:
                     "INVALID_RULE_ID",
                     declaration.rule_id,
                     declaration.rule_id,
+                )
+            )
+            return
+
+        if declaration.invalid_if_matched_sid is not None:
+            self.issues.append(
+                LoadIssue(
+                    "INVALID_IF_MATCHED_SID",
+                    declaration.rule_id,
+                    declaration.invalid_if_matched_sid,
                 )
             )
             return
@@ -617,7 +634,14 @@ def project_occurrence_relationships(
         child_rule = occurrence.rule_id
         state = model.rules[child_rule]
         relation = state.parent_relation or "unknown"
-        selector = state.parent_selector
+        # A multi-SID declaration can attach under different parents.
+        # Preserve the exact source token for each physical attachment so
+        # comparisons can match GraphGenerator's per-SID declared edges.
+        selector = (
+            occurrence.matched_selector
+            if relation == "if_sid" and occurrence.matched_selector is not None
+            else state.parent_selector
+        )
         synthesized_from = state.parent_synthesized_from
         key = (relation, selector, synthesized_from)
         if projected.has_edge(parent_rule, child_rule, key):

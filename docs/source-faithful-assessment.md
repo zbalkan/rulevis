@@ -116,10 +116,13 @@ Tests include mutual group dependencies analogous to stock Wazuh rules
 
 The model is checked against Wazuh 4.14.10's `rules.c`,
 `rules_list.c`, `os_match_compile.c`, and `os_match_execute.c`.
-The source-graph parser now concatenates repeated selector elements,
-uses `OSMatch` semantics for temporal group references (different
-from `OS_WordMatch`), preserves `if_level` priority history, and treats
-missing-base overwrites as new declarations at scan time.
+The source-graph parser concatenates repeated `if_sid`, `if_level`,
+`if_group`, and `if_matched_group` elements. By contrast,
+`if_matched_sid` accepts one numeric value per element, with the last valid
+value taking precedence; an invalid element rejects the rule in analysisd.
+The parser uses `OSMatch` semantics for temporal group references
+(different from `OS_WordMatch`), preserves `if_level` priority history,
+and treats missing-base overwrites as new declarations at scan time.
 
 As before, RuleVis's filesystem scanning is not equivalent to an
 `ossec.conf`-selected include order. A source-level

@@ -418,6 +418,19 @@ class GraphGenerator:
         except ValueError:
             return None
 
+    @staticmethod
+    def _invalid_matched_sid(element: ET.Element) -> Optional[str]:
+        """Wazuh OS_StrIsNum rejects every nondecimal if_matched_sid tag."""
+        for child in element:
+            if (
+                isinstance(child.tag, str)
+                and child.tag.lower() == "if_matched_sid"
+            ):
+                value = child.text or ""
+                if re.fullmatch(r"[0-9]+", value) is None:
+                    return value
+        return None
+
     def _last_int_child(
         self,
         element: ET.Element,
@@ -491,6 +504,7 @@ class GraphGenerator:
                 element,
                 "if_matched_sid",
             ),
+            invalid_if_matched_sid=self._invalid_matched_sid(element),
             if_matched_group=self._concat_child_text(
                 element,
                 "if_matched_group",
@@ -531,6 +545,17 @@ class GraphGenerator:
                 logging.warning(
                     "Skipping invalid visual rule in %s: id=%r, level=%r",
                     xml_file, raw_rule_id, element.get("level"),
+                )
+                return
+
+            invalid_matched_sid = (
+                self.catalog.declarations[-1].invalid_if_matched_sid
+            )
+            if invalid_matched_sid is not None:
+                logging.warning(
+                    "Skipping rule %s in %s: invalid if_matched_sid %r; "
+                    "Wazuh requires one decimal SID per element.",
+                    rule_id, xml_file, invalid_matched_sid,
                 )
                 return
 
