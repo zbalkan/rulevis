@@ -610,10 +610,16 @@ def test_if_matched_group_resolves_members_with_selector(tmp_path):
         assert edge_data is not None
         assert list(edge_data.values()) == [
             {
+                "relation_type": "if_group",
+                "selector": "source_group",
+                "load_order_candidate": True,
+                "synthesized_from": "if_matched_group",
+            },
+            {
                 "relation_type": "if_matched_group",
                 "selector": "source_group",
                 "load_order_candidate": True,
-            }
+            },
         ]
 
 

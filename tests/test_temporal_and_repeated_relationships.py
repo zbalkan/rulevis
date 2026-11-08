@@ -107,3 +107,82 @@ def test_repeated_sid_level_and_temporal_group_tags_are_concatenated(tmp_path):
         and edge["selector"] == "missing|levels"
         for edge in graph.get_edge_data("100931", "100935").values()
     )
+
+
+def test_temporal_sid_synthesizes_structural_if_sid_edge(tmp_path):
+    (tmp_path / "sid.xml").write_text(
+        '<group name="root,">'
+        '<rule id="100940" level="3"><description>Parent</description></rule>'
+        '<rule id="100941" level="8" frequency="2" timeframe="60">'
+        '<if_matched_sid>100940</if_matched_sid>'
+        '<description>Temporal child</description></rule>'
+        '</group>',
+        encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pkl"))
+    generator.build_graph_from_xml()
+
+    edges = generator.G.get_edge_data("100940", "100941")
+    assert edges is not None
+    assert any(
+        e["relation_type"] == "if_sid"
+        and e["synthesized_from"] == "if_matched_sid"
+        for e in edges.values()
+    )
+    assert any(
+        e["relation_type"] == "if_matched_sid"
+        for e in edges.values()
+    )
+
+
+def test_temporal_group_has_distinct_structural_and_historical_links(tmp_path):
+    (tmp_path / "group.xml").write_text(
+        '<group name="auth,"><rule id="100950" level="3">'
+        '<description>Parent</description></rule></group>'
+        '<group name="other,"><rule id="100951" level="8" '
+        'frequency="2" timeframe="60">'
+        '<if_matched_group>auth</if_matched_group>'
+        '<description>Temporal child</description></rule></group>',
+        encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pkl"))
+    generator.build_graph_from_xml()
+
+    edges = generator.G.get_edge_data("100950", "100951")
+    assert edges is not None
+    assert any(
+        e["relation_type"] == "if_group"
+        and e["synthesized_from"] == "if_matched_group"
+        and e["load_order_candidate"] is True
+        for e in edges.values()
+    )
+    assert any(
+        e["relation_type"] == "if_matched_group"
+        and e["load_order_candidate"] is True
+        for e in edges.values()
+    )
+
+
+def test_explicit_sid_avoids_synthesizing_if_group_from_temporal_selector(
+    tmp_path,
+):
+    (tmp_path / "mixed.xml").write_text(
+        '<group name="auth,"><rule id="100960" level="3">'
+        '<description>Parent</description></rule></group>'
+        '<group name="other,"><rule id="100961" level="8">'
+        '<if_sid>100960</if_sid><if_matched_group>auth</if_matched_group>'
+        '<description>Temporal child</description></rule></group>',
+        encoding="utf-8",
+    )
+    generator = GraphGenerator([str(tmp_path)], str(tmp_path / "graph.pkl"))
+    generator.build_graph_from_xml()
+
+    edges = generator.G.get_edge_data("100960", "100961")
+    assert edges is not None
+    assert any(e["relation_type"] == "if_sid" for e in edges.values())
+    assert any(
+        e["relation_type"] == "if_matched_group" for e in edges.values()
+    )
+    assert not any(
+        e["relation_type"] == "if_group" for e in edges.values()
+    )

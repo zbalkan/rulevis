@@ -172,6 +172,8 @@ The log file records informational messages, warnings, and errors emitted during
 
 ## Group relationship interpretation
 
+Temporal relationships have two meanings in analysisd. When `if_matched_sid` or `if_matched_group` supplies the only structural parent, the loader synthesizes `if_sid` or `if_group` for placement, while retaining the original `if_matched_*` condition for historical-event registration. RuleVis now marks those synthesized structural edges explicitly in rule details. A temporal group source uses `OSMatch` to register event-history references; structural `if_group` placement uses `OS_WordMatch`. These may select different rules.
+
 RuleVis displays declared `if_group`, `if_level`, and `if_matched_group` dependencies even when their parents would not have been available at the point the child was encountered in RuleVis's file scan. The temporal `if_matched_group` selector uses Wazuh's `OSMatch` semantics, including negation, alternatives, and anchoring; ordinary `if_group` instead uses `OS_WordMatch`. The rule details label those relationships **not a candidate in scanned load order**. The same annotation is used for declared `if_level` dependencies. Other links are *candidates*, not verified runtime attachments. The scan uses sorted XML files and may differ from the manager's configured rule-loading order. Source-faithful runtime occurrence reconstruction remains a separate experimental subsystem.
 
 ## Notes

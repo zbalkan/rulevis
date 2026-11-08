@@ -124,6 +124,7 @@ class GraphGenerator:
         relation_type: str,
         selector: Optional[str] = None,
         load_order_candidate: Optional[bool] = None,
+        synthesized_from: Optional[str] = None,
     ) -> None:
         if logging.getLogger().getEffectiveLevel() <= logging.DEBUG:
             logging.debug(
@@ -134,6 +135,8 @@ class GraphGenerator:
             edge_data["selector"] = selector
         if load_order_candidate is not None:
             edge_data["load_order_candidate"] = load_order_candidate
+        if synthesized_from is not None:
+            edge_data["synthesized_from"] = synthesized_from
 
         existing_edges = self.G.get_edge_data(source, target) or {}
         if any(
@@ -154,12 +157,27 @@ class GraphGenerator:
         if_matched_group: Optional[str],
         if_level: Optional[int],
     ) -> None:
-        if if_sid:
-            for sid in re.split(r'[,\s]+', if_sid.strip()):
+        structural_group = if_group
+        structural_sid = if_sid
+        group_origin = None
+        sid_origin = None
+        # Wazuh rules.c synthesizes structural parents for temporal selectors
+        # when an explicit if_sid/if_group is absent. The group synthesis runs
+        # before the SID synthesis. Historical registration remains separate.
+        if not structural_sid and not structural_group and if_matched_group:
+            structural_group = if_matched_group
+            group_origin = "if_matched_group"
+        if not structural_sid and not structural_group and if_matched_sid:
+            structural_sid = if_matched_sid
+            sid_origin = "if_matched_sid"
+
+        if structural_sid:
+            for sid in re.split(r'[,\s]+', structural_sid.strip()):
                 if sid:
                     parent = normalize_rule_id(sid) or sid
                     self.add_edge_with_type(
-                        parent, rule_id, 'if_sid', selector=sid
+                        parent, rule_id, 'if_sid', selector=sid,
+                        synthesized_from=sid_origin,
                     )
 
         if if_matched_sid:
@@ -170,8 +188,8 @@ class GraphGenerator:
                         parent, rule_id, 'if_matched_sid', selector=sid
                     )
 
-        if if_group:
-            selector = if_group.strip()
+        if structural_group:
+            selector = structural_group.strip()
             if selector:
                 candidates = set(
                     self.group_parent_snapshots.get(rule_id, ())
@@ -182,6 +200,7 @@ class GraphGenerator:
                     self.add_edge_with_type(
                         parent_rule, rule_id, "if_group", selector=matched,
                         load_order_candidate=(parent_rule, matched) in candidates,
+                        synthesized_from=group_origin,
                     )
 
         if if_level is not None and if_level > 0:
@@ -571,8 +590,13 @@ class GraphGenerator:
                     f"{rule_id}. User must fix the rule manually."
                 )
             else:
-                if if_group:
-                    self._snapshot_group_parents(rule_id, if_group)
+                structural_group = if_group
+                if not if_sid and not if_group and if_matched_group:
+                    structural_group = if_matched_group
+                if structural_group:
+                    self._snapshot_group_parents(
+                        rule_id, structural_group
+                    )
                 if if_level is not None and if_level > 0:
                     self._snapshot_level_parents(rule_id, if_level)
                 self._record_priority(rule_id, priority)

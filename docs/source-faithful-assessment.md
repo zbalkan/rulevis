@@ -95,6 +95,14 @@ their `if_matched_sid` or `if_matched_group` origin. This graph can be
 compared with `GraphGenerator.G` without deleting declared-only edges or
 cycles from static analysis.
 
+Temporal selectors can describe two distinct relationships. When no explicit
+structural parent is provided, analysisd synthesizes `if_sid` or `if_group`
+before attachment. Subsequent `OS_MarkID` or `OS_MarkGroup` registers
+historical sources separately. The visualization graph shows both a
+structural edge (marked `synthesized_from`) and a declared temporal
+reference, while the occurrence projection contains only structural
+attachments.
+
 The occurrence graph itself must remain acyclic. Its logical projection
 does not establish that a declared relation was available at load time
 unless the corresponding accepted occurrences exist. The projection

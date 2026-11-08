@@ -98,3 +98,39 @@ def test_projection_excludes_rejected_duplicate_after_missing_base_overwrite():
         for issue in model.issues
     )
     assert _edges(runtime, "100850", "100851", "if_sid")
+
+
+def test_projection_retains_structural_type_and_temporal_origin():
+    catalog = RuleCatalog()
+    _append(catalog, 1, 0, group="root,")
+    _append(catalog, 100861, 5, group="auth,", if_sid="1")
+
+    catalog.append(
+        rule_id="100862", file="fixture.xml", source_level=8,
+        accuracy=1, noalert=False, overwrite=False,
+        runtime_group="child,", display_groups=[], category="syslog",
+        if_sid=None, if_level=None, if_group=None,
+        if_matched_sid=100861, if_matched_group=None,
+        conditions=[], temporal_conditions=[],
+    )
+    catalog.append(
+        rule_id="100863", file="fixture.xml", source_level=8,
+        accuracy=1, noalert=False, overwrite=False,
+        runtime_group="child,", display_groups=[], category="syslog",
+        if_sid=None, if_level=None, if_group=None,
+        if_matched_sid=None, if_matched_group="auth",
+        conditions=[], temporal_conditions=[],
+    )
+
+    model = EvaluationBuilder(catalog).build()
+    runtime = project_occurrence_relationships(model)
+
+    sid = _edges(runtime, "100861", "100862", "if_sid")
+    group = _edges(runtime, "100861", "100863", "if_group")
+
+    assert len(sid) == 1
+    assert sid[0]["synthesized_from"] == "if_matched_sid"
+    assert len(group) == 1
+    assert group[0]["synthesized_from"] == "if_matched_group"
+    assert not _edges(runtime, "100861", "100862", "if_matched_sid")
+    assert not _edges(runtime, "100861", "100863", "if_matched_group")

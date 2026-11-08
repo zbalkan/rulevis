@@ -82,6 +82,7 @@ class DetailsPanel {
                     onclick="window.visualizer.handleSearchById('${item.id}')">
                     <strong>${escapeHTML(item.relation_type)}:</strong>
                     ${escapeHTML(item.id)}
+                    ${item.synthesized_from ? `<span title="Structural parent synthesized from temporal selector"> (implicit from ${escapeHTML(item.synthesized_from)})</span>` : ''}
                     ${item.load_order_candidate === false ? '<span title="Based on RuleVis file scanning, not a confirmed Wazuh load">(not a candidate in scanned load order)</span>' : ''}
                 </li>
             `).join('')}</ul>`;
@@ -89,7 +90,7 @@ class DetailsPanel {
         const hasGroupOrderNotes = [...(details.parents || []), ...(details.children || [])]
             .some(item => item.load_order_candidate !== undefined);
         const groupOrderNote = hasGroupOrderNotes
-            ? '<p>Group and level parent eligibility is estimated from scanned XML order and priorities; the configured Wazuh load order may differ.</p>'
+            ? '<p>Group, level and temporal-source eligibility is estimated from scanned XML order and priorities; the configured Wazuh load order may differ.</p>'
             : '';
 
         const ruleLevel = parseInt(details.level, 10);

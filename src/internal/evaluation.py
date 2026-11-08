@@ -28,6 +28,7 @@ class RuleState:
     temporal_conditions: tuple[dict[str, object], ...]
     parent_relation: Optional[str] = None
     parent_selector: Optional[str] = None
+    parent_synthesized_from: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -488,22 +489,23 @@ class EvaluationBuilder:
             )
 
         parents = self._effective_parents(declaration)
+        parent_synthesized_from = None
         if int(normalized_rule_id) < 10:
             parent_relation, parent_selector = "root", None
         elif parents.if_sid:
-            parent_relation = (
-                "if_sid" if declaration.if_sid else "if_matched_sid"
-            )
+            parent_relation = "if_sid"
             parent_selector = parents.if_sid
+            if not declaration.if_sid:
+                parent_synthesized_from = "if_matched_sid"
         elif parents.if_level is not None:
             parent_relation, parent_selector = (
                 "if_level", str(parents.if_level)
             )
         elif parents.if_group:
-            parent_relation = (
-                "if_group" if declaration.if_group else "if_matched_group"
-            )
+            parent_relation = "if_group"
             parent_selector = parents.if_group
+            if not declaration.if_group:
+                parent_synthesized_from = "if_matched_group"
         else:
             parent_relation, parent_selector = "category", declaration.category
 
@@ -517,6 +519,7 @@ class EvaluationBuilder:
             temporal_conditions=declaration.temporal_conditions,
             parent_relation=parent_relation,
             parent_selector=parent_selector,
+            parent_synthesized_from=parent_synthesized_from,
         )
         self._register_state(state)
 
@@ -615,7 +618,8 @@ def project_occurrence_relationships(
         state = model.rules[child_rule]
         relation = state.parent_relation or "unknown"
         selector = state.parent_selector
-        key = (relation, selector)
+        synthesized_from = state.parent_synthesized_from
+        key = (relation, selector, synthesized_from)
         if projected.has_edge(parent_rule, child_rule, key):
             projected.edges[parent_rule, child_rule, key][
                 "occurrence_count"
@@ -627,6 +631,7 @@ def project_occurrence_relationships(
                 key=key,
                 relation_type=relation,
                 selector=selector,
+                synthesized_from=synthesized_from,
                 occurrence_count=1,
             )
 
