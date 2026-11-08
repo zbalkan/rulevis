@@ -289,5 +289,7 @@ test('rejected rule relationship renders as rejected rather than active or shado
     detailSandbox.__DetailsPanel.prototype.render.call(state, details);
     assert.match(state.content.innerHTML, /rejected: invalid_if_level/);
     assert.match(state.content.innerHTML, /Wazuh rejects this attachment/);
+    assert.match(state.content.innerHTML, /not active: invalid threshold/);
+    assert.doesNotMatch(state.content.innerHTML, /Toggle candidates/);
     assert.doesNotMatch(state.content.innerHTML, /shadowed by if_level/);
 });
