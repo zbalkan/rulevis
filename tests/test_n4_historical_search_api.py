@@ -9,7 +9,8 @@ from internal.visualizer import create_app
 def test_mixed_historical_selectors_are_annotated_in_api_and_paths(tmp_path):
     (tmp_path / "rules.xml").write_text(
         '<group name="auth,">'
-        '<rule id="100990" level="5"><description>Source</description></rule>'
+        '<rule id="100990" level="5"><decoded_as>json</decoded_as>'
+        '<description>Source</description></rule>'
         '</group><group name="child,">'
         '<rule id="100991" level="8" frequency="2" timeframe="60">'
         '<if_matched_sid>100990</if_matched_sid>'
@@ -72,4 +73,24 @@ def test_mixed_historical_selectors_are_annotated_in_api_and_paths(tmp_path):
         edge["relation_type"] == "if_matched_group"
         and edge.get("shadowed_by") == "if_matched_sid"
         for path in paths for edge in path["edges"]
+    )
+    inactive_paths = [
+        path for path in paths if any(
+            edge.get("shadowed_by") == "if_matched_sid"
+            for edge in path["edges"]
+        )
+    ]
+    assert inactive_paths
+    assert all(
+        condition["scope"] == "declared_only"
+        for path in inactive_paths
+        for condition in path["conditions"]
+        if condition["origin_rule_id"] == "100990"
+    )
+    assert any(
+        condition["scope"] == "historical_source"
+        for path in paths
+        if not any(edge.get("shadowed_by") for edge in path["edges"])
+        for condition in path["conditions"]
+        if condition["origin_rule_id"] == "100990"
     )
