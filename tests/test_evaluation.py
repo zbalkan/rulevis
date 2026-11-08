@@ -709,3 +709,42 @@ def test_if_group_does_not_scan_unmatched_occurrences():
     parent = model.occurrences_by_rule["100350"][0]
     child = model.occurrences_by_rule["100351"][0]
     assert model.occurrences[child].parent_id == parent
+
+
+def test_zero_temporal_sid_uses_group_parent_without_sid_failure():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test", runtime_group="source,")
+    add_rule(catalog, 100221, 5, category="test", if_group="source",
+             if_matched_sid=0)
+    model = EvaluationBuilder(catalog).build()
+    assert model.rules["100221"].parent_relation == "if_group"
+    assert "100221" in model.occurrences_by_rule
+    assert not any(
+        issue.code == "SID_NOT_FOUND" and issue.rule_id == "100221"
+        for issue in model.issues
+    )
+
+
+def test_zero_temporal_sid_uses_category_fallback():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(catalog, 100222, 5, category="test", if_matched_sid=0)
+    model = EvaluationBuilder(catalog).build()
+    assert model.rules["100222"].parent_relation == "category"
+    assert "100222" in model.occurrences_by_rule
+    assert not any(
+        issue.code == "SID_NOT_FOUND" and issue.rule_id == "100222"
+        for issue in model.issues
+    )
+
+
+def test_zero_temporal_sid_does_not_convert_missing_explicit_sid_to_rejection():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(catalog, 100223, 5, if_sid="1,999999", if_matched_sid=0)
+    model = EvaluationBuilder(catalog).build()
+    assert "100223" in model.occurrences_by_rule
+    assert any(
+        issue.code == "SID_NOT_FOUND" and issue.rule_id == "100223"
+        for issue in model.issues
+    )
