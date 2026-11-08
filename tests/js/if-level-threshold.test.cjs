@@ -213,11 +213,12 @@ test('details show level-parent counts and shadowed selector notice', () => {
         level_parents: { declared: 12, load_order_candidates: 4 },
         selector_precedence: { effective: 'if_level', shadowed: ['if_group'] },
     };
-    graph.constructor; // keep class prototype available for rendering tests
-    const panel = vm.runInNewContext(
+    const detailSandbox = { window: {} };
+    vm.runInNewContext(
         source + '\n globalThis.__DetailsPanel = DetailsPanel;',
-        { window: {} },
-    ).__DetailsPanel;
+        detailSandbox,
+    );
+    const panel = detailSandbox.__DetailsPanel;
     panel.prototype.render.call(state, details);
     assert.match(state.content.innerHTML, /12 declared/);
     assert.match(state.content.innerHTML, /4 load-order candidates/);
