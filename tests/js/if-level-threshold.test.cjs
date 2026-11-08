@@ -147,3 +147,44 @@ test('Escape clears an overlay without a highlighted node', () => {
     assert.equal(state.levelOverlayEdges.length, 0);
     assert.equal(state.levelOverlayRequestId, 3);
 });
+
+
+test('selecting another rule clears the selected threshold overlay', () => {
+    const old = { id: '100030', if_level: '5', x: 10, y: 10 };
+    const next = { id: '100040' };
+    let openedDetails = null;
+    let redraws = 0;
+    const state = {
+        nodeMap: new Map([[old.id, old], [next.id, next]]),
+        activeLevelRuleId: old.id,
+        levelOverlayEdges: [{ source: '100001', target: old.id }],
+        levelOverlayRequestId: 7,
+        detailsPanel: { show(node) { openedDetails = node.id; } },
+        updateFocusContext() {},
+        render() { ++redraws; },
+    };
+    graph.highlightAndCenterNode.call(state, next.id);
+    assert.equal(state.activeLevelRuleId, null);
+    assert.equal(state.levelOverlayEdges.length, 0);
+    assert.equal(state.levelOverlayRequestId, 8);
+    assert.equal(openedDetails, next.id);
+    assert.equal(redraws, 1);
+});
+
+test('selecting the currently annotated rule retains its overlay', () => {
+    const node = { id: '100030', if_level: '5' };
+    const overlay = [{ source: '100001', target: node.id }];
+    const state = {
+        nodeMap: new Map([[node.id, node]]),
+        activeLevelRuleId: node.id,
+        levelOverlayEdges: overlay,
+        levelOverlayRequestId: 7,
+        detailsPanel: { show() {} },
+        updateFocusContext() {},
+        render() {},
+    };
+    graph.highlightAndCenterNode.call(state, node.id);
+    assert.equal(state.activeLevelRuleId, node.id);
+    assert.equal(state.levelOverlayEdges, overlay);
+    assert.equal(state.levelOverlayRequestId, 7);
+});
