@@ -204,3 +204,71 @@ def test_threshold_only_parent_does_not_make_a_node_expandable(tmp_path):
     response = client.get("/api/nodes?id=100099&neighbors=children")
     assert response.status_code == 200
     assert [node["id"] for node in response.get_json()["nodes"]] == ["100099"]
+
+
+def test_details_report_declared_and_load_order_level_parent_counts(tmp_path):
+    client = make_client(tmp_path)
+    response = client.get("/api/nodes?id=100004&include=details")
+    assert response.status_code == 200
+    details = response.get_json()
+    assert details["level_parents"]["declared"] == 2
+    assert details["level_parents"]["load_order_candidates"] == 1
+
+
+def test_shadowed_if_group_is_identified_in_details(tmp_path):
+    graph_path, stats_path, heatmap_path = write_app_files(tmp_path)
+    with graph_path.open("rb") as stream:
+        graph = pickle.load(stream)
+    graph.nodes["100004"]["if_level"] = "5"
+    graph.nodes["100004"]["selector_precedence"] = {
+        "effective": "if_level",
+        "shadowed": ["if_group"],
+    }
+    graph.add_edge(
+        "100001", "100004", relation_type="if_group", selector="example",
+    )
+    graph.add_edge(
+        "100001", "100004", relation_type="if_level", selector="5",
+        load_order_candidate=True,
+    )
+    with graph_path.open("wb") as stream:
+        pickle.dump(graph, stream)
+    client = create_app(str(graph_path), str(stats_path), str(heatmap_path)).test_client()
+    response = client.get("/api/nodes?id=100004&include=details")
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["selector_precedence"]["effective"] == "if_level"
+    group_parents = [row for row in payload["parents"] if row["relation_type"] == "if_group"]
+    assert len(group_parents) == 1
+    assert group_parents[0]["shadowed_by"] == "if_level"
+
+
+def test_shadowed_level_selector_cannot_be_activated_as_overlay(tmp_path):
+    graph_path, stats_path, heatmap_path = write_app_files(tmp_path)
+    with graph_path.open("rb") as stream:
+        graph = pickle.load(stream)
+    graph.nodes["100004"]["if_level"] = "5"
+    graph.nodes["100004"]["selector_precedence"] = {
+        "effective": "if_sid", "shadowed": ["if_level"],
+    }
+    graph.add_edge(
+        "100001", "100004", relation_type="if_level", selector="5",
+        load_order_candidate=True,
+    )
+    with graph_path.open("wb") as stream:
+        pickle.dump(graph, stream)
+    client = create_app(str(graph_path), str(stats_path), str(heatmap_path)).test_client()
+    response = client.get("/api/level-parents?id=100004&displayed=100001,100004")
+    assert response.status_code == 400
+
+
+def test_zero_level_selector_is_not_an_eligible_overlay(tmp_path):
+    graph_path, stats_path, heatmap_path = write_app_files(tmp_path)
+    with graph_path.open("rb") as stream:
+        graph = pickle.load(stream)
+    graph.nodes["100004"]["if_level"] = "0"
+    with graph_path.open("wb") as stream:
+        pickle.dump(graph, stream)
+    client = create_app(str(graph_path), str(stats_path), str(heatmap_path)).test_client()
+    response = client.get("/api/level-parents?id=100004")
+    assert response.status_code == 400
