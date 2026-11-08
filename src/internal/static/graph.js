@@ -138,10 +138,24 @@ class DetailsPanel {
                     <p>Candidate eligibility is estimated from scanned rules, not verified runtime attachment.</p>
                </div>`
             : '';
-        const selectorWarning = shadowedSelectors.length
-            ? `<p><strong>Structural selector:</strong> ${escapeHTML(effectiveSelector)}.
-               Declared but shadowed: ${shadowedSelectors.map(escapeHTML).join(', ')}.</p>`
-            : '';
+        const shadowedSources = details.selector_precedence?.shadowed_sources || {};
+        const declaredShadowed = shadowedSelectors.filter(
+            type => !shadowedSources[type] || shadowedSources[type] === type
+        );
+        const synthesizedShadowed = shadowedSelectors.filter(
+            type => shadowedSources[type] && shadowedSources[type] !== type
+        );
+        const selectorWarning = details.selector_precedence?.invalid
+            ? `<p>Invalid structural selector: ${escapeHTML(details.selector_precedence.invalid)}.
+               Wazuh rejects this attachment rather than falling back to another selector.</p>`
+            : shadowedSelectors.length
+                ? `<p><strong>Structural selector:</strong> ${escapeHTML(effectiveSelector)}.
+                   ${declaredShadowed.length
+                       ? `Declared but shadowed: ${declaredShadowed.map(escapeHTML).join(', ')}.` : ''}
+                   ${synthesizedShadowed.length
+                       ? `Synthesized but shadowed: ${synthesizedShadowed.map(type =>
+                           escapeHTML(shadowedSources[type])).join(', ')}.` : ''}</p>`
+                : '';
 
         const conditionsButton = details.id !== "0"
             ? `<button id="showConditionsBtn" class="conditions-btn" onclick="window.visualizer.detailsPanel.showConditions('${details.id}')">Analyze Conditions</button>`
@@ -1084,7 +1098,7 @@ class GraphVisualizer {
                 this.levelOverlayEdges = payload.edges;
                 this.render();
                 this.notificationManager.show(
-                    `${payload.edges.length} visible of ${payload.candidate_count} declared if_level candidates`
+                    `${payload.edges.length} visible of ${payload.declared} declared if_level parents (${payload.load_order_candidates} load-order candidates)`
                 );
             })
             .catch(() => {
@@ -1298,6 +1312,17 @@ class GraphVisualizer {
         this.context.setLineDash([]);
         this.context.fillStyle = STYLES.legend.text;
         this.context.fillText('Level candidate (on demand)', 55, legendY + 14);
+        legendY += 32;
+        this.context.setLineDash([5, 4]);
+        this.context.beginPath();
+        this.context.moveTo(10, legendY + 9);
+        this.context.lineTo(40, legendY + 9);
+        this.context.strokeStyle = '#94a3b8';
+        this.context.lineWidth = 3;
+        this.context.stroke();
+        this.context.setLineDash([]);
+        this.context.fillStyle = STYLES.legend.text;
+        this.context.fillText('Shadowed selector (declared)', 55, legendY + 14);
         legendY += 32;
         edgeLegendData.forEach(item => {
             this.context.beginPath();
