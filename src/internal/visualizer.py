@@ -305,6 +305,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                 "if_level": node_data.get("if_level"),
                 "level_parents": level_parent_summary(node_id),
                 "selector_precedence": node_data.get("selector_precedence"),
+                "historical_search": node_data.get("historical_search"),
                 "file": node_data.get("file"),
                 "temporal": bool(node_data.get("temporal", False)),
                 "parents": parents,
