@@ -179,7 +179,18 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
             return error("Root node not found", 404)
         children = list(G.successors(root))
         nodes = [serialize_node(root, displayed)] + [serialize_node(c, displayed) for c in children]
-        edges = [{"source": root, "target": c, "relation_type": "no_parent"} for c in children]
+        edges = [
+            {
+                "source": root,
+                "target": child,
+                "relation_type": "no_parent",
+                **(
+                    {"rejected_reason": rejected_reason(child)}
+                    if rejected_reason(child) else {}
+                ),
+            }
+            for child in children
+        ]
         return jsonify({"nodes": nodes, "edges": edges})
 
     def _handle_batch(ids_param: str, displayed: set[str]) -> Union[Response, tuple[Response, int]]:
