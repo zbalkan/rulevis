@@ -434,7 +434,7 @@ def test_if_matched_rule_can_be_temporal_analysis_without_clock(tmp_path):
     )
 
 
-def test_index_documents_if_level_path_deviation(tmp_path):
+def test_index_documents_declared_if_level_path_scope(tmp_path):
     paths = write_app_files(tmp_path)
     client = create_app(*(str(path) for path in paths)).test_client()
 
@@ -442,8 +442,9 @@ def test_index_documents_if_level_path_deviation(tmp_path):
     html = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert "if_level" in html
-    assert "intentionally not modeled" in html
+    assert "<code>if_level</code>" in html
+    assert "source-level possibilities" in html
+    assert "intentionally not modeled" not in html
 
 
 def test_conditions_api_marks_subsumed_field_constraint(tmp_path):
@@ -534,3 +535,42 @@ def test_group_parent_details_identify_scan_order_candidates(tmp_path):
         and "load_order_candidate" not in p
         for p in parents
     )
+
+
+def test_details_expose_synthesized_structural_relationship(tmp_path):
+    paths = write_app_files(tmp_path)
+    graph_path, stats_path, heatmap_path = paths
+    with graph_path.open("rb") as stream:
+        graph = pickle.load(stream)
+
+    graph.add_edge(
+        "100001", "100003", relation_type="if_sid",
+        selector="100001", synthesized_from="if_matched_sid",
+    )
+    with graph_path.open("wb") as stream:
+        pickle.dump(graph, stream)
+
+    client = create_app(
+        str(graph_path), str(stats_path), str(heatmap_path)
+    ).test_client()
+    response = client.get(
+        "/api/nodes?id=100003&neighbors=both&include=details"
+    )
+
+    assert response.status_code == 200
+    parents = response.get_json()["parents"]
+    assert any(
+        row["relation_type"] == "if_sid"
+        and row["synthesized_from"] == "if_matched_sid"
+        for row in parents
+    )
+
+
+def test_conditions_modal_includes_if_level_as_declared_relationship(tmp_path):
+    paths = write_app_files(tmp_path)
+    client = create_app(*(str(path) for path in paths)).test_client()
+    html = client.get("/").get_data(as_text=True)
+
+    assert "if_level</code> is intentionally not modeled" not in html
+    assert "<code>if_level</code>" in html
+    assert "declared" in html.lower()

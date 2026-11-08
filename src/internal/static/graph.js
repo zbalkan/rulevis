@@ -14,6 +14,7 @@ const STYLES = {
         if_sid: 'blue', 
         if_matched_sid: 'green', 
         if_group: 'red', 
+        if_level: 'darkorange', 
         if_matched_group: 'purple', 
         no_parent: '#6b6b6b', 
         unknown: '#999' 
@@ -82,6 +83,7 @@ class DetailsPanel {
                     onclick="window.visualizer.handleSearchById('${item.id}')">
                     <strong>${escapeHTML(item.relation_type)}:</strong>
                     ${escapeHTML(item.id)}
+                    ${item.synthesized_from ? `<span title="Structural parent synthesized from temporal selector"> (implicit from ${escapeHTML(item.synthesized_from)})</span>` : ''}
                     ${item.load_order_candidate === false ? '<span title="Based on RuleVis file scanning, not a confirmed Wazuh load">(not a candidate in scanned load order)</span>' : ''}
                 </li>
             `).join('')}</ul>`;
@@ -89,7 +91,7 @@ class DetailsPanel {
         const hasGroupOrderNotes = [...(details.parents || []), ...(details.children || [])]
             .some(item => item.load_order_candidate !== undefined);
         const groupOrderNote = hasGroupOrderNotes
-            ? '<p>Group load-order eligibility is estimated from scanned XML order; the configured Wazuh load order may differ.</p>'
+            ? '<p>Group, level and temporal-source eligibility is estimated from scanned XML order and priorities; the configured Wazuh load order may differ.</p>'
             : '';
 
         const ruleLevel = parseInt(details.level, 10);
@@ -1099,6 +1101,7 @@ class GraphVisualizer {
             { label: "if_sid", color: STYLES.edges.if_sid },
             { label: "if_matched_sid", color: STYLES.edges.if_matched_sid },
             { label: "if_group", color: STYLES.edges.if_group },
+            { label: "if_level", color: STYLES.edges.if_level },
             { label: "if_matched_group", color: STYLES.edges.if_matched_group },
             { label: "No parent", color: STYLES.edges.no_parent },
             { label: "Unknown", color: STYLES.edges.unknown }

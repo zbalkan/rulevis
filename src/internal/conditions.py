@@ -8,6 +8,7 @@ ATOMIC_RELATION_TYPES: Final[frozenset[str]] = frozenset({
     "root",
     "if_sid",
     "if_group",
+    "if_level",
 })
 TEMPORAL_RELATION_TYPES: Final[frozenset[str]] = frozenset({
     *ATOMIC_RELATION_TYPES,
@@ -21,6 +22,7 @@ TEMPORAL_EDGE_TYPES: Final[frozenset[str]] = frozenset({
 RELATION_CONDITION_TAGS: Final[frozenset[str]] = frozenset({
     "if_sid",
     "if_group",
+    "if_level",
     "if_matched_sid",
     "if_matched_group",
 })

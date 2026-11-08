@@ -68,6 +68,41 @@ def os_word_match(pattern: str, value: str) -> bool:
     return False
 
 
+def os_match(pattern: str, value: str) -> bool:
+    """Mirror Wazuh 4.14.10 OSMatch_Compile/Execute for group matching.
+
+    Unlike OS_WordMatch, OSMatch accepts negation, suffix and exact
+    anchors. All alternatives are case-insensitive by default.
+    """
+    if pattern is None:
+        return False
+
+    negate = pattern.startswith("!")
+    if negate:
+        pattern = pattern[1:]
+
+    data = ascii_fold(value.encode("utf-8"))
+    for raw in pattern.encode("utf-8").split(b"|"):
+        anchored_start = raw.startswith(b"^")
+        anchored_end = raw.endswith(b"$")
+        term = raw[1:] if anchored_start else raw
+        term = term[:-1] if anchored_end else term
+        term = ascii_fold(term)
+
+        if anchored_start and anchored_end:
+            matches = data == term
+        elif anchored_start:
+            matches = data.startswith(term)
+        elif anchored_end:
+            matches = data.endswith(term)
+        else:
+            matches = term in data
+
+        if matches:
+            return not negate
+    return negate
+
+
 @dataclass(frozen=True)
 class RuleDeclaration:
     """One rule declaration in Wazuh load order."""
@@ -91,6 +126,7 @@ class RuleDeclaration:
     if_group: Optional[str] = None
     if_matched_sid: Optional[int] = None
     if_matched_group: Optional[str] = None
+    invalid_if_matched_sid: Optional[str] = None
 
     conditions: tuple[dict[str, object], ...] = ()
     temporal_conditions: tuple[dict[str, object], ...] = ()
@@ -121,6 +157,7 @@ class RuleCatalog:
         if_matched_group: Optional[str],
         conditions: list[dict[str, object]],
         temporal_conditions: list[dict[str, object]],
+        invalid_if_matched_sid: Optional[str] = None,
     ) -> RuleDeclaration:
         normalized_rule_id = normalize_rule_id(rule_id)
 
@@ -149,6 +186,7 @@ class RuleCatalog:
             if_group=if_group,
             if_matched_sid=if_matched_sid,
             if_matched_group=if_matched_group,
+            invalid_if_matched_sid=invalid_if_matched_sid,
             conditions=tuple(dict(condition) for condition in conditions),
             temporal_conditions=tuple(
                 dict(condition) for condition in temporal_conditions

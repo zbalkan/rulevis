@@ -26,6 +26,9 @@ class RuleState:
     noalert: bool
     conditions: tuple[dict[str, object], ...]
     temporal_conditions: tuple[dict[str, object], ...]
+    parent_relation: Optional[str] = None
+    parent_selector: Optional[str] = None
+    parent_synthesized_from: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -33,6 +36,7 @@ class Occurrence:
     occurrence_id: int
     rule_id: str
     parent_id: Optional[int]
+    matched_selector: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -193,6 +197,8 @@ class EvaluationBuilder:
         self,
         rule_id: str,
         parent_id: Optional[int],
+        *,
+        matched_selector: Optional[str] = None,
     ) -> int:
         self._ensure_occurrence_budget(rule_id)
         occurrence_id = self._next_occurrence
@@ -246,6 +252,7 @@ class EvaluationBuilder:
             occurrence_id=occurrence_id,
             rule_id=rule_id,
             parent_id=parent_id,
+            matched_selector=matched_selector,
         )
         self.occurrences[occurrence_id] = occurrence
         self.parent_by_occurrence[occurrence_id] = parent_id
@@ -290,13 +297,14 @@ class EvaluationBuilder:
                 )
 
     @staticmethod
-    def _sid_values(value: str) -> list[str]:
-        values: list[str] = []
+    def _sid_values(value: str) -> list[tuple[str, str]]:
+        """Preserve each raw SID token alongside its canonical lookup ID."""
+        values: list[tuple[str, str]] = []
         for sid in re.split(r"[,\s]+", value.strip()):
             if not sid:
                 continue
             normalized = normalize_rule_id(sid)
-            values.append(normalized if normalized is not None else sid)
+            values.append((sid, normalized if normalized is not None else sid))
         return values
 
     def _sid_parent_occurrences(self, rule_id: str) -> list[int]:
@@ -341,7 +349,7 @@ class EvaluationBuilder:
         # Resolve every required parent before mutating the occurrence tree.
         # if_matched_sid failures reject the rule, so staging prevents
         # partially created RuleNodes from surviving that rejection.
-        for sid in self._sid_values(selector):
+        for raw_sid, sid in self._sid_values(selector):
             parent_ids = self._sid_parent_occurrences(sid)
             if not parent_ids:
                 self.issues.append(
@@ -351,17 +359,19 @@ class EvaluationBuilder:
                     return False
                 continue
 
-            planned.append((sid, parent_ids))
+            planned.append((raw_sid, parent_ids))
 
         attached = False
-        for _, parent_ids in planned:
+        for raw_sid, parent_ids in planned:
             for parent_id in parent_ids:
                 parent_rule_id = self.occurrences[parent_id].rule_id
                 self._set_category(
                     state,
                     self.rules[parent_rule_id].category,
                 )
-                self._new_occurrence(state.rule_id, parent_id)
+                self._new_occurrence(
+                    state.rule_id, parent_id, matched_selector=raw_sid
+                )
                 attached = True
 
         return attached
@@ -467,6 +477,16 @@ class EvaluationBuilder:
             )
             return
 
+        if declaration.invalid_if_matched_sid is not None:
+            self.issues.append(
+                LoadIssue(
+                    "INVALID_IF_MATCHED_SID",
+                    declaration.rule_id,
+                    declaration.invalid_if_matched_sid,
+                )
+            )
+            return
+
         existing = self.rules.get(declaration.rule_id)
 
         if existing is not None and not declaration.overwrite:
@@ -485,6 +505,27 @@ class EvaluationBuilder:
                 LoadIssue("OVERWRITE_RULE_NOT_FOUND", declaration.rule_id)
             )
 
+        parents = self._effective_parents(declaration)
+        parent_synthesized_from = None
+        if int(normalized_rule_id) < 10:
+            parent_relation, parent_selector = "root", None
+        elif parents.if_sid:
+            parent_relation = "if_sid"
+            parent_selector = parents.if_sid
+            if not declaration.if_sid:
+                parent_synthesized_from = "if_matched_sid"
+        elif parents.if_level is not None:
+            parent_relation, parent_selector = (
+                "if_level", str(parents.if_level)
+            )
+        elif parents.if_group:
+            parent_relation = "if_group"
+            parent_selector = parents.if_group
+            if not declaration.if_group:
+                parent_synthesized_from = "if_matched_group"
+        else:
+            parent_relation, parent_selector = "category", declaration.category
+
         state = RuleState(
             rule_id=declaration.rule_id,
             load_priority=declaration.load_priority,
@@ -493,14 +534,15 @@ class EvaluationBuilder:
             noalert=declaration.noalert,
             conditions=declaration.conditions,
             temporal_conditions=declaration.temporal_conditions,
+            parent_relation=parent_relation,
+            parent_selector=parent_selector,
+            parent_synthesized_from=parent_synthesized_from,
         )
         self._register_state(state)
 
         if int(normalized_rule_id) < 10:
             self._new_occurrence(state.rule_id, None)
             return
-
-        parents = self._effective_parents(declaration)
 
         if parents.if_sid:
             attached = self._attach_if_sid(
@@ -568,3 +610,53 @@ class EvaluationBuilder:
             occurrences_by_rule=occurrence_map,
             issues=tuple(self.issues),
         )
+
+
+def project_occurrence_relationships(
+    model: EvaluationModel,
+) -> nx.MultiDiGraph:
+    """Collapse accepted RuleNode occurrences into logical runtime edges.
+
+    The projection preserves attachment multiplicity. It is not the declared
+    dependency graph and does not imply historical-event correlation.
+    """
+    projected = nx.MultiDiGraph()
+    for rule_id in model.rules:
+        projected.add_node(
+            rule_id,
+            occurrence_count=len(model.occurrences_by_rule.get(rule_id, ())),
+        )
+
+    for occurrence in model.occurrences.values():
+        if occurrence.parent_id is None:
+            continue
+        parent_rule = model.occurrences[occurrence.parent_id].rule_id
+        child_rule = occurrence.rule_id
+        state = model.rules[child_rule]
+        relation = state.parent_relation or "unknown"
+        # A multi-SID declaration can attach under different parents.
+        # Preserve the exact source token for each physical attachment so
+        # comparisons can match GraphGenerator's per-SID declared edges.
+        selector = (
+            occurrence.matched_selector
+            if relation == "if_sid" and occurrence.matched_selector is not None
+            else state.parent_selector
+        )
+        synthesized_from = state.parent_synthesized_from
+        key = (relation, selector, synthesized_from)
+        if projected.has_edge(parent_rule, child_rule, key):
+            projected.edges[parent_rule, child_rule, key][
+                "occurrence_count"
+            ] += 1
+        else:
+            projected.add_edge(
+                parent_rule,
+                child_rule,
+                key=key,
+                relation_type=relation,
+                selector=selector,
+                synthesized_from=synthesized_from,
+                occurrence_count=1,
+            )
+
+    return projected
