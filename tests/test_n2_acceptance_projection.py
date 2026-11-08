@@ -4,6 +4,8 @@ Red-phase specifications. The source graph remains source-faithful; a distinct
 occurrence-derived projection carries modeled attachments and their counts.
 Wazuh 4.14.10 differential fixtures are required before claiming runtime parity.
 """
+from copy import deepcopy
+
 import pytest
 
 from internal.evaluation import EvaluationBuilder, project_occurrence_relationships
@@ -169,8 +171,76 @@ def test_occurrence_budget_failure_does_not_publish_partial_projection(
         '<description>Child</description></rule></group>',
     )
     previous = generator.modeled_runtime_graph
-    previous_acceptance = generator.G.nodes["100150"]["modeled_acceptance"]
+    before = deepcopy(dict(generator.G.nodes(data=True)))
+    before_issues = deepcopy(generator.modeled_load_issues)
     with pytest.raises(OccurrenceBudgetExceeded):
         generator.build_modeled_runtime_projection(max_occurrences=1)
     assert generator.modeled_runtime_graph is previous
-    assert generator.G.nodes["100150"]["modeled_acceptance"] == previous_acceptance
+    assert dict(generator.G.nodes(data=True)) == before
+    assert generator.modeled_load_issues == before_issues
+
+
+@pytest.mark.parametrize(
+    "selector,expected_issue",
+    [
+        ("<if_level>invalid</if_level>", "INVALID_IF_LEVEL"),
+        ("<if_sid>not-a-sid</if_sid>", "INVALID_IF_SID"),
+    ],
+)
+def test_skipped_declared_rule_is_rejected_not_undeclared_reference(
+    tmp_path, selector, expected_issue
+):
+    generator = make_generator(
+        tmp_path,
+        '<group name="root,">'
+        '<rule id="1" level="5"><description>Root</description></rule>'
+        f'<rule id="100160" level="8">{selector}'
+        '<description>Invalid declared parent</description></rule>'
+        '<rule id="100161" level="7"><if_sid>100160</if_sid>'
+        '<description>Reference to invalid parent</description></rule>'
+        '</group>',
+    )
+    assert "100160" in generator.G
+    assert generator.G.nodes["100160"]["modeled_acceptance"] == "rejected"
+    issues = generator.modeled_load_issues
+    assert any(
+        issue["rule_id"] == "100160" and issue["code"] == expected_issue
+        for issue in issues
+    )
+    assert any(
+        issue["code"] == expected_issue
+        for issue in generator.G.nodes["100160"]["modeled_load_issues"]
+    )
+    assert generator.G.nodes["100161"]["modeled_acceptance"] == "rejected"
+    assert "100160" not in generator.modeled_runtime_graph
+
+
+def test_skipped_declaration_with_no_graph_node_retains_global_load_issues(
+    tmp_path,
+):
+    generator = make_generator(
+        tmp_path,
+        '<group name="root,">'
+        '<rule id="1" level="5"><description>Root</description></rule>'
+        '<rule id="100170" level="8"><if_level>bad</if_level>'
+        '<description>Skipped declaration</description></rule>'
+        '</group>',
+    )
+    assert "100170" not in generator.G
+    assert any(
+        issue["rule_id"] == "100170"
+        and issue["code"] == "INVALID_IF_LEVEL"
+        for issue in generator.modeled_load_issues
+    )
+
+
+def test_modeled_occurrence_count_is_exposed_on_declared_nodes(tmp_path):
+    generator = make_generator(
+        tmp_path,
+        '<group name="root,">'
+        '<rule id="1" level="10"><description>First</description></rule>'
+        '<rule id="2" level="10"><description>Second</description></rule>'
+        '<rule id="100180" level="7"><if_level>5</if_level>'
+        '<description>Fanout</description></rule></group>',
+    )
+    assert generator.G.nodes["100180"]["modeled_occurrence_count"] == 2
