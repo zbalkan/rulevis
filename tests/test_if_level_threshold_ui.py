@@ -134,3 +134,73 @@ def test_multiple_parallel_structural_edges_appear_once_each(tmp_path):
     )
     assert response.status_code == 200
     assert response.get_json()["edges"] == expected
+
+
+def test_threshold_only_children_do_not_expand_structural_graph(tmp_path):
+    client = make_client(tmp_path)
+    # 100001 has a declared level link to 100004, but its other
+    # structural children are 100002 and 100003.
+    response = client.get(
+        "/api/nodes?mode=search&id=100001&displayed=100002,100003"
+    )
+    assert response.status_code == 200
+    node = response.get_json()["nodes"][0]
+    assert node["children_ids"] == ["100002", "100003"]
+    assert node["expandable"] is False
+
+    response = client.get(
+        "/api/nodes?id=100001&neighbors=children&displayed=100001"
+    )
+    assert response.status_code == 200
+    nodes = response.get_json()["nodes"]
+    assert "100004" not in {node["id"] for node in nodes}
+
+
+def test_threshold_only_parent_is_not_returned_in_normal_expansion(tmp_path):
+    client = make_client(tmp_path)
+    response = client.get(
+        "/api/nodes?id=100004&neighbors=parents&displayed=100004"
+    )
+    assert response.status_code == 200
+    assert {node["id"] for node in response.get_json()["nodes"]} == {
+        "100004", "100003"
+    }
+    response = client.get(
+        "/api/nodes?id=100004&neighbors=both&include=details"
+    )
+    assert response.status_code == 200
+    parents = response.get_json()["parents"]
+    assert all(parent["relation_type"] != "if_level" for parent in parents)
+
+
+def test_threshold_only_parent_does_not_make_a_node_expandable(tmp_path):
+    graph_path, stats_path, heatmap_path = write_app_files(tmp_path)
+    with graph_path.open("rb") as stream:
+        graph = pickle.load(stream)
+    graph.add_edge(
+        "100004", "100002", relation_type="if_level",
+        selector="5", load_order_candidate=True,
+    )
+    graph.nodes["100002"]["if_level"] = "5"
+    # Add a rule with no structural successors, only a threshold successor.
+    graph.add_node(
+        "100099", description="Threshold-only parent",
+        level="7", children_ids=["100002"], temporal=False,
+    )
+    graph.add_edge(
+        "100099", "100002", relation_type="if_level",
+        selector="5", load_order_candidate=True,
+    )
+    with graph_path.open("wb") as stream:
+        pickle.dump(graph, stream)
+    client = create_app(
+        str(graph_path), str(stats_path), str(heatmap_path),
+    ).test_client()
+    response = client.get("/api/nodes?mode=search&id=100099")
+    assert response.status_code == 200
+    node = response.get_json()["nodes"][0]
+    assert node["children_ids"] == []
+    assert node["expandable"] is False
+    response = client.get("/api/nodes?id=100099&neighbors=children")
+    assert response.status_code == 200
+    assert [node["id"] for node in response.get_json()["nodes"]] == ["100099"]
