@@ -133,3 +133,14 @@ def test_unknown_scan_order_does_not_imply_missing_group_registration():
     graph.add_node("100200", file="rules.xml", historical_search="if_matched_group")
     graph.add_edge("100100", "100200", relation_type="if_matched_group")
     assert correlation_warnings(graph) == {}
+
+
+def test_rejected_history_source_cannot_have_active_dual_history_lists():
+    graph = nx.MultiDiGraph()
+    graph.add_node("100100", file="rules.xml", modeled_acceptance="rejected")
+    graph.add_node("100200", file="rules.xml", historical_search="if_matched_sid")
+    graph.add_node("100300", file="rules.xml", historical_search="if_matched_group")
+    graph.add_edge("100100", "100200", relation_type="if_matched_sid")
+    graph.add_edge("100100", "100300", relation_type="if_matched_group",
+                   load_order_candidate=True)
+    assert correlation_warnings(graph) == {}
