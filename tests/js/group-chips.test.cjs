@@ -29,7 +29,10 @@ test('four or more groups start collapsed with a native keyboard-accessible cont
         assert.match(html, /<details class="rule-group-overflow">/);
         assert.match(html, new RegExp(`\\+${count - 3} more`));
         assert.match(html, /Show less/);
-        assert.match(html, /<summary aria-label="Show /);
+        assert.match(html, /<summary>/);
+        assert.doesNotMatch(html, /aria-label=/);
+        // Native summary exposes its own current text and open/closed state.
+        // The visible labels are switched by CSS according to details[open].
         assert.equal((html.match(/class="rule-group-chip"/g) || []).length, count);
         assert.equal(html.indexOf('group-0') < html.indexOf('group-3'), true);
     }
