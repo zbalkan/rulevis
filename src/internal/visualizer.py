@@ -369,7 +369,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         </div>
 
         {% if show_correlation_notice %}
-        <aside id="correlationNotice" role="note" aria-label="Wazuh correlation limitations">
+        <aside id="correlationNotice" {% if not warning_count %}class="correlation-notice-info"{% endif %} role="note" aria-label="Wazuh correlation limitations">
             <strong>Known Wazuh 4.14.10 group-correlation limitations.</strong>
             {% if warning_count %}
             {{ warning_count }} rule(s) have potential correlation gaps in the scanned graph.
