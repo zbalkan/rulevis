@@ -52,6 +52,27 @@ class NotificationManager {
     }
 }
 
+// Keep group metadata complete while limiting the space used by the UI.
+// Native details/summary provides keyboard-operable expand/collapse controls.
+function renderGroupChips(groups) {
+    if (!Array.isArray(groups) || groups.length === 0) return '<p>No groups assigned.</p>';
+    const chips = values => values.map(group =>
+        `<code class="rule-group-chip">${escapeHTML(group)}</code>`
+    ).join('');
+    const visible = chips(groups.slice(0, 3));
+    if (groups.length <= 3) return `<div class="rule-group-chips">${visible}</div>`;
+    const remaining = groups.length - 3;
+    return `<div class="rule-group-chips">${visible}
+        <details class="rule-group-overflow">
+            <summary aria-label="Show ${remaining} additional groups">
+                <span class="group-more-label">+${remaining} more</span>
+                <span class="group-less-label">Show less</span>
+            </summary>
+            <span class="rule-group-extra">${chips(groups.slice(3))}</span>
+        </details>
+    </div>`;
+}
+
 class DetailsPanel {
     constructor(visualizer) {
         this.visualizer = visualizer;
@@ -195,7 +216,7 @@ class DetailsPanel {
             ${selectorWarning}
             ${conditionsButton ? `<div class="details-actions">${conditionsButton}</div>` : ''}
             <h4>Groups</h4>
-            ${(details.groups && details.groups.length > 0) ? `<ul>${details.groups.map(g => `<li>${escapeHTML(g)}</li>`).join('')}</ul>` : '<p>No groups assigned.</p>'}
+            ${renderGroupChips(details.groups)}
 
             ${groupOrderNote}
             <div class="details-header"><h4>Parent Rules</h4>${parentExpandBtn}</div>
@@ -659,7 +680,7 @@ class ConditionsModal {
                 </div>
                 <div class="condition-meta-row">
                     <span class="condition-meta-label">Groups</span>
-                    <span>${this.renderMetadataValues(details.groups)}</span>
+                    <div>${renderGroupChips(details.groups)}</div>
                 </div>
                 <div class="condition-meta-row">
                     <span class="condition-meta-label">MITRE ATT&amp;CK</span>
