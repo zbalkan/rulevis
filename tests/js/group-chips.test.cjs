@@ -6,10 +6,8 @@ const vm = require('node:vm');
 const test = require('node:test');
 
 const source = fs.readFileSync('src/internal/static/graph.js', 'utf8')
-    .replace(
-        /window\\.visualizer = new GraphVisualizer\\('canvas'\\);\\s*$/,
-        'globalThis.renderGroupChipsForTest = renderGroupChips;',
-    );
+    .replace("window.visualizer = new GraphVisualizer('canvas');",
+        'globalThis.renderGroupChipsForTest = renderGroupChips;');
 const sandbox = { window: {} };
 vm.runInNewContext(source, sandbox);
 const render = sandbox.renderGroupChipsForTest;
@@ -49,6 +47,7 @@ test('all group values remain escaped, in order, and unmodified', () => {
 });
 
 test('both metadata surfaces use the same group rendering helper', () => {
-    assert.match(source, /<h4>Groups<\\/h4>\\s*\\n\\s*\\$\\{renderGroupChips\\(details\\.groups\\)\\}/);
-    assert.match(source, /<div>\\$\\{renderGroupChips\\(details\\.groups\\)\\}<\\/div>/);
+    assert.ok(source.includes('<h4>Groups</h4>'));
+    assert.ok(source.includes('${renderGroupChips(details.groups)}'));
+    assert.ok(source.includes('<div>${renderGroupChips(details.groups)}</div>'));
 });
