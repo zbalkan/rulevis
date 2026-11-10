@@ -109,8 +109,11 @@ def test_warning_provenance_and_determinism_with_parallel_edges():
     warning = result["100100"][0]
     assert warning["basis"] == "declared"
     assert warning["phase"] == "history_insertion"
-    assert warning["rule_ids"] == ["100300"]
-    assert warning["related_rule_ids"] == ["100200"]
+    assert warning["affected_rule_id"] == "100100"
+    assert warning["source_rule_ids"] == ["100100"]
+    assert warning["dependent_rule_ids"] == ["100300"]
+    assert warning["sid_subscriber_rule_ids"] == ["100200"]
+    assert warning["group_subscriber_rule_ids"] == ["100300"]
     assert warning["wazuh_version"] == "4.14.10"
 
 
@@ -125,6 +128,17 @@ def test_group_load_order_retained_as_advisory_for_rejected_consumer():
     assert warning["code"] == "GROUP_LOAD_ORDER"
     assert warning["basis"] == "declared"
     assert warning["phase"] == "structural_attachment"
+    assert warning["affected_rule_id"] == "100100"
+    assert warning["source_rule_ids"] == ["100200"]
+    assert warning["dependent_rule_ids"] == ["100100"]
+    assert warning["dependent_modeled_acceptance"] == {"100100": "rejected"}
+    assert warning["relationship_status"] == "inactive_declaration"
+    assert "rejected by RuleVis" in warning["message"]
+    source_warning = correlation_warnings(graph)["100200"][0]
+    assert source_warning["affected_rule_id"] == "100200"
+    assert source_warning["source_rule_ids"] == ["100200"]
+    assert source_warning["dependent_rule_ids"] == ["100100"]
+    assert source_warning["relationship_status"] == "inactive_declaration"
 
 
 def test_unknown_scan_order_does_not_imply_missing_group_registration():
@@ -144,3 +158,53 @@ def test_rejected_history_source_cannot_have_active_dual_history_lists():
     graph.add_edge("100100", "100300", relation_type="if_matched_group",
                    load_order_candidate=True)
     assert correlation_warnings(graph) == {}
+
+
+def test_source_side_status_is_unverified_when_dependents_are_mixed():
+    graph = nx.MultiDiGraph()
+    graph.add_node("100010", file="rules.xml", selector_precedence={"effective": "if_group"},
+                   modeled_acceptance="accepted")
+    graph.add_node("100020", file="rules.xml", selector_precedence={"effective": "if_group"},
+                   modeled_acceptance="rejected")
+    graph.add_node("100030", file="rules.xml")
+    for target in ("100010", "100020"):
+        graph.add_edge("100030", target, relation_type="if_group",
+                       load_order_candidate=False)
+    source = correlation_warnings(graph)["100030"][0]
+    assert source["relationship_status"] == "unverified"
+    assert source["dependent_rule_ids"] == ["100010", "100020"]
+    assert source["dependent_modeled_acceptance"] == {
+        "100010": "accepted", "100020": "rejected",
+    }
+
+
+def test_both_warning_endpoints_keep_stable_relationship_roles():
+    graph = nx.MultiDiGraph()
+    graph.add_node("100100", file="rules.xml")
+    graph.add_node("100200", file="rules.xml", historical_search="if_matched_group")
+    graph.add_edge("100100", "100200", relation_type="if_matched_group",
+                   load_order_candidate=False)
+    warnings = correlation_warnings(graph)
+    for node_id in ("100100", "100200"):
+        finding = warnings[node_id][0]
+        assert finding["affected_rule_id"] == node_id
+        assert finding["source_rule_ids"] == ["100100"]
+        assert finding["dependent_rule_ids"] == ["100200"]
+        assert finding["phase"] == "historical_registration"
+        assert finding["relationship_status"] == "unverified"
+
+
+def test_dual_history_target_has_explicit_source_and_subscriber_roles():
+    graph = nx.MultiDiGraph()
+    graph.add_node("100100", file="rules.xml")
+    graph.add_node("100200", file="rules.xml", historical_search="if_matched_sid")
+    graph.add_node("100300", file="rules.xml", historical_search="if_matched_group")
+    graph.add_edge("100100", "100200", relation_type="if_matched_sid")
+    graph.add_edge("100100", "100300", relation_type="if_matched_group",
+                   load_order_candidate=True)
+    warning = correlation_warnings(graph)["100300"][0]
+    assert warning["affected_rule_id"] == "100300"
+    assert warning["source_rule_ids"] == ["100100"]
+    assert warning["dependent_rule_ids"] == ["100300"]
+    assert warning["sid_subscriber_rule_ids"] == ["100200"]
+    assert warning["group_subscriber_rule_ids"] == ["100300"]
