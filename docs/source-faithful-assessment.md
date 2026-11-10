@@ -164,8 +164,15 @@ The scan performs two conservative checks, using the existing declared graph:
   Wazuh 4.14.10's SID-first event insertion can bypass group history.
 
 Each warning carries structured advisory metadata: `code`, `message`,
-`basis=declared`, `phase`, sorted `rule_ids`, sorted `related_rule_ids`,
-`wazuh_version`, and `upstream_issue`. These fields preserve the original
+`basis=declared`, `phase`, `affected_rule_id`, sorted
+`source_rule_ids`, `dependent_rule_ids`, `sid_subscriber_rule_ids`,
+and `group_subscriber_rule_ids`, plus `dependent_modeled_acceptance`,
+`relationship_status`, `wazuh_version`, and `upstream_issue`.
+Rule identifiers retain the same role on source-side and dependent-side
+warnings. `relationship_status=inactive_declaration` means all listed
+dependents were explicitly rejected by the optional RuleVis loader model;
+otherwise it remains `unverified`. This is distinct from verified runtime
+registration and keeps rejected-declaration advisories visible. These fields preserve the original
 UI's `code` and `message` contract. When an optional modeled projection is
 present and marks a historical consumer rejected, that consumer is excluded
 from inferred dual-history overlap. Rejected dependents can still carry a
