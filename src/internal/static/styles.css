@@ -825,3 +825,15 @@ button:hover {
 .rule-group-extra {
     margin-top: 6px;
 }
+
+/* General upstream notices are quieter than rule-specific findings. */
+#correlationNotice.correlation-notice-info {
+    background: #252a30;
+    border-bottom-color: #59616b;
+    color: #c1cbd5;
+}
+
+#correlationNotice.correlation-notice-info strong,
+#correlationNotice.correlation-notice-info a {
+    color: #b5cce6;
+}
