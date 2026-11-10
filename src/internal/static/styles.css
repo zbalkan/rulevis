@@ -765,3 +765,63 @@ button:hover {
     border-color: #9b3a3a;
     background: #3a2020;
 }
+
+/* Compact, accessible rule-group chips (details panel and conditions modal). */
+.rule-group-chips,
+.rule-group-extra {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+    min-width: 0;
+}
+
+.rule-group-chip {
+    display: inline-block;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    padding: 3px 7px;
+    border: 1px solid #555;
+    border-radius: 12px;
+    background: #383838;
+    color: #eee;
+    font-size: 12px;
+}
+
+.rule-group-overflow {
+    display: inline-block;
+    min-width: 0;
+}
+
+.rule-group-overflow[open] {
+    flex-basis: 100%;
+}
+
+.rule-group-overflow summary {
+    display: inline-block;
+    padding: 3px 7px;
+    border-radius: 12px;
+    border: 1px solid #777;
+    cursor: pointer;
+    color: #c5ddfa;
+    font-size: 12px;
+}
+
+.rule-group-overflow summary:hover,
+.rule-group-overflow summary:focus-visible {
+    background: #414d5b;
+    outline-offset: 2px;
+}
+
+.rule-group-overflow .group-less-label,
+.rule-group-overflow[open] .group-more-label {
+    display: none;
+}
+
+.rule-group-overflow[open] .group-less-label {
+    display: inline;
+}
+
+.rule-group-extra {
+    margin-top: 6px;
+}
