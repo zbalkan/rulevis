@@ -112,7 +112,10 @@ def correlation_warnings(graph: nx.MultiDiGraph) -> dict[str, list[dict[str, Any
             ), phase="structural_attachment" if relation == "if_group" else "historical_registration",
             rule_ids=targets))
 
-    for source in sorted(sid_subscribers.keys() & group_subscribers.keys()):
+    for source in sorted(sid_subscribers.keys() & group_subscribers.keys(), key=_sort_id):
+        # A rejected source has no active RuleInfo/history lists to populate.
+        if _modeled_rejected(graph.nodes[source]):
+            continue
         sid_targets = sid_subscribers[source]
         group_targets = group_subscribers[source]
         warnings[source].append(_warning("DUAL_HISTORY", (
