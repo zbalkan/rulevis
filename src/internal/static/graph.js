@@ -64,7 +64,7 @@ function renderGroupChips(groups) {
     const remaining = groups.length - 3;
     return `<div class="rule-group-chips">${visible}
         <details class="rule-group-overflow">
-            <summary aria-label="Show ${remaining} additional groups">
+            <summary>
                 <span class="group-more-label">+${remaining} more</span>
                 <span class="group-less-label">Show less</span>
             </summary>
