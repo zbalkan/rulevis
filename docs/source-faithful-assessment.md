@@ -163,6 +163,20 @@ The scan performs two conservative checks, using the existing declared graph:
   subscriber. Both the source and affected group consumers are warned that
   Wazuh 4.14.10's SID-first event insertion can bypass group history.
 
+Each warning carries structured advisory metadata: `code`, `message`,
+`basis=declared`, `phase`, sorted `rule_ids`, sorted `related_rule_ids`,
+`wazuh_version`, and `upstream_issue`. These fields preserve the original
+UI's `code` and `message` contract. When an optional modeled projection is
+present and marks a historical consumer rejected, that consumer is excluded
+from inferred dual-history overlap. Rejected dependents can still carry a
+declared load-order advisory explaining the potentially missing parent.
+Neither case proves a real registration or a missed alert.
+
+The rule details panel and conditions modal show the first three group chips
+by default; further groups remain available through native expand/collapse
+controls. This changes presentation only, not group values, matching, or APIs.
+General upstream notices without rule-specific warnings use a subdued style.
+
 These findings indicate **potential risks**, not confirmed runtime failures.
 RuleVis does not reconstruct manager include order, rejected source nodes, or
 `OS_MarkID`/`OS_MarkGroup` registrations during ordinary UI generation.
