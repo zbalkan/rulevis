@@ -142,6 +142,34 @@ occurrence-budget exception leaves the previously published projection
 unchanged. The N2 issue requires version-pinned differential tests
 before presenting this model as verified effective runtime attachment.
 
+
+## Known upstream group-correlation limitations (Wazuh 4.14.10)
+
+RuleVis flags potential gaps described in
+[Wazuh issue #41279](https://github.com/wazuh/wazuh/issues/41279).
+The warning banner appears when the graph includes relevant group dependencies.
+Affected nodes receive amber markers and an explanation in the Details panel.
+Warnings are also included as `correlation_warnings` in the node details API
+and `correlation_warning_count` in the graph-node API.
+
+The scan performs two conservative checks, using the existing declared graph:
+
+- **GROUP_LOAD_ORDER / TEMPORAL_GROUP_LOAD_ORDER:** an `if_group` or
+  `if_matched_group` source edge is present in the declared graph but is
+  explicitly marked `load_order_candidate=false`. Both the source and
+  dependent rule receive a warning. Shadowed selectors are excluded.
+- **DUAL_HISTORY:** an earlier scanned source has a declared
+  `if_matched_sid` subscriber and an eligible `if_matched_group`
+  subscriber. Both the source and affected group consumers are warned that
+  Wazuh 4.14.10's SID-first event insertion can bypass group history.
+
+These findings indicate **potential risks**, not confirmed runtime failures.
+RuleVis does not reconstruct manager include order, rejected source nodes, or
+`OS_MarkID`/`OS_MarkGroup` registrations during ordinary UI generation.
+A missing warning is not proof of correct runtime correlation. The warnings
+describe the Wazuh 4.14.10 implementation and should be reviewed when
+targeting other Wazuh versions.
+
 ## Wazuh relationship sources
 
 The model is checked against Wazuh 4.14.10's `rules.c`,

@@ -6,7 +6,8 @@ const STYLES = {
     nodes: { 
         default: 'grey', 
         expandable: 'steelblue', 
-        highlight: 'yellow', 
+        highlight: 'yellow',
+        warning: '#f0b45d',
         text: '#fff',
         collapsed: '#333'
     },
@@ -158,6 +159,19 @@ class DetailsPanel {
                            escapeHTML(shadowedSources[type])).join(', ')}.` : ''}</p>`
                 : '';
 
+        const correlationWarnings = details.correlation_warnings || [];
+        const correlationWarningHTML = correlationWarnings.length
+            ? `<section class="correlation-warnings" aria-label="Potential correlation gaps">
+                 <h4>Potential correlation gaps (Wazuh 4.14.10)</h4>
+                 <ul>${correlationWarnings.map(warning => `
+                     <li><strong>${escapeHTML(warning.code)}:</strong> ${escapeHTML(warning.message)}</li>
+                 `).join('')}</ul>
+                 <p>These are scan-based risks, not verified runtime failures.
+                    <a href="https://github.com/wazuh/wazuh/issues/41279"
+                       target="_blank" rel="noopener noreferrer">Upstream issue #41279</a></p>
+               </section>`
+            : '';
+
         const conditionsButton = details.id !== "0"
             ? `<button id="showConditionsBtn" class="conditions-btn" onclick="window.visualizer.detailsPanel.showConditions('${details.id}')">Analyze Conditions</button>`
             : '';
@@ -176,6 +190,7 @@ class DetailsPanel {
             </div>
 
             <p><strong>Description:</strong> ${escapeHTML(details.description || 'N/A')}</p>
+            ${correlationWarningHTML}
             ${thresholdControl}
             ${selectorWarning}
             ${conditionsButton ? `<div class="details-actions">${conditionsButton}</div>` : ''}
@@ -1003,6 +1018,19 @@ class GraphVisualizer {
             this.drawClockNode(node, STYLES.nodes[node.__drawStyle]);
         }
 
+        // A small amber marker flags potential correlation gaps, not a verified
+        // failure. Markers are separate from temporal and structural shapes.
+        if (k >= 0.4) {
+            this.context.fillStyle = STYLES.nodes.warning;
+            for (const node of this.nodes) {
+                if (!node.correlation_warning_count || node.id === '0') continue;
+                this.context.beginPath();
+                this.context.arc(node.x + NODE_RADIUS - 2, node.y - NODE_RADIUS + 2,
+                    4, 0, 2 * Math.PI);
+                this.context.fill();
+            }
+        }
+
         if (this.highlightedNodeId) {
             const node = this.nodeMap.get(this.highlightedNodeId);
             if (node) {
@@ -1261,7 +1289,8 @@ class GraphVisualizer {
         const nodeLegendData = [
             { label: "Expandable Node", color: STYLES.nodes.expandable, shape: "circle" },
             { label: "Default Node", color: STYLES.nodes.default, shape: "circle" },
-            { label: "Temporal Rule", color: STYLES.nodes.default, shape: "clock" }
+            { label: "Temporal Rule", color: STYLES.nodes.default, shape: "clock" },
+            { label: "Correlation risk", color: STYLES.nodes.warning, shape: "circle" }
         ];
         const edgeLegendData = [
             { label: "if_sid", color: STYLES.edges.if_sid },

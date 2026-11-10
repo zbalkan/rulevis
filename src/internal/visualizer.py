@@ -14,6 +14,7 @@ from internal.conditions import (
     resolve_atomic_paths,
     resolve_temporal_paths,
 )
+from internal.correlation_warnings import correlation_warnings
 
 PRECOMPUTED_BLOCK_SIZES: list[int] = [1, 10, 50, 100, 250, 500]
 PRECOMPUTED_HEATMAPS: dict[int, Any] = {}
@@ -95,6 +96,15 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
     # Precompute heatmaps for all sizes on app startup
     base_blocks = HEATMAP_DATA.get("blocks", [])
     precompute_heatmaps(base_blocks)
+    CORRELATION_WARNINGS = correlation_warnings(G)
+    show_correlation_notice = any(
+        data.get('relation_type') in {'if_group', 'if_matched_group'}
+        for _, _, data in G.edges(data=True)
+    ) or any(
+        attrs.get('historical_search') == 'if_matched_group'
+        or (attrs.get('selector_precedence') or {}).get('effective') == 'if_group'
+        for _, attrs in G.nodes(data=True)
+    )
 
     cli = sys.modules['flask.cli']
     cli.show_server_banner = lambda *x: None  # type: ignore
@@ -116,6 +126,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         children = structural_children(nid)
         payload = {
             "id": nid,
+            "correlation_warning_count": len(CORRELATION_WARNINGS.get(nid, ())),
             **{
                 key: value for key, value in attrs.items()
                 if key not in {"expandable", "children_ids"}
@@ -306,6 +317,7 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                 "level_parents": level_parent_summary(node_id),
                 "selector_precedence": node_data.get("selector_precedence"),
                 "historical_search": node_data.get("historical_search"),
+                "correlation_warnings": CORRELATION_WARNINGS.get(node_id, []),
                 "file": node_data.get("file"),
                 "temporal": bool(node_data.get("temporal", False)),
                 "parents": parents,
@@ -355,6 +367,21 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
                 <button id="searchBtn">Search</button>
             </div>
         </div>
+
+        {% if show_correlation_notice %}
+        <aside id="correlationNotice" role="note" aria-label="Wazuh correlation limitations">
+            <strong>Known Wazuh 4.14.10 group-correlation limitations.</strong>
+            {% if warning_count %}
+            {{ warning_count }} rule(s) have potential correlation gaps in the scanned graph.
+            Select a marked rule to review its warning.
+            {% else %}
+            No specific scan-order risk was identified; this is not proof of runtime correctness.
+            {% endif %}
+            <a href="https://github.com/wazuh/wazuh/issues/41279"
+               target="_blank" rel="noopener noreferrer">Upstream issue #41279</a>
+            <span>Findings are based on scanned XML, not verified manager behavior.</span>
+        </aside>
+        {% endif %}
 
         <div class="content">
             <canvas></canvas>
@@ -410,7 +437,8 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         <script src="static/graph.js" defer></script>
         </body>
         </html>
-""")
+""", show_correlation_notice=show_correlation_notice,
+                                 warning_count=len(CORRELATION_WARNINGS))
 
     # ---------- Consolidated APIs ----------
     @app.route("/api/nodes", methods=["GET"])

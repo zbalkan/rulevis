@@ -10,6 +10,7 @@ This tool is designed for security engineers, SOC analysts, and Wazuh administra
 
 * **Interactive Graph Visualization:** Renders your entire ruleset as a graph using D3.js and HTML Canvas for high performance.
 * **Dependency Analysis:** Clearly shows parent-child relationships (`if_sid`, `if_group`, etc.) with directed edges.
+* **Correlation Risk Warnings:** Flag load-order-dependent group references and possible SID/group-history interference in Wazuh 4.14.10, with node-level explanations and a link to [upstream issue #41279](https://github.com/wazuh/wazuh/issues/41279). These are scan-based risk indicators, not confirmed runtime failures.
 * **Node Expansion:** Interactively expand nodes to reveal their parent or child dependencies on demand.
 * **Detailed Rule Information:** Click on any rule to see its full description, groups, and a complete list of its parents and children.
 * **Condition Path Analysis:** Open a large condition-analysis view for atomic or temporal rules, inspect direct parents, and expand each resolved root-to-rule path as a flattened table with condition provenance.

@@ -21,6 +21,53 @@ body {
     flex-direction: column;
 }
 
+/* Wazuh 4.14.10 upstream correlation limitations. */
+#correlationNotice {
+    padding: 9px 20px;
+    background: #282116;
+    color: #e9dac3;
+    border-bottom: 1px solid #99713b;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+#correlationNotice strong {
+    color: #f0c987;
+}
+
+#correlationNotice a,
+.correlation-warnings a {
+    color: #f0c987;
+    text-decoration: underline;
+}
+
+#correlationNotice span {
+    color: #c5b9a7;
+}
+
+.correlation-warnings {
+    padding: 10px;
+    margin: 12px 0;
+    background: #282116;
+    border-left: 3px solid #d49c53;
+    border-radius: 3px;
+    color: #e9dac3;
+}
+
+.correlation-warnings h4 {
+    color: #f0c987;
+    margin: 0 0 8px;
+}
+
+.panel-content .correlation-warnings ul {
+    padding-left: 0;
+}
+
+.panel-content .correlation-warnings li {
+    background: transparent;
+    padding: 4px 0;
+}
+
 .content {
     flex: 1; /* Makes the content area fill all available vertical space */
     position: relative; /* Establishes a containing block for the absolute-positioned canvas */

@@ -574,3 +574,78 @@ def test_conditions_modal_includes_if_level_as_declared_relationship(tmp_path):
     assert "if_level</code> is intentionally not modeled" not in html
     assert "<code>if_level</code>" in html
     assert "declared" in html.lower()
+
+
+def test_ui_exposes_wazuh_correlation_warnings(tmp_path):
+    graph_path, stats_path, heatmap_path = write_app_files(tmp_path)
+    with graph_path.open("rb") as stream:
+        graph = pickle.load(stream)
+
+    # Source is declared after the dependent: no retroactive if_group link.
+    graph.add_edge(
+        "100004", "100002", relation_type="if_group",
+        load_order_candidate=False, selector="example",
+    )
+    # An earlier source has simultaneous historical SID and group consumers.
+    graph.add_edge(
+        "100001", "100004", relation_type="if_matched_group",
+        load_order_candidate=True, selector="example",
+    )
+    with graph_path.open("wb") as stream:
+        pickle.dump(graph, stream)
+
+    client = create_app(
+        str(graph_path), str(stats_path), str(heatmap_path)
+    ).test_client()
+
+    html = client.get("/").get_data(as_text=True)
+    assert 'id="correlationNotice"' in html
+    assert "Upstream issue #41279" in html
+    assert "not verified manager behavior" in html
+
+    root = client.get("/api/nodes?mode=root").get_json()
+    parent = next(node for node in root["nodes"] if node["id"] == "100001")
+    assert parent["correlation_warning_count"] == 1
+
+    detail = client.get(
+        "/api/nodes?id=100002&neighbors=both&include=details"
+    ).get_json()
+    assert any(warning["code"] == "GROUP_LOAD_ORDER"
+               for warning in detail["correlation_warnings"])
+
+    detail = client.get(
+        "/api/nodes?id=100004&neighbors=both&include=details"
+    ).get_json()
+    assert {w["code"] for w in detail["correlation_warnings"]} == {
+        "GROUP_LOAD_ORDER", "DUAL_HISTORY"
+    }
+
+
+def test_ui_does_not_flag_unrelated_rules(tmp_path):
+    paths = write_app_files(tmp_path)
+    client = create_app(*(str(path) for path in paths)).test_client()
+    html = client.get("/").get_data(as_text=True)
+    assert 'id="correlationNotice"' not in html
+    detail = client.get(
+        "/api/nodes?id=100002&neighbors=both&include=details"
+    ).get_json()
+    assert detail["correlation_warnings"] == []
+
+
+def test_group_only_declaration_shows_upstream_notice_without_specific_warning(tmp_path):
+    graph_path, stats_path, heatmap_path = write_app_files(tmp_path)
+    with graph_path.open("rb") as stream:
+        graph = pickle.load(stream)
+    graph.nodes["100002"]["selector_precedence"] = {"effective": "if_group"}
+    with graph_path.open("wb") as stream:
+        pickle.dump(graph, stream)
+
+    client = create_app(
+        str(graph_path), str(stats_path), str(heatmap_path)
+    ).test_client()
+    html = client.get("/").get_data(as_text=True)
+    assert 'id="correlationNotice"' in html
+    assert "No specific scan-order risk was identified" in html
+    assert client.get(
+        "/api/nodes?id=100002&include=details"
+    ).get_json()["correlation_warnings"] == []
