@@ -112,12 +112,6 @@ class DetailsPanel {
                 </li>
             `).join('')}</ul>`;
 
-        const hasGroupOrderNotes = [...(details.parents || []), ...(details.children || [])]
-            .some(item => item.load_order_candidate !== undefined);
-        const groupOrderNote = hasGroupOrderNotes
-            ? '<p>Group, level and temporal-source eligibility is estimated from scanned XML order and priorities; the configured Wazuh load order may differ.</p>'
-            : '';
-
         const ruleLevel = parseInt(details.level, 10);
         const generatesAlert = ruleLevel >= 3;
         const alertClass = generatesAlert ? 'alert-true' : 'alert-false';
@@ -182,15 +176,19 @@ class DetailsPanel {
 
         const correlationWarnings = details.correlation_warnings || [];
         const correlationWarningHTML = correlationWarnings.length
-            ? `<section class="correlation-warnings" aria-label="Potential correlation gaps">
-                 <h4>Potential correlation gaps (Wazuh 4.14.10)</h4>
-                 <ul>${correlationWarnings.map(warning => `
-                     <li><strong>${escapeHTML(warning.code)}:</strong> ${escapeHTML(warning.message)}</li>
-                 `).join('')}</ul>
-                 <p>These are scan-based risks, not verified runtime failures.
-                    <a href="https://github.com/wazuh/wazuh/issues/41279"
-                       target="_blank" rel="noopener noreferrer">Upstream issue #41279</a></p>
-               </section>`
+            ? `<details class="correlation-warnings" aria-label="Potential correlation gaps">
+                 <summary>Potential correlation gaps (Wazuh 4.14.10)
+                     <span class="correlation-warning-count">(${correlationWarnings.length})</span>
+                 </summary>
+                 <div class="correlation-warning-body">
+                     <ul>${correlationWarnings.map(warning => `
+                         <li><strong>${escapeHTML(warning.code)}:</strong> ${escapeHTML(warning.message)}</li>
+                     `).join('')}</ul>
+                     <p>These are scan-based risks, not verified runtime failures.
+                        <a href="https://github.com/wazuh/wazuh/issues/41279"
+                           target="_blank" rel="noopener noreferrer">Upstream issue #41279</a></p>
+                 </div>
+               </details>`
             : '';
 
         const conditionsButton = details.id !== "0"
@@ -218,7 +216,6 @@ class DetailsPanel {
             <h4>Groups</h4>
             ${renderGroupChips(details.groups)}
 
-            ${groupOrderNote}
             <div class="details-header"><h4>Parent Rules</h4>${parentExpandBtn}</div>
             ${renderList(details.parents)}
 
@@ -888,6 +885,7 @@ class GraphVisualizer {
         this.nodeMap = new Map();
         this.highlightedNodeId = null;
         this.highlightedCycleIds = new Set(); 
+        this.cycleRequestId = 0;
         this.displayedRuleIDs = new Set();
         this.simulationPausedByKey = false;
         this.transform = d3.zoomIdentity;
@@ -939,9 +937,58 @@ class GraphVisualizer {
         this.canvas.call(this.zoom);
         
         this.initializeEventListeners();
+        this.initializeResizeHandling();
         this.resetGraph();
     }
-    
+
+    initializeResizeHandling() {
+        this.resizeTimeout = null;
+        const scheduleResize = () => {
+            clearTimeout(this.resizeTimeout);
+            this.resizeTimeout = setTimeout(() => {
+                this.resizeTimeout = null;
+                this.resizeCanvas();
+            }, 150);
+        };
+        // Observe the layout container: changing the canvas backing size
+        // must not recursively trigger another resize notification.
+        const container = this.canvas.node().parentElement;
+        if (typeof ResizeObserver !== 'undefined' && container) {
+            this.resizeObserver = new ResizeObserver(scheduleResize);
+            this.resizeObserver.observe(container);
+        }
+        window.addEventListener('resize', scheduleResize);
+    }
+
+    resizeCanvas() {
+        const rect = this.canvas.node().getBoundingClientRect();
+        const width = Math.round(rect.width);
+        const height = Math.round(rect.height);
+        const ratio = window.devicePixelRatio || 1;
+        if (width <= 0 || height <= 0) return;
+        if (width === this.width && height === this.height &&
+            ratio === this.devicePixelRatio) return;
+
+        const oldWidth = this.width;
+        const oldHeight = this.height;
+        this.width = width;
+        this.height = height;
+        this.devicePixelRatio = ratio;
+        this.canvas.attr('width', Math.max(1, Math.round(width * ratio)))
+            .attr('height', Math.max(1, Math.round(height * ratio)));
+        // Setting width or height resets the 2D context's transformation.
+        this.context.setTransform(ratio, 0, 0, ratio, 0, 0);
+        this.simulation.force('center').x(width / 2).y(height / 2);
+        const transform = d3.zoomIdentity
+            .translate(this.transform.x + (width - oldWidth) / 2,
+                this.transform.y + (height - oldHeight) / 2)
+            .scale(this.transform.k);
+        this.canvas.call(this.zoom.transform, transform);
+        // A stopped force simulation does not produce tick-triggered renders.
+        this.needsRender = true;
+        this.render();
+    }
+
     render() {
         this.context.save();
         this.context.clearRect(0, 0, this.width * this.devicePixelRatio, this.height * this.devicePixelRatio);
@@ -1061,6 +1108,19 @@ class GraphVisualizer {
                 this.context.lineWidth = 3 / this.transform.k;
                 this.context.stroke();
             }
+        }
+
+        if (this.highlightedCycleIds.size) {
+            this.context.beginPath();
+            for (const id of this.highlightedCycleIds) {
+                const node = this.nodeMap.get(id);
+                if (!node || !Number.isFinite(node.x) || !Number.isFinite(node.y)) continue;
+                this.context.moveTo(node.x + NODE_RADIUS + 4, node.y);
+                this.context.arc(node.x, node.y, NODE_RADIUS + 4, 0, 2 * Math.PI);
+            }
+            this.context.strokeStyle = STYLES.nodes.highlight;
+            this.context.lineWidth = 3 / this.transform.k;
+            this.context.stroke();
         }
 
         if (k >= 0.4) {
@@ -1503,6 +1563,7 @@ class GraphVisualizer {
 
     
     clearHighlight() {
+        ++this.cycleRequestId;
         if (this.highlightedNodeId && this.nodeMap.has(this.highlightedNodeId)) {
             const node = this.nodeMap.get(this.highlightedNodeId);
             node.fx = null;
@@ -1549,31 +1610,54 @@ class GraphVisualizer {
         return Array.from(this.displayedRuleIDs).join(",");
     }
     
-    highlightCycle(nodeIdsString) {
-        const nodeIds = nodeIdsString.split(',');
+    async highlightCycle(nodeIdsString) {
+        const nodeIds = [...new Set(nodeIdsString.split(',').filter(Boolean))];
         if (!nodeIds.length) return;
-        
-        this.clearHighlight(); // Clear previous state
-        
-        this.highlightedCycleIds = new Set(nodeIds);
-        
-        // Re-render to show the highlights
-        this.render();
-        
-        // Center the view on the first node of the cycle
-        const firstNode = this.nodeMap.get(nodeIds[0]);
-        if (firstNode && firstNode.x !== undefined) {
-            const newTransform = d3.zoomIdentity
-            .translate(this.width / 2, this.height / 2)
-            .scale(Math.max(this.transform.k, 1.0)) // Zoom to at least 1.0
-            .translate(-firstNode.x, -firstNode.y);
-            this.canvas.transition().duration(750).call(this.zoom.transform, newTransform);
+        const requestId = ++this.cycleRequestId;
+        const missingIds = nodeIds.filter(id => !this.nodeMap.has(id));
+        if (missingIds.length) {
+            try {
+                const query = new URLSearchParams({
+                    ids: missingIds.join(','),
+                    displayed: this.getDisplayedIds(),
+                });
+                const payload = await fetchJSON(`/api/nodes?${query}`);
+                if (requestId !== this.cycleRequestId) return;
+                this.updateGraph(payload.nodes, payload.edges);
+            } catch (error) {
+                // fetchJSON already shows the failure to the user.
+                return;
+            }
         }
-        
-        this.statsPanel.hide(); // Hide panel to see the graph
+        if (requestId !== this.cycleRequestId) return;
+        this.clearHighlight();
+        this.highlightedCycleIds = new Set(nodeIds);
+        this.focusedContextIds = new Set(nodeIds);
+        this.statsPanel.hide();
+
+        const nodes = nodeIds.map(id => this.nodeMap.get(id))
+            .filter(node => node && Number.isFinite(node.x) && Number.isFinite(node.y));
+        if (nodes.length) {
+            const xMin = Math.min(...nodes.map(node => node.x));
+            const xMax = Math.max(...nodes.map(node => node.x));
+            const yMin = Math.min(...nodes.map(node => node.y));
+            const yMax = Math.max(...nodes.map(node => node.y));
+            const margin = 80;
+            const fitScale = Math.min(
+                2,
+                (this.width - 2 * margin) / Math.max(xMax - xMin, 2 * NODE_RADIUS),
+                (this.height - 2 * margin) / Math.max(yMax - yMin, 2 * NODE_RADIUS),
+            );
+            const scale = Math.max(0.02, fitScale);
+            const transform = d3.zoomIdentity
+                .translate(this.width / 2, this.height / 2)
+                .scale(scale)
+                .translate(-(xMin + xMax) / 2, -(yMin + yMax) / 2);
+            this.canvas.transition().duration(750).call(this.zoom.transform, transform);
+        }
+        this.render();
     }
-    
-    
+
     handleCanvasClick(e) {
         const thresholdNode = this.findThresholdBadgeAt(e.offsetX, e.offsetY);
         if (thresholdNode) {

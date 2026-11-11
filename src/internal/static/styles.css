@@ -74,9 +74,24 @@ body {
     color: #e9dac3;
 }
 
-.correlation-warnings h4 {
+.correlation-warnings summary {
     color: #f0c987;
-    margin: 0 0 8px;
+    cursor: pointer;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+.correlation-warnings summary:focus-visible {
+    outline: 2px solid #f0c987;
+    outline-offset: 3px;
+}
+
+.correlation-warning-count {
+    font-weight: 400;
+}
+
+.correlation-warning-body {
+    margin-top: 10px;
 }
 
 .panel-content .correlation-warnings ul {
