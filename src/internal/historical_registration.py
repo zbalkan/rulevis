@@ -136,15 +136,15 @@ class HistoricalRegistrationBuilder:
         ):
             occurrence = builder.occurrences[occurrence_id]
             source = builder.rules[occurrence.rule_id]
-                self._registrations.append(HistoricalRegistration(
-                    source_rule_id=source.rule_id,
-                    source_occurrence_id=occurrence_id,
-                    consumer_rule_id=declaration.rule_id,
-                    selector=selector,
-                    relation_type=search,
-                    consumer_declaration_sequence=declaration.sequence,
-                    source_group_at_registration=source.runtime_group,
-                ))
+            self._registrations.append(HistoricalRegistration(
+                source_rule_id=source.rule_id,
+                source_occurrence_id=occurrence_id,
+                consumer_rule_id=declaration.rule_id,
+                selector=selector,
+                relation_type=search,
+                consumer_declaration_sequence=declaration.sequence,
+                source_group_at_registration=source.runtime_group,
+            ))
 
     def build(self) -> HistoricalRegistrationProjection:
         if self._built:
