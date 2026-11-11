@@ -1,0 +1,259 @@
+{
+  "schema_version": 1,
+  "wazuh_version": "4.14.10",
+  "scenarios": [
+    {
+      "id": "sid-existing",
+      "description": "SID source precedes temporal consumer",
+      "rules": [
+        {
+          "id": 1,
+          "level": 0,
+          "group": "root,"
+        },
+        {
+          "id": 100101,
+          "if_sid": "1",
+          "group": "audit,"
+        },
+        {
+          "id": 100201,
+          "if_sid": "1",
+          "if_matched_sid": 100101,
+          "group": "consumer,"
+        }
+      ]
+    },
+    {
+      "id": "sid-forward",
+      "description": "Forward SID source is absent at registration time",
+      "rules": [
+        {
+          "id": 1,
+          "level": 0,
+          "group": "root,"
+        },
+        {
+          "id": 100201,
+          "if_sid": "1",
+          "if_matched_sid": 100101,
+          "group": "consumer,"
+        },
+        {
+          "id": 100101,
+          "if_sid": "1",
+          "group": "audit,"
+        }
+      ]
+    },
+    {
+      "id": "group-late",
+      "description": "Group source introduced after a valid consumer",
+      "rules": [
+        {
+          "id": 1,
+          "level": 0,
+          "group": "root,"
+        },
+        {
+          "id": 100101,
+          "if_sid": "1",
+          "group": "audit,"
+        },
+        {
+          "id": 100201,
+          "if_sid": "1",
+          "if_matched_group": "audit",
+          "group": "consumer,"
+        },
+        {
+          "id": 100102,
+          "if_sid": "1",
+          "group": "audit,"
+        }
+      ]
+    },
+    {
+      "id": "rejected-consumer",
+      "description": "Missing structural parent suppresses registration",
+      "rules": [
+        {
+          "id": 1,
+          "level": 0,
+          "group": "root,"
+        },
+        {
+          "id": 100101,
+          "if_sid": "1",
+          "group": "audit,"
+        },
+        {
+          "id": 100201,
+          "if_sid": "999999",
+          "if_matched_group": "audit",
+          "group": "consumer,"
+        }
+      ]
+    },
+    {
+      "id": "dual-history",
+      "description": "SID and group consumers subscribe to one source",
+      "rules": [
+        {
+          "id": 1,
+          "level": 0,
+          "group": "root,"
+        },
+        {
+          "id": 100101,
+          "if_sid": "1",
+          "group": "audit,"
+        },
+        {
+          "id": 100201,
+          "if_sid": "1",
+          "if_matched_sid": 100101,
+          "group": "consumer,"
+        },
+        {
+          "id": 100202,
+          "if_sid": "1",
+          "if_matched_group": "audit",
+          "group": "consumer,"
+        }
+      ]
+    },
+    {
+      "id": "multiple-occurrences",
+      "description": "Multi-SID source yields two physical occurrences",
+      "rules": [
+        {
+          "id": 1,
+          "level": 0,
+          "group": "root,"
+        },
+        {
+          "id": 2,
+          "level": 0,
+          "group": "root,"
+        },
+        {
+          "id": 100101,
+          "if_sid": "1,2",
+          "group": "audit,"
+        },
+        {
+          "id": 100201,
+          "if_sid": "1",
+          "if_matched_group": "audit",
+          "group": "consumer,"
+        }
+      ]
+    },
+    {
+      "id": "group-overwrite",
+      "description": "Existing group registration is not replayed on overwrite",
+      "rules": [
+        {
+          "id": 1,
+          "level": 0,
+          "group": "root,"
+        },
+        {
+          "id": 100101,
+          "if_sid": "1",
+          "group": "audit,"
+        },
+        {
+          "id": 100201,
+          "if_sid": "1",
+          "if_matched_group": "audit",
+          "group": "consumer,"
+        },
+        {
+          "id": 100101,
+          "overwrite": true,
+          "group": "renamed,"
+        },
+        {
+          "id": 100202,
+          "if_sid": "1",
+          "if_matched_group": "audit",
+          "group": "consumer,"
+        }
+      ]
+    },
+    {
+      "id": "overwrite-missing",
+      "description": "Missing-base overwrite inserts structurally but skips history registration",
+      "rules": [
+        {
+          "id": 1,
+          "level": 0,
+          "group": "root,"
+        },
+        {
+          "id": 100101,
+          "if_sid": "1",
+          "group": "audit,"
+        },
+        {
+          "id": 100201,
+          "overwrite": true,
+          "if_sid": "1",
+          "if_matched_group": "audit",
+          "group": "consumer,"
+        }
+      ]
+    },
+    {
+      "id": "shadowed-group",
+      "description": "SID history search takes precedence over group search",
+      "rules": [
+        {
+          "id": 1,
+          "level": 0,
+          "group": "root,"
+        },
+        {
+          "id": 100101,
+          "if_sid": "1",
+          "group": "audit,"
+        },
+        {
+          "id": 100201,
+          "if_sid": "1",
+          "if_matched_sid": 100101,
+          "if_matched_group": "audit",
+          "group": "consumer,"
+        }
+      ]
+    },
+    {
+      "id": "structural-group-forward",
+      "description": "Structural group-dependent rule has an earlier and later source",
+      "rules": [
+        {
+          "id": 1,
+          "level": 0,
+          "group": "root,"
+        },
+        {
+          "id": 100101,
+          "if_sid": "1",
+          "group": "audit,"
+        },
+        {
+          "id": 100201,
+          "if_group": "audit",
+          "group": "consumer,"
+        },
+        {
+          "id": 100102,
+          "if_sid": "1",
+          "group": "audit,"
+        }
+      ]
+    }
+  ]
+}
