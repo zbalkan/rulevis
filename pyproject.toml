@@ -47,7 +47,7 @@ Repository = "https://github.com/zbalkan/rulevis"
 Issues = "https://github.com/zbalkan/rulevis/issues"
 
 [project.scripts]
-rulevis = "rulevis:main"
+rulevis = "rulevis:cli"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

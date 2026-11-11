@@ -60,30 +60,20 @@ class Rulevis():
         self.__validate_paths(paths)
         self.__paths: list[str] = paths
 
+    def close(self) -> None:
+        """Release temporary artifacts on normal exit and interruption."""
+        for attribute in ("graph_path", "stats_path", "heatmap_path"):
+            path = getattr(self, attribute, None)
+            if path and os.path.exists(path):
+                try:
+                    os.remove(path)
+                    logging.info("Temporary file %s deleted.", path)
+                except OSError:
+                    logging.exception("Unable to remove temporary file %s", path)
+
     def __del__(self) -> None:
-        try:
-            if hasattr(self, 'graph_path') and os.path.exists(self.graph_path):
-                os.remove(self.graph_path)
-                logging.info(
-                    f"Temporary graph file {self.graph_path} deleted.")
-        except Exception:
-            ...
-
-        try:
-            if hasattr(self, 'stats_path') and os.path.exists(self.stats_path):
-                os.remove(self.stats_path)
-                logging.info(
-                    f"Temporary stats file {self.stats_path} deleted.")
-        except Exception:
-            ...
-
-        try:
-            if hasattr(self, 'heatmap_path') and os.path.exists(self.heatmap_path):
-                os.remove(self.heatmap_path)
-                logging.info(
-                    f"Temporary heatmap file {self.heatmap_path} deleted.")
-        except Exception:
-            ...
+        # Best-effort fallback when callers did not explicitly close the app.
+        self.close()
 
     def run(self) -> None:
         self.__generate_graph()
@@ -116,7 +106,9 @@ class Rulevis():
     def __run_flask_app(self) -> None:
         app = create_app(self.graph_path, self.stats_path, self.heatmap_path)
         logging.info("Starting Flask app...")
-        Timer(1, self.__open_browser).start()
+        browser_timer = Timer(1, self.__open_browser)
+        browser_timer.daemon = True
+        browser_timer.start()
         app.run(debug=False, use_reloader=False)
 
     def __open_browser(self, ) -> None:
@@ -142,7 +134,10 @@ def main() -> None:
     logging.info(f"Paths: {paths}")
 
     rulevis = Rulevis(paths)
-    rulevis.run()
+    try:
+        rulevis.run()
+    finally:
+        rulevis.close()
 
 
 def _get_log_path() -> str:
@@ -170,32 +165,32 @@ def _get_log_path() -> str:
     return os.path.abspath(os.path.join(log_dir, f"{APP_NAME}.log"))
 
 
-if __name__ == "__main__":
+def cli() -> int:
+    """Shared executable entry point for installed commands and direct execution."""
+    handler = CustomFileHandler(_get_log_path(), encoding=ENCODING)
+    logging.basicConfig(
+        handlers=[handler],
+        format='%(asctime)s:%(name)s:%(levelname)s:%(message)s',
+        datefmt="%Y-%m-%dT%H:%M:%S%z",
+        level=logging.INFO,
+    )
+    logging.getLogger('werkzeug').disabled = True
     try:
-        handler = CustomFileHandler(_get_log_path(), encoding=ENCODING)
-
-        logging.basicConfig(handlers=[handler],
-                            format='%(asctime)s:%(name)s:%(levelname)s:%(message)s',
-                            datefmt="%Y-%m-%dT%H:%M:%S%z",
-                            level=logging.INFO)
-        # Get the loggers used by Flask and prevent them from propagating to the root logger
-        wl = logging.getLogger('werkzeug')
-        wl.disabled = True
-        excepthook = logging.error
         logging.info('Starting')
         main()
         logging.info('Exiting.')
+        return 0
     except KeyboardInterrupt:
         print('Cancelled by user.')
         logging.info('Cancelled by user.')
-        try:
-            sys.exit(0)
-        except SystemExit:
-            os._exit(0)
+        return 130
     except Exception as ex:
         print('ERROR: ' + str(ex))
         logging.error(str(ex), exc_info=True)
-        try:
-            sys.exit(1)
-        except SystemExit:
-            os._exit(1)
+        return 1
+    finally:
+        handler.close()
+
+
+if __name__ == "__main__":
+    sys.exit(cli())
