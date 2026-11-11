@@ -1675,4 +1675,13 @@ async function fetchJSON(url, options = {}) {
     }
 }
 
+// Dismissing this general advisory does not suppress per-rule findings.
+const correlationNoticeClose = document.getElementById('correlationNoticeClose');
+if (correlationNoticeClose) {
+    correlationNoticeClose.addEventListener('click', () => {
+        document.cookie = 'rulevis_correlation_notice_dismissed=1; Max-Age=31536000; Path=/; SameSite=Lax';
+        document.getElementById('correlationNotice')?.remove();
+    });
+}
+
 window.visualizer = new GraphVisualizer('canvas');

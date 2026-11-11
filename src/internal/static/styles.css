@@ -23,12 +23,32 @@ body {
 
 /* Wazuh 4.14.10 upstream correlation limitations. */
 #correlationNotice {
-    padding: 9px 20px;
+    position: relative;
+    padding: 9px 50px 9px 20px;
     background: #282116;
     color: #e9dac3;
     border-bottom: 1px solid #99713b;
     font-size: 13px;
     line-height: 1.5;
+}
+
+#correlationNoticeClose {
+    position: absolute;
+    top: 6px;
+    right: 12px;
+    padding: 2px 8px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+#correlationNoticeClose:hover,
+#correlationNoticeClose:focus-visible {
+    background: rgba(255, 255, 255, 0.12);
 }
 
 #correlationNotice strong {

@@ -621,6 +621,32 @@ def test_ui_exposes_wazuh_correlation_warnings(tmp_path):
     }
 
 
+def test_dismissed_correlation_notice_cookie_hides_only_global_banner(tmp_path):
+    graph_path, stats_path, heatmap_path = write_app_files(tmp_path)
+    with graph_path.open("rb") as stream:
+        graph = pickle.load(stream)
+    graph.add_edge(
+        "100004", "100002", relation_type="if_group",
+        load_order_candidate=False, selector="example",
+    )
+    with graph_path.open("wb") as stream:
+        pickle.dump(graph, stream)
+
+    client = create_app(
+        str(graph_path), str(stats_path), str(heatmap_path)
+    ).test_client()
+    assert 'id="correlationNoticeClose"' in client.get("/").get_data(as_text=True)
+    client.set_cookie("rulevis_correlation_notice_dismissed", "1")
+    assert 'id="correlationNotice"' not in client.get("/").get_data(as_text=True)
+    detail = client.get(
+        "/api/nodes?id=100002&neighbors=both&include=details"
+    ).get_json()
+    assert any(w["code"] == "GROUP_LOAD_ORDER" for w in detail["correlation_warnings"])
+
+    client.set_cookie("rulevis_correlation_notice_dismissed", "0")
+    assert 'id="correlationNotice"' in client.get("/").get_data(as_text=True)
+
+
 def test_ui_does_not_flag_unrelated_rules(tmp_path):
     paths = write_app_files(tmp_path)
     client = create_app(*(str(path) for path in paths)).test_client()

@@ -368,8 +368,9 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
             </div>
         </div>
 
-        {% if show_correlation_notice %}
+        {% if show_correlation_notice and not correlation_notice_dismissed %}
         <aside id="correlationNotice" {% if not warning_count %}class="correlation-notice-info"{% endif %} role="note" aria-label="Wazuh correlation limitations">
+            <button type="button" id="correlationNoticeClose" aria-label="Dismiss correlation notice" title="Dismiss this notice">×</button>
             <strong>Known Wazuh 4.14.10 group-correlation limitations.</strong>
             {% if warning_count %}
             {{ warning_count }} rule(s) have potential correlation gaps in the scanned graph.
@@ -438,7 +439,10 @@ def create_app(graph_path: str, stats_path: str, heatmap_path: str) -> Flask:
         </body>
         </html>
 """, show_correlation_notice=show_correlation_notice,
-                                 warning_count=len(CORRELATION_WARNINGS))
+                                 warning_count=len(CORRELATION_WARNINGS),
+                                 correlation_notice_dismissed=(
+                                     request.cookies.get("rulevis_correlation_notice_dismissed") == "1"
+                                 ))
 
     # ---------- Consolidated APIs ----------
     @app.route("/api/nodes", methods=["GET"])
