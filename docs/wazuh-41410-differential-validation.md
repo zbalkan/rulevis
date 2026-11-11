@@ -28,6 +28,13 @@ Use a disposable, fully isolated test environment.
 
 ## Capturing the native oracle
 
+An opt-in native GDB probe and provenance-bound assembler are now available.
+See [Native Oracle Capture](wazuh-41410-native-oracle-capture.md) for the
+isolated debugger workflow. The capture infrastructure is not evidence that
+a compiled Wazuh manager has been executed in CI.
+
+
+
 Use the exact Wazuh 4.14.10 source and a compiled manager test installation.
 For each fixture, configure a fresh ruleset and record the tree *after* the
 loader has processed the declaration sequence. Native instrumentation must
@@ -98,8 +105,9 @@ of execution or a substitute for inspecting the collecting program. Runtime
 equivalence remains **unverified** until native observations are captured,
 audited and compared.
 
-Implementation work still required: compile/instrument the pinned Wazuh
-loader in a disposable test environment; capture immutable oracle artifacts;
+Implementation work still required: execute the debugger probe against
+a compiled Wazuh 4.14.10 loader in a disposable test environment, capture
+immutable oracle artifacts;
 validate any loader/registration divergences; add tests for event insertion,
 search, expiration and cleanup; and only then promote the registration model
 to runtime-verified evidence. None of this changes RuleVis's declared graph
