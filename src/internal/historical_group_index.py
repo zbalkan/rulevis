@@ -43,7 +43,10 @@ class HistoricalGroupMembershipIndex:
                 candidate = term[:-1] if term.endswith("$") else term
                 alternatives.append(candidate)
             marker = "|".join(alternatives)
-            self._patterns.setdefault(marker, set()).add(selector)
+            if not marker:
+                self._always.add(selector)
+            else:
+                self._patterns.setdefault(marker, set()).add(selector)
         self._matcher = GroupSelectorIndex(self._patterns)
 
     def update(self, rule_id: str, runtime_group: str) -> None:
