@@ -77,7 +77,8 @@ class EvaluationBuilder:
 
     def __init__(
         self, catalog: RuleCatalog, *, max_occurrences: int = 100_000,
-        on_accepted: Optional[Callable[[RuleDeclaration, "EvaluationBuilder"], None]] = None
+        on_accepted: Optional[Callable[[RuleDeclaration, "EvaluationBuilder"], None]] = None,
+        on_group_change: Optional[Callable[[str, Optional[str]], None]] = None
     ) -> None:
         if (
             isinstance(max_occurrences, bool)
@@ -87,6 +88,7 @@ class EvaluationBuilder:
             raise ValueError("max_occurrences must be a positive integer")
         self.max_occurrences = max_occurrences
         self.on_accepted = on_accepted
+        self.on_group_change = on_group_change
         self.catalog = catalog
         self.graph = nx.DiGraph()
         self.rules: dict[str, RuleState] = {}
@@ -157,10 +159,14 @@ class EvaluationBuilder:
     def _register_state(self, state: RuleState) -> None:
         self.rules[state.rule_id] = state
         self.group_index.update(state.rule_id, state.runtime_group)
+        if self.on_group_change is not None:
+            self.on_group_change(state.rule_id, state.runtime_group)
 
     def _unregister_state(self, state: RuleState) -> None:
         self.rules.pop(state.rule_id, None)
         self.group_index.discard(state.rule_id)
+        if self.on_group_change is not None:
+            self.on_group_change(state.rule_id, None)
 
     def _occurrences_in_preorder(self) -> list[int]:
         """Snapshot runtime occurrences in current RuleNode preorder."""
@@ -267,6 +273,8 @@ class EvaluationBuilder:
         state.temporal_conditions = declaration.temporal_conditions
 
         self.group_index.update(state.rule_id, state.runtime_group)
+        if self.on_group_change is not None:
+            self.on_group_change(state.rule_id, state.runtime_group)
 
         if old_priority != state.load_priority:
             for occurrence_id in self.occurrences_by_rule.get(
