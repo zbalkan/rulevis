@@ -185,7 +185,7 @@
     },
     {
       "id": "overwrite-missing",
-      "description": "Missing-base overwrite inserts structurally but skips history registration",
+      "description": "Missing-base overwrite is treated as a new rule and registers group history",
       "rules": [
         {
           "id": 1,

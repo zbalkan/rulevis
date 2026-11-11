@@ -179,7 +179,7 @@ def test_builder_cannot_run_twice_even_without_registrations():
         builder.build()
 
 
-def test_overwrite_with_missing_base_is_inserted_but_not_registered():
+def test_overwrite_with_missing_base_is_inserted_and_registered():
     catalog = RuleCatalog()
     add_rule(catalog, 1, group="root,")
     add_rule(catalog, 100010, if_sid="1", group="audit,")
@@ -189,7 +189,7 @@ def test_overwrite_with_missing_base_is_inserted_but_not_registered():
     )
     projection = build_historical_registrations(catalog)
     assert "100020" in projection.structural_model.rules
-    assert projection.subscribers("100010", "if_matched_group") == ()
+    assert projection.subscribers("100010", "if_matched_group") == ("100020",)
     assert any(
         issue.code == "OVERWRITE_RULE_NOT_FOUND"
         for issue in projection.structural_model.issues

@@ -57,7 +57,12 @@ def test_registration_fixtures_cover_forward_references_and_dual_history():
     assert len(regs("dual-history", "if_matched_group")) == 1
     assert len(regs("multiple-occurrences", "if_matched_group")) == 1
     assert regs("multiple-occurrences", "if_matched_group")[0]["count"] == 2
-    assert not regs("overwrite-missing", "if_matched_group")
+    assert regs("overwrite-missing", "if_matched_group") == [{
+        "source_rule_id": "100101",
+        "consumer_rule_id": "100201",
+        "relation_type": "if_matched_group",
+        "count": 1,
+    }]
     assert not regs("shadowed-group", "if_matched_group")
 
 

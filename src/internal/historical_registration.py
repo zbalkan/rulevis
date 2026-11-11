@@ -80,7 +80,6 @@ class HistoricalRegistrationBuilder:
                 declaration.if_matched_sid,
                 declaration.if_matched_group,
             ) == "if_matched_group"
-            and not declaration.overwrite
         )
 
     def _on_group_change(self, rule_id: str, group: str | None) -> None:
@@ -110,10 +109,9 @@ class HistoricalRegistrationBuilder:
         )
 
     def _on_accepted(self, declaration: RuleDeclaration, builder: EvaluationBuilder) -> None:
-        # rules.c guards both OS_MarkID and OS_MarkGroup with !DO_OVERWRITE,
-        # even when the requested overwrite had no existing RuleInfo.
-        if declaration.overwrite:
-            return
+        # Existing-rule overwrites return before on_accepted is called.
+        # For a missing base, Wazuh rules.c resets overwrite to 0 before
+        # building RuleInfo, so normal OS_MarkID/OS_MarkGroup applies.
         search = select_historical_search(
             declaration.if_matched_sid, declaration.if_matched_group,
         )
