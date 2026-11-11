@@ -254,6 +254,70 @@
           "group": "audit,"
         }
       ]
+    },
+    {
+      "id": "sid-sequential-self",
+      "description": "Later ordinary SID token resolves a new occurrence created by the same declaration",
+      "rules": [
+        {
+          "id": 1,
+          "level": 0,
+          "group": "root,"
+        },
+        {
+          "id": 100101,
+          "if_sid": "1,100101",
+          "group": "audit,"
+        }
+      ]
+    },
+    {
+      "id": "sid-repeated-token",
+      "description": "Repeated ordinary SID tokens are processed independently rather than deduplicated",
+      "rules": [
+        {
+          "id": 1,
+          "level": 0,
+          "group": "root,"
+        },
+        {
+          "id": 100101,
+          "if_sid": "1,1",
+          "group": "audit,"
+        }
+      ]
+    },
+    {
+      "id": "sid-missing-then-existing",
+      "description": "Missing ordinary SID is skipped before a later valid SID token",
+      "rules": [
+        {
+          "id": 1,
+          "level": 0,
+          "group": "root,"
+        },
+        {
+          "id": 100101,
+          "if_sid": "999999,1",
+          "group": "audit,"
+        }
+      ]
+    },
+    {
+      "id": "sid-existing-then-missing",
+      "description": "Earlier ordinary SID attachment survives a later missing SID token",
+      "rules": [
+        {
+          "id": 1,
+          "level": 0,
+          "group": "root,"
+        },
+        {
+          "id": 100101,
+          "if_sid": "1,999999",
+          "group": "audit,"
+        }
+      ]
     }
   ]
 }

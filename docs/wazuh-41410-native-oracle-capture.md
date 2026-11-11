@@ -148,8 +148,16 @@ transcript and snapshot collection procedure before treating comparisons as
 verified. The assembler's local copies cannot prove that the manager actually
 used those files.
 
-A full native oracle has **not** been produced in project CI. The CI tests
-exercise the Python probe with mocked native pointers, the orchestration
-wrapper with simulated subprocess behavior, and the schema/assembler with
-synthetic comparison data. Actual Wazuh 4.14.10 differential validation
-requires running these commands in the specified isolated native environment.
+The isolated GitHub Actions workflow now executes a **compiled Wazuh
+4.14.10** analysisd binary under GDB, with exact loaded-file hashing,
+and compares independent native observations against RuleVis predictions.
+The first ten pinned structural/registration scenarios passed on the
+merged native CI branch (run 43085696078). Those captures establish
+loader and registration structural agreement for the tested scenarios,
+**not** event-history insertion, timeout handling, event search, or alerts.
+
+The new loader-fidelity branch expands the differential corpus to 14
+scenarios, specifically probing sequential ordinary SID tokens. The
+additional scenarios are not claimed as native-verified until their
+GitHub Actions run passes. The Python mock tests remain separate from
+native observations.

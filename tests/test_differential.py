@@ -66,6 +66,31 @@ def test_registration_fixtures_cover_forward_references_and_dual_history():
     assert not regs("shadowed-group", "if_matched_group")
 
 
+
+def test_incremental_sid_scenarios_are_explicit_and_bounded():
+    suite, _ = load_fixture(FIXTURE)
+    cases = {scenario["id"]: scenario for scenario in suite["scenarios"]}
+    assert len(cases) == 14
+
+    self_attached = predict(cases["sid-sequential-self"])
+    assert self_attached["accepted_rules"] == ["1", "100101"]
+    assert self_attached["attachments"] == [
+        {"parent_rule_id": "1", "child_rule_id": "100101", "relation_type": "if_sid", "count": 1},
+        {"parent_rule_id": "100101", "child_rule_id": "100101", "relation_type": "if_sid", "count": 1},
+    ]
+
+    duplicates = predict(cases["sid-repeated-token"])
+    assert duplicates["attachments"] == [
+        {"parent_rule_id": "1", "child_rule_id": "100101", "relation_type": "if_sid", "count": 2},
+    ]
+
+    for scenario_id in ("sid-missing-then-existing", "sid-existing-then-missing"):
+        snapshot = predict(cases[scenario_id])
+        assert snapshot["attachments"] == [
+            {"parent_rule_id": "1", "child_rule_id": "100101", "relation_type": "if_sid", "count": 1},
+        ]
+
+
 def test_comparison_reports_exact_model_vs_observed_differences():
     suite, digest = load_fixture(FIXTURE)
     oracle = _oracle(suite, digest)

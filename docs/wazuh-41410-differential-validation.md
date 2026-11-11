@@ -1,9 +1,12 @@
 # Wazuh 4.14.10 differential validation
 
-This directory defines a **comparison protocol**, not a claim of completed
-runtime verification. RuleVis predicts structural accepted rules, physical
-attachments and historical SID/group subscriptions. A separate, instrumented
-**compiled Wazuh 4.14.10** process must supply the observed oracle.
+The differential protocol compares RuleVis predictions with independent
+observations from a **compiled Wazuh 4.14.10** analysisd process. It checks
+accepted logical rules, physical structural attachments and historical
+SID/group registrations, with binary, fixture and loaded-file provenance.
+The initial ten scenarios passed in GitHub Actions run 43085696078.
+This phase extends the same native oracle to four incremental-SID
+scenarios; these additions require separate native verification.
 
 The initial fixture suite covers pre-existing and forward SID references,
 late group sources, rejected consumers, dual-history sources, multiple physical
@@ -98,17 +101,15 @@ scenario and data type, rather than stopping on the first mismatch.
 
 ## Evidence boundary and remaining steps
 
-The comparison protocol **does not collect a native oracle by itself**.
-The SHA-256 fields bind the reported observations to declared artifacts when
-the collector computes them correctly; they are metadata checks, not a proof
-of execution or a substitute for inspecting the collecting program. Runtime
-equivalence remains **unverified** until native observations are captured,
-audited and compared.
+The CI suite runner collects a native oracle under GDB. SHA-256 provenance
+fields bind observations to the captured binary, rules and configuration;
+they are metadata checks, not cryptographic attestation. Inspect the
+capturing program and logs before interpreting results as verified evidence.
 
-Implementation work still required: execute the debugger probe against
-a compiled Wazuh 4.14.10 loader in a disposable test environment, capture
-immutable oracle artifacts;
-validate any loader/registration divergences; add tests for event insertion,
-search, expiration and cleanup; and only then promote the registration model
-to runtime-verified evidence. None of this changes RuleVis's declared graph
-or the existing advisory UI.
+The ten original scenarios have independent native-loader/registration
+agreement. The four additional SID scenarios must pass before the
+expanded loader-fidelity claim is accepted. Future work must still test
+actual event insertion, SID/group history search, expiry and cleanup;
+structural registration alone does not prove alert delivery or parity
+of the runtime event processor. RuleVis's declared graph and advisory
+UI remain separate from these experimental predictions.

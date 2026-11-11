@@ -284,6 +284,28 @@ As before, RuleVis's filesystem scanning is not equivalent to an
 attachment. Differential tests against a compiled 4.14.10 loader are
 still required before claiming byte- or occurrence-identical behavior.
 
+### Incremental ordinary SID-list attachment
+
+Wazuh 4.14.10 `OS_AddChild` resolves and attaches each ordinary `if_sid`
+token immediately. A later token may therefore find a new physical
+`RuleNode` occurrence created by an earlier token in the same rule.
+Repetitions may create multiple occurrences under one parent. RuleVis
+models this sequential behavior, including skipped nonexistent SID tokens.
+
+The pinned native GDB oracle has four additional scenarios:
+`sid-sequential-self`, `sid-repeated-token`,
+`sid-missing-then-existing`, and `sid-existing-then-missing`.
+A logical self-edge in the collapsed projection does not necessarily
+imply a cycle in the physical occurrence graph.
+
+**Boundary:** A nonzero `if_matched_sid` with multiple explicit
+structural SID tokens can fail after partial native insertion. Wazuh's
+failure cleanup may release a `RuleInfo` still referenced by a
+physical node. RuleVis deliberately retains staged all-or-nothing
+modeling for this unsafe rejection path, which is **not yet verified**
+as a safe native observable state. This phase does not emulate
+dangling references or crash behavior.
+
 ## Exact finite-domain evaluation
 
 The assessor does not attempt arbitrary symbolic regex satisfiability.

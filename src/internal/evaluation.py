@@ -335,35 +335,53 @@ class EvaluationBuilder:
         declaration: RuleDeclaration,
         selector: str,
     ) -> bool:
+        # Wazuh 4.14.10 OS_AddChild resolves and attaches each ordinary
+        # SID token immediately. A later token can see the occurrences
+        # created by an earlier token of the same declaration.
+        #
+        # For active temporal SID selectors, retain the existing staged
+        # rejection model. Native cleanup after a partial insertion can
+        # free RuleInfo while an earlier RuleNode still points to it;
+        # RuleVis intentionally does not reproduce unsafe dangling nodes.
+        temporal = active_temporal_sid(declaration.if_matched_sid)
         planned: list[tuple[str, list[int]]] = []
+        attached = False
 
-        # Resolve every required parent before mutating the occurrence tree.
-        # if_matched_sid failures reject the rule, so staging prevents
-        # partially created RuleNodes from surviving that rejection.
         for raw_sid, sid in self._sid_values(selector):
             parent_ids = self._sid_parent_occurrences(sid)
             if not parent_ids:
                 self.issues.append(
                     LoadIssue("SID_NOT_FOUND", state.rule_id, sid)
                 )
-                if active_temporal_sid(declaration.if_matched_sid):
+                if temporal:
                     return False
                 continue
 
-            planned.append((raw_sid, parent_ids))
+            if temporal:
+                planned.append((raw_sid, parent_ids))
+                continue
 
-        attached = False
-        for raw_sid, parent_ids in planned:
             for parent_id in parent_ids:
                 parent_rule_id = self.occurrences[parent_id].rule_id
                 self._set_category(
-                    state,
-                    self.rules[parent_rule_id].category,
+                    state, self.rules[parent_rule_id].category,
                 )
                 self._new_occurrence(
                     state.rule_id, parent_id, matched_selector=raw_sid
                 )
                 attached = True
+
+        if temporal:
+            for raw_sid, parent_ids in planned:
+                for parent_id in parent_ids:
+                    parent_rule_id = self.occurrences[parent_id].rule_id
+                    self._set_category(
+                        state, self.rules[parent_rule_id].category,
+                    )
+                    self._new_occurrence(
+                        state.rule_id, parent_id, matched_selector=raw_sid
+                    )
+                    attached = True
 
         return attached
 

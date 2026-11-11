@@ -754,3 +754,46 @@ def test_zero_temporal_sid_does_not_convert_missing_explicit_sid_to_rejection():
         issue.code == "SID_NOT_FOUND" and issue.rule_id == "100223"
         for issue in model.issues
     )
+
+
+def test_incremental_sid_tokens_see_newly_created_rule_occurrence():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(catalog, 100900, 5, if_sid="1,100900")
+
+    model = EvaluationBuilder(catalog).build()
+    root = model.occurrences_by_rule["1"][0]
+    first, nested = model.occurrences_by_rule["100900"]
+    assert model.occurrences[first].parent_id == root
+    assert model.occurrences[nested].parent_id == first
+    assert not any(
+        issue.code == "SID_NOT_FOUND" and issue.selector == "100900"
+        for issue in model.issues
+    )
+
+
+def test_repeated_sid_tokens_keep_physical_multiplicity():
+    catalog = RuleCatalog()
+    add_rule(catalog, 1, 0, category="test")
+    add_rule(catalog, 100901, 5, if_sid="1,1")
+
+    model = EvaluationBuilder(catalog).build()
+    root = model.occurrences_by_rule["1"][0]
+    assert len(model.occurrences_by_rule["100901"]) == 2
+    assert all(
+        model.occurrences[occurrence].parent_id == root
+        for occurrence in model.occurrences_by_rule["100901"]
+    )
+
+
+def test_missing_ordinary_sid_does_not_rollback_other_tokens():
+    for selector in ("999999,1", "1,999999"):
+        catalog = RuleCatalog()
+        add_rule(catalog, 1, 0, category="test")
+        add_rule(catalog, 100902, 5, if_sid=selector)
+        model = EvaluationBuilder(catalog).build()
+        assert len(model.occurrences_by_rule["100902"]) == 1
+        assert any(
+            issue.code == "SID_NOT_FOUND" and issue.selector == "999999"
+            for issue in model.issues
+        )

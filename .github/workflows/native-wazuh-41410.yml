@@ -3,7 +3,7 @@ name: Native Wazuh 4.14.10 analysisd debug build
 on:
   workflow_dispatch:
   push:
-    branches: [ci/wazuh-41410-native-build]
+    branches: [ci/wazuh-41410-native-build, test/native-loader-fidelity-expansion]
 
 permissions:
   contents: read
