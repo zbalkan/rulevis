@@ -21,6 +21,8 @@ def run_capture(
     *, fixture: Path, scenario_id: str, binary: Path, output: Path,
     gdb: str = "gdb", timeout: int = 120,
     analysisd_args: tuple[str, ...] = ("-t",),
+    cwd: Path | None = None,
+    transcript: Path | None = None,
 ) -> None:
     suite, _ = load_fixture(fixture)
     if scenario_id not in {case["id"] for case in suite["scenarios"]}:
@@ -35,6 +37,10 @@ def run_capture(
         raise ValueError("Native GDB probe file not found")
     if not output.parent.is_dir():
         raise ValueError("Native capture output directory does not exist")
+    if cwd is not None and not cwd.is_dir():
+        raise ValueError("Native analysisd working directory does not exist")
+    if transcript is not None and (transcript.exists() or not transcript.parent.is_dir()):
+        raise ValueError("Native transcript destination must be new in an existing directory")
     env = dict(os.environ)
     env.update({
         "RULEVIS_NATIVE_SCENARIO": str(fixture.resolve()),
@@ -51,11 +57,16 @@ def run_capture(
         result = subprocess.run(
             command, env=env, timeout=timeout,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-            check=False,
+            check=False, cwd=cwd,
         )
     except subprocess.TimeoutExpired as exc:
         output.unlink(missing_ok=True)
         raise RuntimeError("Native GDB probe timed out") from exc
+    if transcript is not None:
+        transcript.write_text(
+            "STDOUT\n" + result.stdout + "\nSTDERR\n" + result.stderr,
+            encoding="utf-8",
+        )
     if result.returncode != 0 or not output.is_file():
         output.unlink(missing_ok=True)
         raise RuntimeError(
@@ -83,6 +94,8 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--gdb", default="gdb")
     parser.add_argument("--timeout", type=int, default=120)
+    parser.add_argument("--cwd", type=Path)
+    parser.add_argument("--transcript", type=Path)
     parser.add_argument(
         "--analysisd-arg", action="append", default=None,
         help="Native binary argument (repeat as needed); default -t",
@@ -94,6 +107,7 @@ def main() -> int:
             binary=args.binary, output=args.output,
             gdb=args.gdb, timeout=args.timeout,
             analysisd_args=tuple(args.analysisd_arg or ["-t"]),
+            cwd=args.cwd, transcript=args.transcript,
         )
     except (ValueError, RuntimeError, OSError) as exc:
         parser.exit(2, f"Native GDB capture failed: {exc}\n")

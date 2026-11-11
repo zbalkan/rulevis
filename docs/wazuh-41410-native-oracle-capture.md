@@ -27,6 +27,39 @@ matches the scenario and that Wazuh accepts the XML. Generated fixtures
 include intentional invalid references and overwrite cases; a rejected
 declaration need not prevent the other declarations from loading.
 
+## End-to-end suite runner (isolated manager only)
+
+The optional `scripts/run_wazuh_41410_suite.py` orchestrates the pinned
+scenarios sequentially, retaining configuration copies, captured native
+snapshots, preparation logs, debugger logs, and the final differential report.
+**It does not provision a Wazuh manager.** A trusted operator-supplied
+executable must install each scenario in an independently isolated
+4.14.10 test installation. Do not point it at a production manager.
+
+The preparation executable receives three positional arguments:
+`<scenario-id> <rendered-rules.xml> <evidence-config-dir>`. It must install
+the fixture as the isolated manager's **only** loaded ruleset and write copies
+of the actually deployed rules to `<evidence-config-dir>/rules.xml` and the
+effective configuration to `<evidence-config-dir>/ossec.conf`. It must exit
+nonzero when installation or isolation verification fails. The suite runner
+verifies the rules copy equals the rendered fixture before starting GDB.
+**The runner cannot establish that the manager actually loaded the submitted
+configuration; the preparation executable and its environment must be
+audited independently.**
+
+Use a new empty evidence destination for every invocation. For example:
+
+```shell
+PYTHONPATH=src python scripts/run_wazuh_41410_suite.py --fixture tests/fixtures/wazuh_41410_differential.json --binary /path/to/isolated/wazuh-analysisd --workspace /tmp/rulevis-native-run-01 --preparer /path/to/your/isolated-scenario-installer --cwd /path/to/isolated/manager
+```
+
+The runner exits 0 when all compared snapshots match, 1 for differences,
+and 2 for missing prerequisites, failed preparation, invalid captures or
+other incomplete validation. A nonzero preparation or capture error stops
+the suite; partial evidence remains in the workspace for diagnosis.
+The pipeline neither changes `master` nor publishes oracle artifacts.
+Do not interpret synthetic unit tests as native observations.
+
 ## Capture one scenario
 
 Install RuleVis dependencies, then render the pinned scenarios:
