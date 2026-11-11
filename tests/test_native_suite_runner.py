@@ -47,8 +47,14 @@ def _setup(tmp_path, monkeypatch, *, mismatch=False, invalid_rules=False):
         if mismatch and name == "sid-existing":
             result["registrations"] = []
         kwargs["output"].write_text(json.dumps({
-            "capture_format": "gdb_wazuh_41410_v1",
+            "capture_format": "gdb_wazuh_41410_v2",
             "scenario_id": name,
+            "loaded_rule_files": [{
+                "path": str((kwargs["transcript"].parent.parent / "configs" / name / "rules.xml").resolve()),
+                "sha256": __import__("hashlib").sha256(
+                    (kwargs["transcript"].parent.parent / "configs" / name / "rules.xml").read_bytes()
+                ).hexdigest(),
+            }],
             "snapshot": {
                 **result,
                 "unexpected_rule_ids": [],

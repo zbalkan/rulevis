@@ -43,7 +43,7 @@ def assemble(
         if not raw_path.is_file():
             raise ValueError(f"Missing native GDB capture: {scenario_id}")
         raw = json.loads(raw_path.read_text(encoding="utf-8"))
-        if raw.get("capture_format") != "gdb_wazuh_41410_v1":
+        if raw.get("capture_format") != "gdb_wazuh_41410_v2":
             raise ValueError(f"Unsupported native capture format: {scenario_id}")
         if raw.get("scenario_id") != scenario_id:
             raise ValueError(f"Native scenario identity mismatch: {scenario_id}")
@@ -71,6 +71,23 @@ def assemble(
             raise ValueError(f"Missing native config snapshot: {scenario_id}")
         if native_rules.read_text(encoding="utf-8") != render_rules(scenario):
             raise ValueError(f"Rules XML differs from the pinned fixture: {scenario_id}")
+        loaded = raw.get("loaded_rule_files")
+        if not isinstance(loaded, list) or len(loaded) != 1:
+            raise ValueError(
+                f"Native manager must load exactly one observed rules file: {scenario_id}"
+            )
+        loaded_file = loaded[0]
+        if (
+            not isinstance(loaded_file, dict)
+            or set(loaded_file) != {"path", "sha256"}
+            or not isinstance(loaded_file["path"], str)
+            or not Path(loaded_file["path"]).is_absolute()
+            or not isinstance(loaded_file["sha256"], str)
+            or loaded_file["sha256"] != sha256_file(native_rules)
+        ):
+            raise ValueError(
+                f"Loaded native rules do not match captured fixture: {scenario_id}"
+            )
         per_scenario_configs[scenario_id] = {
             "rules_sha256": sha256_file(native_rules),
             "ossec_conf_sha256": sha256_file(ossec_config),
@@ -90,7 +107,7 @@ def assemble(
             "binary_sha256": sha256_file(binary),
             "ruleset_config_sha256": hashlib.sha256(config_bytes).hexdigest(),
             "per_scenario_config_sha256": per_scenario_configs,
-            "capture_method": "GDB _setlevels RuleNode/RuleInfo snapshot v1",
+            "capture_method": "GDB _setlevels RuleNode/RuleInfo plus Config.includes file hashes v2",
         },
         "scenarios": observed,
     }

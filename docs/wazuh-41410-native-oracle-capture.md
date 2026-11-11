@@ -112,6 +112,25 @@ deterministic aggregate SHA-256 of per-scenario configuration-file hashes.
 It also rejects unexpected native rule IDs, missing scenarios, inconsistent
 scenario labels, and modified rules XML.
 
+## Native loaded-file evidence
+
+The v2 native GDB capture reads `Config.includes` directly from the
+compiled process when the rule tree is first finalized. It hashes every
+reported rules file **from the debugger's filesystem namespace**, recording
+its resolved path and SHA-256. Oracle assembly rejects captures that do not
+report exactly one loaded rules file with the same SHA-256 as the exact pinned
+fixture XML. This prevents an isolated manager that accidentally loaded an
+unrelated or additional ruleset from being mistaken for a matching capture,
+even when its accepted rule IDs happen to overlap.
+
+This requires the GDB host to see the same rule files as its inferior.
+`Config.includes` and native debug symbols must be inspectable. A missing
+file, additional include, or uninspectable symbol is an incomplete capture,
+not a passing test. The v1 envelope format is intentionally rejected;
+capture all scenarios again with the v2 probe. These checks strengthen
+traceability but do not attest the binary's build provenance or guarantee
+that all non-rules configuration matches the copied `ossec.conf`.
+
 ## What is and is not independent
 
 Native process memory supplies **physical** rule-node identities, accepted

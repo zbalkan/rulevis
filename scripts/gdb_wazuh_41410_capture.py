@@ -8,6 +8,7 @@ This script does not import RuleVis, its prediction code, or its XML parser.
 The structural relation label comes from the supplied scenario manifest;
 physical parent/child identity and all registrations come from native memory.
 """
+import hashlib
 import json
 import os
 import pathlib
@@ -147,6 +148,30 @@ def _capture(head, scenario):
     }
 
 
+def _loaded_rule_files(config_includes, *, cap=100):
+    """Hash every rules file named in analysisd's effective Config.includes.
+
+    This comes from native memory, not a copied ossec.conf or a model input.
+    Reading a path is only meaningful in the same filesystem namespace as
+    the debugged inferior. Fail closed when it cannot be inspected.
+    """
+    if _address(config_includes) == 0:
+        raise RuntimeError("analysisd has no configured rules files")
+    result = []
+    for index in range(cap):
+        item = config_includes[index]
+        if _address(item) == 0:
+            if not result:
+                raise RuntimeError("Empty native rules include list")
+            return result
+        path = pathlib.Path(item.string(errors="strict"))
+        if not path.is_file():
+            raise RuntimeError("Native rules include cannot be read: " + str(path))
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        result.append({"path": str(path.resolve()), "sha256": digest})
+    raise RuntimeError("Native rule include count exceeds capture limit")
+
+
 class CaptureOnce(gdb.Breakpoint):
     def __init__(self):
         super().__init__("_setlevels", internal=False)
@@ -178,10 +203,13 @@ class CaptureOnce(gdb.Breakpoint):
                     raise ValueError("Scenario ID differs from supplied fixture")
             head = gdb.parse_and_eval("node")
             snapshot = _capture(head, scenario)
+            included = gdb.parse_and_eval("Config.includes")
+            loaded_files = _loaded_rule_files(included)
             artifact = {
-                "capture_format": "gdb_wazuh_41410_v1",
+                "capture_format": "gdb_wazuh_41410_v2",
                 "scenario_id": scenario["id"],
                 "snapshot": snapshot,
+                "loaded_rule_files": loaded_files,
             }
             # No output is written unless native traversal fully succeeds.
             temp = output.with_suffix(output.suffix + ".tmp")

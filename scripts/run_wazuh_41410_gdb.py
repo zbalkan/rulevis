@@ -76,9 +76,11 @@ def run_capture(
     try:
         observed = json.loads(output.read_text(encoding="utf-8"))
         if (
-            observed.get("capture_format") != "gdb_wazuh_41410_v1"
+            observed.get("capture_format") != "gdb_wazuh_41410_v2"
             or observed.get("scenario_id") != scenario_id
             or not isinstance(observed.get("snapshot"), dict)
+            or not isinstance(observed.get("loaded_rule_files"), list)
+            or len(observed["loaded_rule_files"]) != 1
         ):
             raise ValueError("GDB emitted an invalid capture envelope")
     except (OSError, ValueError, TypeError) as exc:

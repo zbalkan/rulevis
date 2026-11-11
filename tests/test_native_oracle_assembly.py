@@ -29,8 +29,14 @@ def _artifacts(tmp_path):
     for scenario in fixture["scenarios"]:
         sid = scenario["id"]
         (captures / (sid + ".json")).write_text(json.dumps({
-            "capture_format": "gdb_wazuh_41410_v1",
+            "capture_format": "gdb_wazuh_41410_v2",
             "scenario_id": sid,
+            "loaded_rule_files": [{
+                "path": str((configs / sid / "rules.xml").resolve()),
+                "sha256": hashlib.sha256(
+                    render_rules(scenario).encode("utf-8")
+                ).hexdigest(),
+            }],
             "snapshot": {
                 **predict(scenario),
                 "unexpected_rule_ids": [],
@@ -105,4 +111,26 @@ def test_assembler_rejects_nonisolated_manager_tree(tmp_path):
     raw["snapshot"]["unexpected_rule_ids"] = ["999999"]
     file.write_text(json.dumps(raw), encoding="utf-8")
     with pytest.raises(ValueError, match="Unexpected rules loaded"):
+        assemble(fixture=FIXTURE, captures=captures, configs=configs, binary=binary)
+
+
+def test_assembler_rejects_loaded_rule_file_mismatch(tmp_path):
+    fixture, digest, captures, configs, binary = _artifacts(tmp_path)
+    name = fixture["scenarios"][0]["id"]
+    file = captures / (name + ".json")
+    raw = json.loads(file.read_text(encoding="utf-8"))
+    raw["loaded_rule_files"][0]["sha256"] = "0" * 64
+    file.write_text(json.dumps(raw), encoding="utf-8")
+    with pytest.raises(ValueError, match="Loaded native rules do not match"):
+        assemble(fixture=FIXTURE, captures=captures, configs=configs, binary=binary)
+
+
+def test_assembler_rejects_multiple_native_rule_includes(tmp_path):
+    fixture, digest, captures, configs, binary = _artifacts(tmp_path)
+    name = fixture["scenarios"][0]["id"]
+    file = captures / (name + ".json")
+    raw = json.loads(file.read_text(encoding="utf-8"))
+    raw["loaded_rule_files"].append(dict(raw["loaded_rule_files"][0]))
+    file.write_text(json.dumps(raw), encoding="utf-8")
+    with pytest.raises(ValueError, match="exactly one observed rules file"):
         assemble(fixture=FIXTURE, captures=captures, configs=configs, binary=binary)

@@ -3,6 +3,7 @@
 Fake pointers model RuleInfo sharing and group-list pointer multiplicity.
 These unit tests are not compiled Wazuh differential observations.
 """
+import hashlib
 import runpy
 import sys
 from pathlib import Path
@@ -118,3 +119,35 @@ def test_native_probe_uses_scenario_only_for_attachment_labels(monkeypatch):
          "relation_type": "if_group", "count": 1},
     ]
     assert result["registrations"] == []
+
+
+def test_gdb_probe_records_exact_loaded_rules_hash(tmp_path, monkeypatch):
+    probe = _probe(monkeypatch)
+    rules = tmp_path / "rules.xml"
+    rules.write_bytes(b"<group name='test,'/>\n")
+
+    class StringPointer(FakePtr):
+        def string(self, errors="strict"):
+            return str(rules)
+
+    includes = FakePtr(500, [StringPointer(501), FakePtr()])
+    result = probe["_loaded_rule_files"](includes)
+    assert result == [{
+        "path": str(rules.resolve()),
+        "sha256": hashlib.sha256(rules.read_bytes()).hexdigest(),
+    }]
+
+
+def test_gdb_probe_rejects_missing_or_unreadable_rules(tmp_path, monkeypatch):
+    probe = _probe(monkeypatch)
+
+    class StringPointer(FakePtr):
+        def string(self, errors="strict"):
+            return str(tmp_path / "missing.xml")
+
+    with pytest.raises(RuntimeError, match="no configured rules"):
+        probe["_loaded_rule_files"](FakePtr())
+    with pytest.raises(RuntimeError, match="cannot be read"):
+        probe["_loaded_rule_files"](
+            FakePtr(600, [StringPointer(601), FakePtr()])
+        )

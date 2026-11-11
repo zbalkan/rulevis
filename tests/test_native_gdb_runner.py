@@ -27,8 +27,9 @@ def test_runner_exports_fixture_and_rejects_failed_native_probes(tmp_path, monke
         assert env["RULEVIS_NATIVE_SCENARIO_ID"] == "sid-existing"
         assert env["RULEVIS_NATIVE_SCENARIO"] == str(FIXTURE.resolve())
         output.write_text(json.dumps({
-            "capture_format": "gdb_wazuh_41410_v1",
+            "capture_format": "gdb_wazuh_41410_v2",
             "scenario_id": "sid-existing",
+            "loaded_rule_files": [{"path": "/tmp/rules.xml", "sha256": "0" * 64}],
             "snapshot": {
                 "accepted_rules": ["1"], "attachments": [], "registrations": [],
             },
