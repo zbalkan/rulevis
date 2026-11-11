@@ -144,6 +144,45 @@ before presenting this model as verified effective runtime attachment.
 
 
 
+## Indexed historical registration lookup
+
+The opt-in historical-registration projection no longer builds a complete
+`RuleNode` preorder snapshot for every accepted historical consumer.
+`if_matched_sid` resolves candidates directly through the existing
+`occurrences_by_rule` index. `if_matched_group` uses
+`HistoricalGroupMembershipIndex`, a separate temporal `OSMatch` index;
+it does **not** reuse structural `if_group`/`OS_WordMatch` membership.
+Aho-Corasick and prefix matching generate a conservative superset of
+positive group matches, then `os_match` confirms the exact result.
+Negated selectors and empty alternatives receive fallback checks. Current
+group membership is updated for every accepted rule and overwrite, with
+failed declarations removed.
+
+Only matching physical occurrences are ranked and sorted into current
+`RuleNode` preorder. Each match still emits an independent provenance
+record; repeated physical source occurrences and registration-time snapshots
+remain intact. Existing full-scan equivalence tests cover mixed selectors,
+multiple occurrences, late sources and overwrites.
+
+For `k` matching physical occurrences among `V` total occurrences, the
+lookup/sort stage costs approximately `O(k log V + k log k)`, plus index
+candidate discovery. For common positive group patterns, index updates cost
+time proportional to group-text length and candidate outputs. Negated
+patterns and unselective patterns can still approach whole-ruleset work
+because the underlying semantics legitimately match many sources.
+The optimization avoids the previous unconditional `O(H × V)`
+registration-time scanning pattern, where `H` is the number of historical
+consumers. It does not guarantee linear total loader complexity.
+
+Run the reproducible before/after benchmark (no enforced CI threshold):
+
+```shell
+PYTHONPATH=src python benchmarks/historical_registration_scaling.py --rules 1000 --consumers 250 --matched-percent 5
+```
+
+This is a RuleVis model optimization, **not** independent verification
+against compiled Wazuh 4.14.10.
+
 ## Opt-in historical subscription projection (Wazuh 4.14.10)
 
 `build_historical_registrations(catalog)` in
