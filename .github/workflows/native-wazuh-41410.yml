@@ -1,0 +1,172 @@
+name: Native Wazuh 4.14.10 analysisd debug build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ci/wazuh-41410-native-build]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-wazuh-41410-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-analysisd-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Check out RuleVis
+        uses: actions/checkout@v4
+
+      - name: Check out pinned Wazuh source
+        uses: actions/checkout@v4
+        with:
+          repository: wazuh/wazuh
+          ref: 'v4.14.10'
+          path: native-wazuh
+          persist-credentials: false
+
+      - name: Configure public DNS and official Ubuntu mirrors
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native-artifacts
+          sudo cp -L /etc/resolv.conf native-artifacts/resolv.conf.original
+          # Replace the runner's resolver symlink/file with an explicit DNS file.
+          sudo rm -f /etc/resolv.conf
+          printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\noptions timeout:2 attempts:2\n' | sudo tee /etc/resolv.conf >/dev/null
+          sudo chmod 0644 /etc/resolv.conf
+          # Ubuntu runner images may use mirror+file: rather than ordinary URLs.
+          # Rewrite Ubuntu sources before the first APT request, leaving Microsoft
+          # and other unrelated sources unchanged.
+          for source in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do
+            if [[ -f "$source" ]]; then
+              sudo sed -i -e 's|mirror+file:/etc/apt/apt-mirrors.txt|https://archive.ubuntu.com/ubuntu|g' -e 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' -e 's|https://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
+            fi
+          done
+          if [[ -f /etc/apt/apt-mirrors.txt ]]; then
+            printf 'https://archive.ubuntu.com/ubuntu\nhttps://security.ubuntu.com/ubuntu\n' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          fi
+          cat /etc/resolv.conf | tee native-artifacts/resolv.conf.effective
+          getent ahostsv4 archive.ubuntu.com > native-artifacts/dns-archive.txt || { echo '::error::Public DNS cannot resolve archive.ubuntu.com'; exit 1; }
+          getent ahostsv4 security.ubuntu.com > native-artifacts/dns-security.txt || { echo '::error::Public DNS cannot resolve security.ubuntu.com'; exit 1; }
+          sed -n '1,3p' native-artifacts/dns-archive.txt
+          sed -n '1,3p' native-artifacts/dns-security.txt
+          echo 'Effective Ubuntu APT sources:'
+          grep -hE '^(URIs:|Suites:|deb |# deb )' /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
+
+      - name: Install native build and debugger prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          packages=(build-essential cmake ninja-build pkg-config curl ca-certificates git python3 python3-networkx gdb binutils file autoconf automake libtool bison flex)
+          for attempt in 1 2 3; do
+            if sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update &&
+               sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends "${packages[@]}"; then
+              exit 0
+            fi
+            echo "::warning::APT attempt $attempt/3 failed"
+            if (( attempt < 3 )); then sleep "$((attempt * 5))"; fi
+          done
+          echo '::error::APT failed after public DNS and official mirror configuration'
+          exit 1
+
+      - name: Record source provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native-artifacts
+          git -C native-wazuh rev-parse HEAD | tee native-artifacts/wazuh-source-commit.txt
+          git -C native-wazuh describe --tags --exact-match | tee native-artifacts/wazuh-source-tag.txt
+          test "$(cat native-artifacts/wazuh-source-tag.txt)" = "v4.14.10"
+          cp native-wazuh/src/Makefile native-artifacts/upstream-Makefile.txt
+
+      - name: Identify dependency cache inputs
+        id: native-cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "wazuh_sha=$(git -C native-wazuh rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "runner_image=${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pinned Wazuh third-party sources and libraries
+        id: cache-deps
+        uses: actions/cache@v4
+        with:
+          # The upstream deps target extracts source trees here; its
+          # analysisd link prerequisites also build libraries under external.
+          path: |
+            native-wazuh/src/external/
+            native-wazuh/src/external-precompiled/
+            native-wazuh/src/shared_modules/http-request/
+            native-wazuh/src/shared_modules/http-request.tar.gz
+          key: wazuh-41410-deps-${{ runner.os }}-${{ runner.arch }}-${{ steps.native-cache.outputs.runner_image }}-${{ steps.native-cache.outputs.wazuh_sha }}-${{ hashFiles('native-wazuh/src/Makefile') }}-debug-nojemalloc-v2
+
+      - name: Fetch upstream dependency sources only
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C native-wazuh/src TARGET=server DEBUG=yes DISABLE_JEMALLOC=yes deps -j2
+
+      - name: Generate Wazuh FlatBuffers headers required by shared code
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This is a code-generator prerequisite, not another Wazuh daemon.
+          make -C native-wazuh/src TARGET=server DEBUG=yes DISABLE_JEMALLOC=yes -j2 external/flatbuffers/build/libflatbuffers.a
+          cmake -S native-wazuh/src/shared_modules/utils/flatbuffers -B native-wazuh/src/shared_modules/utils/flatbuffers/build -DSRC_FOLDER="$PWD/native-wazuh/src"
+          cmake --build native-wazuh/src/shared_modules/utils/flatbuffers/build --target compile_schemas_input -j2
+          test -s native-wazuh/src/shared_modules/utils/flatbuffers/include/rsync_schema.h
+          test -s native-wazuh/src/shared_modules/utils/flatbuffers/include/syscollector_deltas_schema.h
+
+      - name: Build only the wazuh-analysisd make target
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Wazuh 4.14.10's original libwazuh.a requires module context
+          # definitions from its own wm_ objects, even for analysisd -t.
+          # No agent or other manager executable target is requested.
+          make -C native-wazuh/src TARGET=server DEBUG=yes DISABLE_JEMALLOC=yes -j2 wazuh-analysisd 2>&1 | tee native-artifacts/build.log
+
+      - name: Verify debug symbols and build scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/check_wazuh_41410_build.py --source native-wazuh/src --artifacts native-artifacts
+
+      - name: Capture isolated Wazuh rule-loader differential oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime="$PWD/native-artifacts/runtime"
+          mkdir -p "$runtime"
+          printf '%s\n' 'Wazuh 4.14.10 disposable CI' > "$runtime/.rulevis-native-test-root"
+          mkdir -p "$runtime/etc/shared"
+          cp native-wazuh/etc/internal_options.conf "$runtime/etc/internal_options.conf"
+          : > "$runtime/etc/shared/ar.conf"
+          mkdir -p "$runtime/ruleset/decoders"
+          cp native-wazuh/ruleset/decoders/0006-json_decoders.xml "$runtime/ruleset/decoders/0006-json_decoders.xml"
+          cp native-wazuh/ruleset/decoders/0025-apache_decoders.xml "$runtime/ruleset/decoders/0025-apache_decoders.xml"
+          # Wazuh 4.14.10 AR_ReadConfig() resolves the compiled-in USER
+          # ('wazuh') as a group, independently of analysisd -u/-g.
+          # A disposable GitHub runner does not have this group by default.
+          if ! getent group wazuh >/dev/null; then
+            sudo groupadd --system wazuh
+          fi
+          getent group wazuh
+          chmod +x scripts/prepare_wazuh_41410_isolated.py
+          # Native analysisd requires chroot; run only in this marked
+          # disposable directory. No Wazuh services or agents are started.
+          sudo env PYTHONPATH="$PWD:$PWD/src" python3 scripts/run_wazuh_41410_suite.py --fixture tests/fixtures/wazuh_41410_differential.json --binary "$PWD/native-artifacts/bin/wazuh-analysisd" --workspace "$PWD/native-artifacts/native-oracle" --preparer "$PWD/scripts/prepare_wazuh_41410_isolated.py" --cwd "$runtime" --analysisd-arg=-t --analysisd-arg=-D --analysisd-arg="$runtime" --analysisd-arg=-u --analysisd-arg=root --analysisd-arg=-g --analysisd-arg=root --analysisd-arg=-c --analysisd-arg=etc/ossec.conf
+
+      - name: Upload analysisd-only debug evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wazuh-41410-analysisd-debug
+          path: native-artifacts/
+          if-no-files-found: error
+          retention-days: 14
