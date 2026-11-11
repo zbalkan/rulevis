@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "wazuh_version": "4.14.10",
+  "scope": "native_event_history_pending",
+  "cases": [
+    {
+      "id": "sid-insertion",
+      "source": "SID history list",
+      "steps": [
+        "load_registered_source",
+        "insert_source_event",
+        "inspect_sid_list"
+      ],
+      "observe": [
+        "sid_list_size",
+        "source_event_pointer"
+      ]
+    },
+    {
+      "id": "group-insertion",
+      "source": "group history lists",
+      "steps": [
+        "load_registered_source",
+        "insert_source_event",
+        "inspect_group_lists"
+      ],
+      "observe": [
+        "group_list_sizes",
+        "source_event_pointers"
+      ]
+    },
+    {
+      "id": "dual-source-precedence",
+      "source": "SID and group lists on one RuleInfo",
+      "steps": [
+        "load_dual_registered_source",
+        "insert_source_event",
+        "inspect_sid_and_group_lists"
+      ],
+      "observe": [
+        "sid_list_size",
+        "group_list_sizes",
+        "selected_insertion_path"
+      ]
+    },
+    {
+      "id": "group-multiplicity",
+      "source": "duplicated group-list registrations",
+      "steps": [
+        "load_multiple_occurrence_source",
+        "insert_source_event",
+        "inspect_group_lists"
+      ],
+      "observe": [
+        "group_list_sizes",
+        "source_event_pointers"
+      ]
+    },
+    {
+      "id": "sid-search",
+      "source": "Search_LastSids",
+      "steps": [
+        "insert_source_event",
+        "evaluate_temporal_consumer"
+      ],
+      "observe": [
+        "search_result",
+        "frequency_counter",
+        "matched_level"
+      ]
+    },
+    {
+      "id": "group-search",
+      "source": "Search_LastGroups",
+      "steps": [
+        "insert_source_event",
+        "evaluate_temporal_consumer"
+      ],
+      "observe": [
+        "search_result",
+        "frequency_counter",
+        "matched_level"
+      ]
+    },
+    {
+      "id": "timeframe-expiry",
+      "source": "timeframe boundary",
+      "steps": [
+        "insert_source_event",
+        "advance_controlled_time",
+        "evaluate_temporal_consumer"
+      ],
+      "observe": [
+        "search_result",
+        "list_membership"
+      ]
+    },
+    {
+      "id": "agent-isolation",
+      "source": "agent_id default scope",
+      "steps": [
+        "insert_source_event",
+        "evaluate_consumer_other_agent",
+        "evaluate_consumer_same_agent"
+      ],
+      "observe": [
+        "search_results"
+      ]
+    },
+    {
+      "id": "match-level-suppression",
+      "source": "prior matched level",
+      "steps": [
+        "insert_source_event",
+        "set_source_matched_level",
+        "evaluate_temporal_consumer"
+      ],
+      "observe": [
+        "search_result",
+        "matched_level"
+      ]
+    },
+    {
+      "id": "event-eviction-cleanup",
+      "source": "Free_Eventinfo and OS_AddEvent",
+      "steps": [
+        "insert_source_event",
+        "force_event_list_eviction",
+        "inspect_history_lists"
+      ],
+      "observe": [
+        "sid_list_size",
+        "group_list_sizes",
+        "dangling_pointer_count"
+      ]
+    },
+    {
+      "id": "event-teardown-cleanup",
+      "source": "os_remove_eventlist",
+      "steps": [
+        "insert_source_event",
+        "tear_down_isolated_event_list",
+        "inspect_cleanup"
+      ],
+      "observe": [
+        "cleanup_status"
+      ]
+    }
+  ]
+}
