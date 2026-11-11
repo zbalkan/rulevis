@@ -4,7 +4,7 @@ import heapq
 import re
 from itertools import islice
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Callable, Optional
 
 import networkx as nx
 
@@ -76,7 +76,8 @@ class EvaluationBuilder:
     """Replay the Wazuh 4.14.10 RuleNode construction semantics."""
 
     def __init__(
-        self, catalog: RuleCatalog, *, max_occurrences: int = 100_000
+        self, catalog: RuleCatalog, *, max_occurrences: int = 100_000,
+        on_accepted: Optional[Callable[[RuleDeclaration, "EvaluationBuilder"], None]] = None
     ) -> None:
         if (
             isinstance(max_occurrences, bool)
@@ -85,6 +86,7 @@ class EvaluationBuilder:
         ):
             raise ValueError("max_occurrences must be a positive integer")
         self.max_occurrences = max_occurrences
+        self.on_accepted = on_accepted
         self.catalog = catalog
         self.graph = nx.DiGraph()
         self.rules: dict[str, RuleState] = {}
@@ -446,6 +448,15 @@ class EvaluationBuilder:
 
         return attached
 
+    def _notify_accepted(self, declaration: RuleDeclaration) -> None:
+        """Expose the current tree immediately after a new accepted rule.
+
+        Called only for newly inserted RuleInfo objects. Wazuh does not rerun
+        OS_MarkID/OS_MarkGroup when an existing RuleInfo is overwritten.
+        """
+        if self.on_accepted is not None:
+            self.on_accepted(declaration, self)
+
     def _process(self, declaration: RuleDeclaration) -> None:
         normalized_rule_id = normalize_rule_id(declaration.rule_id)
         if normalized_rule_id is None:
@@ -539,6 +550,7 @@ class EvaluationBuilder:
 
         if int(normalized_rule_id) < 10:
             self._new_occurrence(state.rule_id, None)
+            self._notify_accepted(declaration)
             return
 
         if parents.if_sid:
@@ -590,6 +602,8 @@ class EvaluationBuilder:
 
         if not attached:
             self._unregister_state(state)
+        else:
+            self._notify_accepted(declaration)
 
     def build(self) -> EvaluationModel:
         for declaration in self.catalog.declarations:

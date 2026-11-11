@@ -143,6 +143,42 @@ unchanged. The N2 issue requires version-pinned differential tests
 before presenting this model as verified effective runtime attachment.
 
 
+
+## Opt-in historical subscription projection (Wazuh 4.14.10)
+
+`build_historical_registrations(catalog)` in
+`internal.historical_registration` runs the existing `EvaluationBuilder`
+with an accepted-declaration callback. Each callback observes the current
+`RuleNode` occurrence tree immediately after insertion, matching the
+registration point for `OS_MarkID()` and `OS_MarkGroup()` in
+`src/analysisd/rules.c`. Rejected and duplicate declarations are not
+registered; overwrites update existing rule state without replaying earlier
+subscriptions. The loader's `DO_OVERWRITE` guard also suppresses registration
+when an overwrite has no existing target and is inserted as a new rule.
+A future source is not retroactively registered.
+
+`HistoricalRegistrationProjection` returns the structural evaluation model
+alongside immutable `HistoricalRegistration` records. Each record retains
+source and consumer rule IDs, the physical source occurrence ID, selector,
+relationship type, declaration sequence and source group string at registration
+time. For `if_matched_group`, multiple physical source occurrences may produce
+multiple registrations to the same group's history list. For
+`if_matched_sid`, multiple occurrences share their source `RuleInfo` SID
+list; per-occurrence records represent traversal evidence, **not** independent
+SID history lists. The `subscribers()` helper deduplicates logical consumer
+rule IDs and `dual_history_sources()` identifies sources where both SID and
+group subscriptions were modeled.
+
+The projection is **opt-in** and does not modify declared visualization edges,
+Flask, the ordinary evaluation model or assessment reports. It models the
+registration state, **not** historical event insertion, frequency/timeframe
+matching, expiration, active response or alert outcomes. The SID-first event
+insertion and mutually exclusive cleanup bugs remain uncorrected in Wazuh
+4.14.10 and require a separate event-lifecycle model and compiled differential
+fixtures before making runtime-verified claims. In particular, the model's
+registration snapshot is only as faithful as the upstream structural
+attachment and load-order model it consumes.
+
 ## Known upstream group-correlation limitations (Wazuh 4.14.10)
 
 RuleVis flags potential gaps described in
