@@ -58,6 +58,7 @@ def _catalog(seed):
         "audit", "authentication", "^audit", "audit,$",
         "^audit,$", "missing", "!audit", "audit|missing",
         "!audit|root", "|", "^root,$", "Déjà", "$",
+        "audit|$", "$|missing", "^root,$|$", "web|$",
     ]
     for offset in range(32):
         rule_id = 100100 + offset
@@ -102,6 +103,7 @@ def test_group_membership_index_matches_osmatch_with_overwrites_and_deletion():
         "audit", "AUDIT", "^audit", "audit,$", "^audit,$",
         "missing", "!audit", "!audit|root", "audit|missing",
         "|", "^root,$", "Déjà", "$", "^$", "!", "foo||bar",
+        "audit|$", "$|missing", "^root,$|$", "web|$",
     ]
     groups = ["audit,", "audit,extra,", "root,", "other,", "Déjà,", "", "AUDIT,"]
     index = HistoricalGroupMembershipIndex(selectors)
@@ -130,3 +132,34 @@ def test_indexes_are_not_reused_between_independent_builds():
     second = build_historical_registrations(catalog)
     assert first.registrations == second.registrations
     assert first.dual_history_sources() == second.dual_history_sources()
+
+
+def test_bare_dollar_alternatives_preserve_all_source_memberships():
+    """Wazuh's OSMatch suffix comparison accepts an empty suffix."""
+    groups = {
+        "101": "ssh,",
+        "102": "web,",
+        "103": "audit,",
+        "104": "",
+    }
+    selectors = ("audit|$", "$|missing", "^root,$|$", "web|$")
+    index = HistoricalGroupMembershipIndex(selectors)
+    for rule_id, group in groups.items():
+        index.update(rule_id, group)
+    for selector in selectors:
+        assert set(index.matching_rules(selector)) == set(groups)
+        assert all(os_match(selector, group) for group in groups.values())
+
+
+def test_bare_dollar_alternative_matches_full_scan_during_load():
+    catalog = RuleCatalog()
+    _add(catalog, 1, group="root,")
+    _add(catalog, 100110, if_sid="1", group="ssh,")
+    _add(catalog, 100111, if_sid="1", group="audit,")
+    _add(catalog, 100112, if_sid="1", matched_group="web|$")
+    expected = FullScanReference(catalog).build()
+    actual = build_historical_registrations(catalog)
+    assert actual.registrations == expected.registrations
+    assert {item.source_rule_id for item in actual.registrations} == {
+        "1", "100110", "100111", "100112",
+    }
