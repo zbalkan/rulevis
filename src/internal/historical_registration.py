@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from internal.catalog import RuleCatalog, RuleDeclaration, os_match, select_historical_search
 from internal.evaluation import EvaluationBuilder, EvaluationModel
+from internal.historical_group_index import HistoricalGroupMembershipIndex
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,41 @@ class HistoricalRegistrationBuilder:
         self.max_occurrences = max_occurrences
         self._registrations: list[HistoricalRegistration] = []
         self._built = False
+        self._groups = HistoricalGroupMembershipIndex(
+            declaration.if_matched_group
+            for declaration in catalog.declarations
+            if select_historical_search(
+                declaration.if_matched_sid,
+                declaration.if_matched_group,
+            ) == "if_matched_group"
+            and not declaration.overwrite
+        )
+
+    def _on_group_change(self, rule_id: str, group: str | None) -> None:
+        if group is None:
+            self._groups.discard(rule_id)
+        else:
+            self._groups.update(rule_id, group)
+
+    def _candidate_occurrences(
+        self, selector: str, search: str, builder: EvaluationBuilder,
+    ) -> list[int]:
+        """Sort only matching physical occurrences in current RuleNode order."""
+        source_rules = (
+            (selector,) if search == "if_matched_sid"
+            else self._groups.matching_rules(selector)
+        )
+        matches = (
+            occurrence_id
+            for rule_id in source_rules
+            for occurrence_id in builder.occurrences_by_rule.get(rule_id, ())
+        )
+        return sorted(
+            matches,
+            key=lambda occurrence_id: builder.order.rank(
+                builder.enter_token_by_occurrence[occurrence_id]
+            ),
+        )
 
     def _on_accepted(self, declaration: RuleDeclaration, builder: EvaluationBuilder) -> None:
         # rules.c guards both OS_MarkID and OS_MarkGroup with !DO_OVERWRITE,
@@ -91,16 +127,15 @@ class HistoricalRegistrationBuilder:
         if selector is None:
             return
 
-        # The C implementation traverses the current occurrence tree. Scan
-        # in preorder and preserve each physical occurrence that matches.
-        for occurrence_id in builder._occurrences_in_preorder():
+        # Native OS_MarkID and OS_MarkGroup traverse the current RuleNode
+        # tree. Index candidate RuleInfo objects first, then order their
+        # physical occurrences by current preorder rank. This retains native
+        # registration order without scanning unrelated occurrences.
+        for occurrence_id in self._candidate_occurrences(
+            selector, search, builder,
+        ):
             occurrence = builder.occurrences[occurrence_id]
             source = builder.rules[occurrence.rule_id]
-            if search == "if_matched_sid":
-                matches = source.rule_id == selector
-            else:
-                matches = os_match(selector, source.runtime_group)
-            if matches:
                 self._registrations.append(HistoricalRegistration(
                     source_rule_id=source.rule_id,
                     source_occurrence_id=occurrence_id,
@@ -119,6 +154,7 @@ class HistoricalRegistrationBuilder:
             self.catalog,
             max_occurrences=self.max_occurrences,
             on_accepted=self._on_accepted,
+            on_group_change=self._on_group_change,
         )
         model = builder.build()
         return HistoricalRegistrationProjection(
