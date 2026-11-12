@@ -318,6 +318,114 @@
           "group": "audit,"
         }
       ]
+    },
+    {
+      "id": "sid-multi-parent-history",
+      "description": "Two structural parents each host a source occurrence; SID history registration remains logical",
+      "rules": [
+        {
+          "id": 1,
+          "level": 0,
+          "group": "root,"
+        },
+        {
+          "id": 2,
+          "level": 0,
+          "group": "root,"
+        },
+        {
+          "id": 100101,
+          "if_sid": "1,2",
+          "group": "audit,"
+        },
+        {
+          "id": 100201,
+          "if_sid": "1",
+          "if_matched_sid": 100101,
+          "group": "consumer,"
+        }
+      ]
+    },
+    {
+      "id": "sid-partial-followup",
+      "description": "A partially attached multi-SID rule is followed by a dependent rule on its accepted SID",
+      "rules": [
+        {
+          "id": 1,
+          "level": 0,
+          "group": "root,"
+        },
+        {
+          "id": 100101,
+          "if_sid": "1,999999",
+          "group": "audit,"
+        },
+        {
+          "id": 100201,
+          "if_sid": "100101",
+          "group": "dependent,"
+        }
+      ]
+    },
+    {
+      "id": "sid-repeated-with-history",
+      "description": "Repeated SID selector produces multiple physical source occurrences before a group history consumer",
+      "rules": [
+        {
+          "id": 1,
+          "level": 0,
+          "group": "root,"
+        },
+        {
+          "id": 100101,
+          "if_sid": "1,1",
+          "group": "audit,"
+        },
+        {
+          "id": 100201,
+          "if_sid": "1",
+          "if_matched_group": "audit",
+          "group": "consumer,"
+        }
+      ]
+    },
+    {
+      "id": "sid-overwrite-after-multi",
+      "description": "Overwrite follows multiple physical attachments, then temporal consumers inspect old and new group labels",
+      "rules": [
+        {
+          "id": 1,
+          "level": 0,
+          "group": "root,"
+        },
+        {
+          "id": 2,
+          "level": 0,
+          "group": "root,"
+        },
+        {
+          "id": 100101,
+          "if_sid": "1,2",
+          "group": "audit,"
+        },
+        {
+          "id": 100101,
+          "overwrite": true,
+          "group": "renamed,"
+        },
+        {
+          "id": 100201,
+          "if_sid": "1",
+          "if_matched_group": "audit",
+          "group": "old-consumer,"
+        },
+        {
+          "id": 100202,
+          "if_sid": "1",
+          "if_matched_group": "renamed",
+          "group": "new-consumer,"
+        }
+      ]
     }
   ]
 }
