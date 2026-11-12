@@ -51,7 +51,7 @@ class LoadIssue:
 
 @dataclass
 class EvaluationModel:
-    graph: nx.DiGraph
+    graph: nx.DiGraph  # Physical occurrence forest, keyed by occurrence ID.
     rules: dict[str, RuleState]
     occurrences: dict[int, Occurrence]
     children: dict[Optional[int], tuple[int, ...]]
@@ -73,7 +73,12 @@ class OccurrenceBudgetExceeded(RuntimeError):
 
 
 class EvaluationBuilder:
-    """Replay the Wazuh 4.14.10 RuleNode construction semantics."""
+    """Model Wazuh 4.14.10 load-time RuleNode occurrence construction.
+
+    This is not a full event-execution engine or a native verification oracle.
+    Physical occurrences form a forest; grouping them by logical SID may
+    produce a cyclic directed quotient graph without physical cycles.
+    """
 
     def __init__(
         self, catalog: RuleCatalog, *, max_occurrences: int = 100_000,
@@ -661,10 +666,13 @@ class EvaluationBuilder:
 def project_occurrence_relationships(
     model: EvaluationModel,
 ) -> nx.MultiDiGraph:
-    """Collapse accepted RuleNode occurrences into logical runtime edges.
+    """Compute the SID-keyed directed quotient of an occurrence forest.
 
-    The projection preserves attachment multiplicity. It is not the declared
-    dependency graph and does not imply historical-event correlation.
+    Each physical parent-child edge maps to a logical SID pair. Edges with
+    identical relationship metadata are aggregated with occurrence_count.
+    Consequently projected self-loops/cycles need not occur in the forest,
+    and the projection cannot recover physical parent paths or sibling order.
+    This is neither the declared graph nor native event-execution evidence.
     """
     projected = nx.MultiDiGraph()
     for rule_id in model.rules:
