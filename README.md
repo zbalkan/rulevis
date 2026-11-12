@@ -139,7 +139,7 @@ The project is composed of four main Python modules and a JavaScript frontend:
 
 ### Experimental Source-Faithful Assessment
 
-The experimental assessment pipeline is deliberately separate from the visualization graph and UI. It preserves Wazuh rule declarations in load order, reconstructs Wazuh 4.14.10 runtime rule occurrences, evaluates an explicitly supplied finite event domain with exact bitsets, classifies the resulting reachability/shadowing/drop behavior, and can serialize a stable JSON report. `project_occurrence_relationships()` additionally reduces the runtime occurrence tree to logical rule-to-rule attachments with multiplicity counts for comparison against the declared visualization graph; it is not used by the UI.
+The experimental assessment pipeline is deliberately separate from the visualization graph and UI. It preserves Wazuh rule declarations in load order, models Wazuh 4.14.10 load-time rule occurrences, evaluates an explicitly supplied finite event domain with exact bitsets, classifies the resulting reachability/shadowing/drop behavior, and can serialize a stable JSON report. `project_occurrence_relationships()` additionally maps the accepted occurrence forest to a SID-keyed directed quotient graph, aggregating physical attachments with multiplicity counts for comparison against the declared visualization graph; it is not used by the UI. The occurrence forest is acyclic, but collapsing occurrences by SID may create projected self-loops or cycles. This graph aids interpretation and does not reproduce event-time execution or prove native Wazuh equivalence.
 
 The pipeline is:
 
@@ -147,7 +147,7 @@ The pipeline is:
 Rule XML
   -> RuleCatalog
   -> EvaluationBuilder
-  -> runtime occurrence DAG
+  -> accepted occurrence forest
   -> BitsetAssessor
   -> AssessmentClassifier
   -> AssessmentReport
