@@ -24,7 +24,7 @@ RuleCatalog
 EvaluationBuilder
    |
    v
-Runtime occurrence DAG
+Accepted occurrence forest
    |
    +---- supplied finite-domain predicates
    v
@@ -83,6 +83,64 @@ The UI graph includes declared `if_level` dependencies, including later
 and superseded references, because RuleVis is also a source-analysis tool.
 The evaluator instead models attachments to accepted rule occurrences in
 current Wazuh tree order.
+
+## Representation and execution fidelity (RF0–RF2)
+
+RuleVis's graphs are explanatory representations, not executable copies of
+`wazuh-analysisd`. A relationship in a graph is not evidence that analysisd
+will traverse it for an event or produce an alert. Structural loader fidelity
+and event-execution fidelity are independent validation domains.
+
+Three representations must be distinguished:
+
+1. **Declared relationship graph** — the existing SID-keyed directed
+   `MultiDiGraph` records relationships inferred from XML declarations,
+   including edges for forward, missing, superseded or rejected references.
+   A declared edge need not exist in the accepted loader structure.
+2. **Accepted occurrence forest** — the separate occurrence-keyed directed
+   structural model contains a distinct vertex for each accepted physical
+   `RuleNode` occurrence. A non-root occurrence has exactly one parent;
+   physical sibling ordering is significant. Multiple occurrences can share
+   a SID. This is a *modeled* forest unless independently captured from a
+   compiled Wazuh engine.
+3. **Accepted logical projection** — a SID-keyed directed graph derived by
+   identifying every occurrence with the same logical SID. It represents
+   accepted structural connectivity, not physical node identity or event
+   execution. Aggregated edges may carry occurrence counts and provenance.
+
+Formally, for an accepted occurrence forest `F = (V_F, E_F)` and SID map
+`π: V_F → V_G`, define the directed quotient graph `G = (V_G, E_G)` by
+`E_G = {(π(u), π(v)) | (u, v) ∈ E_F}`. Retaining parallel attachments gives
+an edge-multiplicity-aware directed multigraph; merging duplicate pairs gives
+an ordinary directed graph. The existing implementation's edge attributes
+retain some multiplicity but do not reconstruct the complete occurrence forest.
+
+**Acyclicity belongs to the occurrence forest, not its SID quotient.** A
+physical edge from one occurrence of SID `100101` to a distinct child
+occurrence of the same SID yields a projected self-loop `100101 → 100101`.
+Neither that self-loop nor a longer projected cycle implies a physical
+execution cycle. Conversely, the logical projection does not preserve unique
+physical parents, exact sibling positions, full occurrence paths or insertion
+order. It is not an invertible transformation.
+
+Temporal `if_matched_sid` and `if_matched_group` subscriptions are distinct
+from structural attachment edges; event-history insertion, retrieval,
+expiration, rule predicates, and alert selection are outside this quotient
+operation. The native loader differential oracle validates only the observed
+load-time properties covered by its captures. Native event-execution fidelity
+requires separate execution tests, and no untested behavior may be labeled
+`native verified` merely because its loader attachment matched.
+
+Evidence terminology: **declared** means parsed from source XML; **modeled
+accepted** means predicted by RuleVis's loader model; **native verified**
+means independently observed for a specific Wazuh version, fixture, and
+validation domain. The eight scenarios added after the original ten-case
+native baseline require independent comparison; an unobserved prediction
+is not a successful differential test.
+
+This fidelity contract does not change the default UI, graph layout, warning
+behavior, or the optional occurrence projection. It is a documentation and
+test contract for the existing architecture.
 
 ## Logical relationship projection
 
