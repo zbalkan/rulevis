@@ -156,8 +156,11 @@ merged native CI branch (run 43085696078). Those captures establish
 loader and registration structural agreement for the tested scenarios,
 **not** event-history insertion, timeout handling, event search, or alerts.
 
-The new loader-fidelity branch expands the differential corpus to 14
-scenarios, specifically probing sequential ordinary SID tokens. The
-additional scenarios are not claimed as native-verified until their
-GitHub Actions run passes. The Python mock tests remain separate from
+The incremental-SID expansion grew the original ten-scenario corpus to 14.
+The subsequent `test/extend-native-loader-differential` branch expands it to
+18 scenarios covering multi-parent history, partial attachment dependencies,
+repeated SID-selector history, and overwrite interactions. Only the initial
+ten have established native agreement in the cited run. Neither the four
+previous additions nor the four new additions should be treated as
+native-verified without their own passing capture and comparison evidence. The Python mock tests remain separate from
 native observations.
