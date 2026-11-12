@@ -5,10 +5,13 @@ observations from a **compiled Wazuh 4.14.10** analysisd process. It checks
 accepted logical rules, physical structural attachments and historical
 SID/group registrations, with binary, fixture and loaded-file provenance.
 The initial ten scenarios passed in GitHub Actions run 43085696078.
-This phase extends the same native oracle to four incremental-SID
-scenarios; these additions require separate native verification.
+A previous phase extended the original ten scenarios with four incremental-SID
+cases. This branch adds four further cases (18 total), exercising multi-parent
+history, partial attachment followed by dependency, repeated-selector history,
+and multi-attachment overwrite interactions. Newly added cases require native
+verification; model predictions alone are not observational evidence.
 
-The initial fixture suite covers pre-existing and forward SID references,
+The original fixture suite covers pre-existing and forward SID references,
 late group sources, rejected consumers, dual-history sources, multiple physical
 occurrences, group overwrites, missing-base overwrites, selector precedence,
 and forward structural group attachments.
@@ -107,8 +110,8 @@ they are metadata checks, not cryptographic attestation. Inspect the
 capturing program and logs before interpreting results as verified evidence.
 
 The ten original scenarios have independent native-loader/registration
-agreement. The four additional SID scenarios must pass before the
-expanded loader-fidelity claim is accepted. Future work must still test
+agreement. The eight additional scenarios beyond the initial ten must pass before
+full expanded loader-fidelity coverage can be claimed. Future work must still test
 actual event insertion, SID/group history search, expiry and cleanup;
 structural registration alone does not prove alert delivery or parity
 of the runtime event processor. RuleVis's declared graph and advisory
