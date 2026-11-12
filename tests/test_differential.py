@@ -70,7 +70,7 @@ def test_registration_fixtures_cover_forward_references_and_dual_history():
 def test_incremental_sid_scenarios_are_explicit_and_bounded():
     suite, _ = load_fixture(FIXTURE)
     cases = {scenario["id"]: scenario for scenario in suite["scenarios"]}
-    assert len(cases) == 14
+    assert len(cases) == 18
 
     self_attached = predict(cases["sid-sequential-self"])
     assert self_attached["accepted_rules"] == ["1", "100101"]
